@@ -44,9 +44,9 @@ class AttributePersister
      * Flow:
      *   1. Load all existing entity_attribute rows for the given attributes (1 query).
      *   2. Partition into update / insert / delete buckets.
-     *   3. Bulk-update existing rows via upsert-by-id (1 query).
-     *   4. Bulk-insert new rows, then retrieve their IDs (2 queries).
-     *   5. Delete surplus rows (1 query, conditional).
+     *   3. Bulk-delete surplus rows (1 query, conditional).
+     *   4. Bulk-update existing rows via upsert-by-id (1 query).
+     *   5. Bulk-insert new rows, then retrieve their IDs (2 queries).
      *   6. Sync all translations in two queries: 1 DELETE stale + 1 UPSERT.
      *
      * @param  Collection<int, Field>  $filled
@@ -57,62 +57,24 @@ class AttributePersister
             return;
         }
 
-        $now         = now();
-        $entityType  = $this->entity->getAttributeEntityType();
-        $entityId    = $this->entity->id;
+        $now          = now();
+        $entityType   = $this->entity->getAttributeEntityType();
+        $entityId     = $this->entity->id;
         $attributeIds = $filled->map(fn (Field $f) => $f->getAttribute()->id)->values()->all();
 
-        // ── 1. Load all existing rows in one query ────────────────────────────────
         $existingByAttr = $this->entityQuery()
             ->whereIn('attribute_id', $attributeIds)
             ->orderBy('id')
             ->get()
             ->groupBy('attribute_id');
 
-        $toUpdate           = [];   // rows to upsert by id
-        $toInsert           = [];   // rows to bulk-insert
-        $toDelete           = [];   // record IDs to remove
-        $insertTranslations = [];   // aligned with $toInsert by index
-        $updateTranslations = [];   // [record_id => translations[]]
+        [$toUpdate, $toInsert, $toDelete, $insertTranslations, $updateTranslations]
+            = $this->partitionFields($filled, $existingByAttr, $entityType, $entityId, $now);
 
-        foreach ($filled as $field) {
-            $attrId   = $field->getAttribute()->id;
-            $column   = $field->getStorageColumn();
-            $items    = $field->toStorage();
-            $existing = $existingByAttr->get($attrId, collect())->values();
-
-            // ── UPDATE: pair incoming items with existing rows ────────────────────
-            foreach ($existing->take(count($items)) as $i => $record) {
-                $row              = $this->blankRow($entityType, $entityId, $attrId, $now);
-                $row['id']        = $record->id;
-                $row[$column]     = $items[$i]['value'];
-                $toUpdate[]       = $row;
-
-                if (! empty($items[$i]['translations'])) {
-                    $updateTranslations[$record->id] = $items[$i]['translations'];
-                }
-            }
-
-            // ── INSERT: items beyond the existing count ───────────────────────────
-            foreach (array_slice($items, $existing->count()) as $item) {
-                $row          = $this->blankRow($entityType, $entityId, $attrId, $now);
-                $row[$column] = $item['value'];
-                $toInsert[]             = $row;
-                $insertTranslations[]   = $item['translations'];
-            }
-
-            // ── DELETE: surplus existing rows ─────────────────────────────────────
-            foreach ($existing->slice(count($items)) as $record) {
-                $toDelete[] = $record->id;
-            }
-        }
-
-        // ── 2. Bulk DELETE surplus rows ───────────────────────────────────────────
         if (! empty($toDelete)) {
             $this->delete($toDelete);
         }
 
-        // ── 3. Bulk UPDATE via upsert-by-id ───────────────────────────────────────
         // The INSERT attempt in ON DUPLICATE KEY UPDATE will conflict on the primary
         // key, triggering the UPDATE path. All required NOT NULL columns are provided
         // in blankRow() to satisfy the INSERT side.
@@ -124,43 +86,110 @@ class AttributePersister
             );
         }
 
-        // ── 4. Bulk INSERT + retrieve IDs ─────────────────────────────────────────
         if (! empty($toInsert)) {
-            EavModels::query('entity_attribute')->insert($toInsert);
+            $updateTranslations += $this->insertAndResolveTranslations(
+                $toInsert, $insertTranslations, $existingByAttr
+            );
+        }
 
-            // Retrieve only the rows we just inserted: exclude every ID that existed
-            // before this persist() call so concurrent inserts for other entities
-            // are never picked up.
-            $existingIds    = $existingByAttr->flatten()->pluck('id')->all();
-            $newAttrIds     = array_unique(array_column($toInsert, 'attribute_id'));
+        $this->bulkSyncTranslations($updateTranslations, $now);
+    }
 
-            $newRecords = $this->entityQuery()
-                ->whereIn('attribute_id', $newAttrIds)
-                ->when(! empty($existingIds), fn ($q) => $q->whereNotIn('id', $existingIds))
-                ->orderBy('attribute_id')
-                ->orderBy('id')
-                ->get(['id', 'attribute_id']);
+    /**
+     * Partition a collection of filled fields into update / insert / delete / translation buckets.
+     *
+     * @param  Collection<int, Field>  $filled
+     * @return array{array, array, array, array, array}  [toUpdate, toInsert, toDelete, insertTranslations, updateTranslations]
+     */
+    private function partitionFields(
+        Collection $filled,
+        Collection $existingByAttr,
+        string $entityType,
+        int|string $entityId,
+        Carbon $now,
+    ): array {
+        $toUpdate           = [];
+        $toInsert           = [];
+        $toDelete           = [];
+        $insertTranslations = [];
+        $updateTranslations = [];
 
-            // Re-align each new record to its insertTranslations entry.
-            // $toInsert preserves per-attribute insertion order, so records returned
-            // in (attribute_id, id) order map positionally to the same order.
-            $insertIdxByAttr = [];
-            foreach ($toInsert as $idx => $row) {
-                $insertIdxByAttr[$row['attribute_id']][] = $idx;
+        foreach ($filled as $field) {
+            $attrId   = $field->getAttribute()->id;
+            $column   = $field->getStorageColumn();
+            $items    = $field->toStorage();
+            $existing = $existingByAttr->get($attrId, collect())->values();
+
+            foreach ($existing->take(count($items)) as $i => $record) {
+                $row          = $this->blankRow($entityType, $entityId, $attrId, $now);
+                $row['id']    = $record->id;
+                $row[$column] = $items[$i]['value'];
+                $toUpdate[]   = $row;
+
+                if (! empty($items[$i]['translations'])) {
+                    $updateTranslations[$record->id] = $items[$i]['translations'];
+                }
             }
 
-            foreach ($newRecords->groupBy('attribute_id') as $attrId => $records) {
-                foreach ($records->values() as $pos => $record) {
-                    $idx = $insertIdxByAttr[$attrId][$pos] ?? null;
-                    if ($idx !== null && ! empty($insertTranslations[$idx])) {
-                        $updateTranslations[$record->id] = $insertTranslations[$idx];
-                    }
+            foreach (array_slice($items, $existing->count()) as $item) {
+                $row          = $this->blankRow($entityType, $entityId, $attrId, $now);
+                $row[$column] = $item['value'];
+                $toInsert[]           = $row;
+                $insertTranslations[] = $item['translations'];
+            }
+
+            foreach ($existing->slice(count($items)) as $record) {
+                $toDelete[] = $record->id;
+            }
+        }
+
+        return [$toUpdate, $toInsert, $toDelete, $insertTranslations, $updateTranslations];
+    }
+
+    /**
+     * Bulk-insert rows, then retrieve the assigned IDs and re-align them to their
+     * translation payloads. Returns a [record_id => translations[]] map ready to
+     * be merged into the caller's $updateTranslations array.
+     *
+     * Retrieve only the rows we just inserted: exclude every ID that existed
+     * before this persist() call so concurrent inserts for other entities
+     * are never picked up. $toInsert preserves per-attribute insertion order,
+     * so records returned in (attribute_id, id) order map positionally to the
+     * same order.
+     */
+    private function insertAndResolveTranslations(
+        array $toInsert,
+        array $insertTranslations,
+        Collection $existingByAttr,
+    ): array {
+        EavModels::query('entity_attribute')->insert($toInsert);
+
+        $existingIds = $existingByAttr->flatten()->pluck('id')->all();
+        $newAttrIds  = array_unique(array_column($toInsert, 'attribute_id'));
+
+        $newRecords = $this->entityQuery()
+            ->whereIn('attribute_id', $newAttrIds)
+            ->when(! empty($existingIds), fn ($q) => $q->whereNotIn('id', $existingIds))
+            ->orderBy('attribute_id')
+            ->orderBy('id')
+            ->get(['id', 'attribute_id']);
+
+        $insertIdxByAttr = [];
+        foreach ($toInsert as $idx => $row) {
+            $insertIdxByAttr[$row['attribute_id']][] = $idx;
+        }
+
+        $updateTranslations = [];
+        foreach ($newRecords->groupBy('attribute_id') as $attrId => $records) {
+            foreach ($records->values() as $pos => $record) {
+                $idx = $insertIdxByAttr[$attrId][$pos] ?? null;
+                if ($idx !== null && ! empty($insertTranslations[$idx])) {
+                    $updateTranslations[$record->id] = $insertTranslations[$idx];
                 }
             }
         }
 
-        // ── 5. Bulk sync translations (1 DELETE + 1 UPSERT) ──────────────────────
-        $this->bulkSyncTranslations($updateTranslations, $now);
+        return $updateTranslations;
     }
 
     /**
