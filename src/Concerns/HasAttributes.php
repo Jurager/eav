@@ -144,14 +144,27 @@ trait HasAttributes
             ->withPivot(['id', 'value_text', 'value_integer', 'value_float', 'value_boolean', 'value_date', 'value_datetime']);
     }
 
-    // -------------------------------------------------------------------------
-    // Protected helpers
-    // -------------------------------------------------------------------------
-
     /**
      * Return the attribute scope strategy for this entity.
      * Override in models that scope attributes by a relation (e.g. category).
      */
+    /**
+     * Build the array of data to index for search engines.
+     * Override in the model when Scout is used to include the scout key.
+     */
+    public function toSearchableArray(): array
+    {
+        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()?->getIndexData() ?? []];
+    }
+
+    /**
+     * Determine if the model should be searchable.
+     */
+    public function shouldBeSearchable(): bool
+    {
+        return !empty($this->attributes()->getIndexData());
+    }
+
     protected function getAttributeScope(): string
     {
         return 'global';
