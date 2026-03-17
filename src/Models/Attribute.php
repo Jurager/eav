@@ -15,7 +15,6 @@ use Jurager\Eav\EavModels;
  * @property string      $entity_type
  * @property int         $attribute_type_id
  * @property int|null    $attribute_group_id
- * @property int|null    $measurement_id
  * @property string      $code
  * @property int         $sort
  * @property bool        $mandatory
@@ -33,7 +32,7 @@ class Attribute extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'entity_type', 'attribute_type_id', 'attribute_group_id', 'measurement_id',
+        'entity_type', 'attribute_type_id', 'attribute_group_id',
         'code', 'sort', 'mandatory', 'localizable', 'multiple', 'unique',
         'filterable', 'searchable', 'validations',
     ];
@@ -61,11 +60,6 @@ class Attribute extends Model
     public function group(): BelongsTo
     {
         return $this->belongsTo(EavModels::class('attribute_group'), 'attribute_group_id');
-    }
-
-    public function measurement(): BelongsTo
-    {
-        return $this->belongsTo(EavModels::class('measurement'), 'measurement_id');
     }
 
     public function enums(): HasMany
@@ -112,8 +106,6 @@ class Attribute extends Model
         return $query->with([
             'type',
             'group.translations',
-            'measurement.translations',
-            'measurement.units',
             'translations',
         ]);
     }

@@ -3,6 +3,7 @@
 namespace Jurager\Eav;
 
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Observers\AttributeObserver;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -26,5 +27,10 @@ class EavServiceProvider extends ServiceProvider
         ], 'eav-migrations');
 
         $this->loadTranslationsFrom(__DIR__ . '/../lang', 'eav');
+
+        $attributeModel = config('eav.models.attribute');
+        if ($attributeModel) {
+            $attributeModel::observe(AttributeObserver::class);
+        }
     }
 }
