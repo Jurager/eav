@@ -14,17 +14,17 @@ class LinkField extends Field
 
     protected function validateValue(mixed $value): bool
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
         $parsed = parse_url($value);
 
-        if ($parsed === false || !isset($parsed['scheme'], $parsed['host'])) {
+        if ($parsed === false || ! isset($parsed['scheme'], $parsed['host'])) {
             return $this->addError(__('eav::attributes.validation.invalid_url'));
         }
 
-        if (!in_array(strtolower($parsed['scheme']), ['http', 'https'], true)) {
+        if (! in_array(strtolower($parsed['scheme']), ['http', 'https'], true)) {
             return $this->addError(__('eav::attributes.validation.invalid_url'));
         }
 

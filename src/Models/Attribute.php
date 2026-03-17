@@ -11,19 +11,19 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Eav\EavModels;
 
 /**
- * @property int         $id
- * @property string      $entity_type
- * @property int         $attribute_type_id
- * @property int|null    $attribute_group_id
- * @property string      $code
- * @property int         $sort
- * @property bool        $mandatory
- * @property bool        $localizable
- * @property bool        $multiple
- * @property bool        $unique
- * @property bool        $filterable
- * @property bool        $searchable
- * @property array|null  $validations
+ * @property int $id
+ * @property string $entity_type
+ * @property int $attribute_type_id
+ * @property int|null $attribute_group_id
+ * @property string $code
+ * @property int $sort
+ * @property bool $mandatory
+ * @property bool $localizable
+ * @property bool $multiple
+ * @property bool $unique
+ * @property bool $filterable
+ * @property bool $searchable
+ * @property array|null $validations
  *
  * @mixin Builder
  */

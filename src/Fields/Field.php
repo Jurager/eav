@@ -2,10 +2,10 @@
 
 namespace Jurager\Eav\Fields;
 
-use Jurager\Eav\AttributeLocaleRegistry;
-use Jurager\Eav\Models\Attribute;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
+use Jurager\Eav\AttributeLocaleRegistry;
+use Jurager\Eav\Models\Attribute;
 
 /**
  * Base attribute field abstraction for validation, localization and storage mapping.
@@ -13,10 +13,15 @@ use Illuminate\Support\Facades\Validator;
 abstract class Field
 {
     public const STORAGE_TEXT = 'value_text';
+
     public const STORAGE_INTEGER = 'value_integer';
+
     public const STORAGE_FLOAT = 'value_float';
+
     public const STORAGE_BOOLEAN = 'value_boolean';
+
     public const STORAGE_DATE = 'value_date';
+
     public const STORAGE_DATETIME = 'value_datetime';
 
     /**
@@ -32,12 +37,12 @@ abstract class Field
     protected AttributeLocaleRegistry $localeRegistry;
 
     /**
-     * @param Attribute $attribute Attribute definition model.
-     * @param AttributeLocaleRegistry|null $localeRegistry Locale registry dependency.
+     * @param  Attribute  $attribute  Attribute definition model.
+     * @param  AttributeLocaleRegistry|null  $localeRegistry  Locale registry dependency.
      */
     public function __construct(protected Attribute $attribute, ?AttributeLocaleRegistry $localeRegistry = null)
     {
-        $this->localeRegistry = $localeRegistry ?? new AttributeLocaleRegistry();
+        $this->localeRegistry = $localeRegistry ?? new AttributeLocaleRegistry;
     }
 
     /**
@@ -48,16 +53,17 @@ abstract class Field
     /**
      * Hydrate field values from stored entity attribute records.
      *
-     * @param Collection<int, object> $records
+     * @param  Collection<int, object>  $records
      */
     public function hydrate(Collection $records): void
     {
         if ($records->isEmpty()) {
             $this->values = [];
+
             return;
         }
 
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             $values = $records->map(fn ($record) => $this->getValueFromRecord($record))->all();
 
             $this->values = [[
@@ -95,7 +101,7 @@ abstract class Field
             return true;
         }
 
-        if (!$this->validate($values)) {
+        if (! $this->validate($values)) {
             return false;
         }
 
@@ -109,7 +115,7 @@ abstract class Field
      */
     public function isFilled(): bool
     {
-        return !empty($this->values);
+        return ! empty($this->values);
     }
 
     /**
@@ -117,7 +123,7 @@ abstract class Field
      */
     public function hasErrors(): bool
     {
-        return !empty($this->validationErrors);
+        return ! empty($this->validationErrors);
     }
 
     /**
@@ -133,7 +139,7 @@ abstract class Field
      */
     public function toStorage(): array
     {
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             $value = $this->values[0]['value'] ?? null;
             $items = is_array($value) ? $value : [$value];
 
@@ -171,7 +177,7 @@ abstract class Field
     /**
      * Get attribute value for specific locale.
      *
-     * @param int|null $localeId Locale ID, null for default locale
+     * @param  int|null  $localeId  Locale ID, null for default locale
      * @return mixed Attribute value or null if not found
      */
     public function getValue(?int $localeId = null): mixed
@@ -180,7 +186,7 @@ abstract class Field
             return null;
         }
 
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             return $this->values[0]['value'] ?? null;
         }
 
@@ -195,8 +201,8 @@ abstract class Field
     /**
      * Set attribute value for specific locale.
      *
-     * @param mixed $value Value to set
-     * @param int|null $localeId Locale ID, null for default locale
+     * @param  mixed  $value  Value to set
+     * @param  int|null  $localeId  Locale ID, null for default locale
      */
     public function setValue(mixed $value, ?int $localeId = null): void
     {
@@ -210,6 +216,7 @@ abstract class Field
 
         if ($key !== false) {
             $this->values[$key]['value'] = $processedValue;
+
             return;
         }
 
@@ -224,8 +231,9 @@ abstract class Field
      */
     public function removeValue(?int $localeId = null): void
     {
-        if ($localeId === null || !$this->isLocalizable()) {
+        if ($localeId === null || ! $this->isLocalizable()) {
             $this->values = [];
+
             return;
         }
 
@@ -303,7 +311,7 @@ abstract class Field
     {
         $code = $this->getCode();
 
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             $value = $this->getValue();
 
             return $value !== null ? [$code => $value] : [];
@@ -330,15 +338,16 @@ abstract class Field
      */
     protected function validate(mixed $values): bool
     {
-        if (!$this->isLocalizable()) {
-            if (!$this->isMultiple()) {
+        if (! $this->isLocalizable()) {
+            if (! $this->isMultiple()) {
                 if (is_array($values)) {
                     return $this->addError(__('eav::attributes.validation.multiple_not_allowed'));
                 }
+
                 return $this->validateSingle($values);
             }
 
-            if (!is_array($values)) {
+            if (! is_array($values)) {
                 return $this->addError(__('eav::attributes.validation.array_expected'));
             }
 
@@ -346,7 +355,7 @@ abstract class Field
                 if (is_array($value)) {
                     return $this->addError(__('eav::attributes.validation.invalid_format'));
                 }
-                if (!$this->validateSingle($value)) {
+                if (! $this->validateSingle($value)) {
                     return false;
                 }
             }
@@ -354,7 +363,7 @@ abstract class Field
             return true;
         }
 
-        if (!is_array($values)) {
+        if (! is_array($values)) {
             return $this->addError(__('eav::attributes.validation.translations_required'));
         }
 
@@ -366,7 +375,7 @@ abstract class Field
      */
     protected function validateSingle(mixed $value): bool
     {
-        if (!$this->validateValue($value)) {
+        if (! $this->validateValue($value)) {
             return false;
         }
 
@@ -382,6 +391,7 @@ abstract class Field
             foreach ($validator->errors()->get('value') as $error) {
                 $this->addError($error);
             }
+
             return false;
         }
 
@@ -398,21 +408,21 @@ abstract class Field
         $rules = [];
 
         foreach ($this->attribute->validations ?? [] as $validation) {
-            $type  = $validation['type']  ?? null;
+            $type = $validation['type'] ?? null;
             $param = $validation['value'] ?? null;
 
             $rule = match ($type) {
-                'min_length'  => "min:{$param}",
-                'max_length'  => "max:{$param}",
-                'min'         => "min:{$param}",
-                'max'         => "max:{$param}",
-                'regex'       => "regex:{$param}",
-                'email'       => 'email',
-                'url'         => 'url',
+                'min_length' => "min:{$param}",
+                'max_length' => "max:{$param}",
+                'min' => "min:{$param}",
+                'max' => "max:{$param}",
+                'regex' => "regex:{$param}",
+                'email' => 'email',
+                'url' => 'url',
                 'date_format' => "date_format:{$param}",
-                'after'       => "after:{$param}",
-                'before'      => "before:{$param}",
-                default       => null,
+                'after' => "after:{$param}",
+                'before' => "before:{$param}",
+                default => null,
             };
 
             if ($rule !== null) {
@@ -426,18 +436,18 @@ abstract class Field
     /**
      * Validate localized payload where each translation item contains locale and value.
      *
-     * @param array<int, mixed> $values
+     * @param  array<int, mixed>  $values
      */
     protected function validateLocalizableValues(array $values): bool
     {
         $groups = $this->isMultiple() ? $values : [$values];
 
         foreach ($groups as $group) {
-            if (!is_array($group)) {
+            if (! is_array($group)) {
                 return $this->addError(__('eav::attributes.validation.invalid_format'));
             }
 
-            if (array_any($group, fn ($translation) => !$this->validateTranslation($translation))) {
+            if (array_any($group, fn ($translation) => ! $this->validateTranslation($translation))) {
                 return false;
             }
         }
@@ -446,15 +456,15 @@ abstract class Field
     }
 
     /**
-     * @param array{locale_id?: int, values?: mixed} $translation
+     * @param  array{locale_id?: int, values?: mixed}  $translation
      */
     protected function validateTranslation(array $translation): bool
     {
-        if (!isset($translation['locale_id'])) {
+        if (! isset($translation['locale_id'])) {
             return $this->addError(__('eav::attributes.validation.locale_required'));
         }
 
-        if (!$this->localeRegistry->isValidLocaleId($translation['locale_id'])) {
+        if (! $this->localeRegistry->isValidLocaleId($translation['locale_id'])) {
             return $this->addError(__('eav::attributes.validation.invalid_locale'));
         }
 
@@ -467,6 +477,7 @@ abstract class Field
     protected function addError(string $message): bool
     {
         $this->validationErrors[] = $message;
+
         return false;
     }
 
@@ -475,7 +486,7 @@ abstract class Field
      */
     protected function processValues(array|string $values): array
     {
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             $processed = is_array($values)
                 ? array_map(fn ($v) => $this->processValue($v), $values)
                 : $this->processValue($values);

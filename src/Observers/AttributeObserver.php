@@ -9,7 +9,7 @@ class AttributeObserver
 {
     public function updated(Attribute $attribute): void
     {
-        if (!$attribute->wasChanged('searchable')) {
+        if (! $attribute->wasChanged('searchable')) {
             return;
         }
 

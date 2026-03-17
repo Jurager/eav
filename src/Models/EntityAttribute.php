@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\EavModels;
 
 /**
- * @property int         $id
- * @property int         $entity_id
- * @property string      $entity_type
- * @property int         $attribute_id
+ * @property int $id
+ * @property int $entity_id
+ * @property string $entity_type
+ * @property int $attribute_id
  * @property string|null $value_text
- * @property int|null    $value_integer
- * @property float|null  $value_float
- * @property bool|null   $value_boolean
+ * @property int|null $value_integer
+ * @property float|null $value_float
+ * @property bool|null $value_boolean
  * @property string|null $value_date
  * @property string|null $value_datetime
  */

@@ -150,11 +150,11 @@ class SelectField extends Field
      */
     protected function validate(mixed $values): bool
     {
-        if (!$this->isMultiple()) {
+        if (! $this->isMultiple()) {
             return $this->validateValue($values);
         }
 
-        if (!is_array($values)) {
+        if (! is_array($values)) {
             return $this->addError(__('eav::attributes.validation.array_expected'));
         }
 
@@ -168,7 +168,7 @@ class SelectField extends Field
                 return $this->addError(__('eav::attributes.validation.invalid_format'));
             }
 
-            if (!is_numeric($value)) {
+            if (! is_numeric($value)) {
                 return $this->addError(__('eav::attributes.validation.invalid_value'));
             }
         }
@@ -182,7 +182,7 @@ class SelectField extends Field
 
         $invalid = array_diff($requested, $valid);
 
-        if (!empty($invalid)) {
+        if (! empty($invalid)) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));
         }
 
@@ -190,7 +190,7 @@ class SelectField extends Field
     }
 
     /**
-     * @param array<int, int|string>|int|string $values
+     * @param  array<int, int|string>|int|string  $values
      * @return array<int, array{locale_id: int|null, value: int|array<int, int>}>
      */
     protected function processValues(array|string|int $values): array
@@ -208,7 +208,7 @@ class SelectField extends Field
             return true;
         }
 
-        if (!is_numeric($value)) {
+        if (! is_numeric($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
@@ -218,7 +218,7 @@ class SelectField extends Field
             ->where('id', $enumId)
             ->exists();
 
-        if (!$exists) {
+        if (! $exists) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));
         }
 

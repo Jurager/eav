@@ -63,8 +63,9 @@ class DateField extends Field
     {
         $code = $this->getCode();
 
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             $value = $this->toTimestamp($this->getValue());
+
             return $value !== null ? [$code => $value] : [];
         }
 
@@ -102,12 +103,13 @@ class DateField extends Field
             return true;
         }
 
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
         try {
             Carbon::parse($value);
+
             return true;
         } catch (InvalidFormatException) {
             return $this->addError(__('eav::attributes.validation.invalid_date'));

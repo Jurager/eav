@@ -2,8 +2,6 @@
 
 namespace Jurager\Eav;
 
-use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\Fields\Field;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -11,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
 use InvalidArgumentException;
 use JsonException;
+use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Fields\Field;
 use LogicException;
 
 /**
@@ -47,8 +47,8 @@ class AttributeManager
     private ?array $indexData = null;
 
     /**
-     * @param Attributable|null               $entity              Concrete entity instance, or null for schema-only mode.
-     * @param Collection<int, mixed>|null     $preloadedAttributes Pre-fetched attributes to skip the initial DB query.
+     * @param  Attributable|null  $entity  Concrete entity instance, or null for schema-only mode.
+     * @param  Collection<int, mixed>|null  $preloadedAttributes  Pre-fetched attributes to skip the initial DB query.
      */
     public function __construct(
         protected ?Attributable $entity = null,
@@ -64,8 +64,6 @@ class AttributeManager
     /**
      * Create a manager for a concrete entity instance, class, or string entity type.
      *
-     * @param  string|Attributable $entity
-     * @return static
      *
      * @throws InvalidArgumentException If a class string is passed that does not implement Attributable.
      */
@@ -76,11 +74,11 @@ class AttributeManager
         }
 
         if (class_exists($entity)) {
-            if (!is_subclass_of($entity, Attributable::class)) {
+            if (! is_subclass_of($entity, Attributable::class)) {
                 throw new InvalidArgumentException("$entity must implement Attributable");
             }
 
-            return new static(new $entity());
+            return new static(new $entity);
         }
 
         // String entity type (e.g. 'product') — load schema without an instance.
@@ -93,7 +91,7 @@ class AttributeManager
     /**
      * Load all attribute schemas (without values) into $this->fields.
      *
-     * @throws BindingResolutionException|\JsonException
+     * @throws BindingResolutionException|JsonException
      */
     public function loadSchema(): void
     {
@@ -107,8 +105,9 @@ class AttributeManager
     /**
      * Batch-load and hydrate specific fields by attribute code.
      *
-     * @param  array<string> $codes
-     * @throws \JsonException|BindingResolutionException
+     * @param  array<string>  $codes
+     *
+     * @throws JsonException|BindingResolutionException
      */
     public function loadFields(array $codes): void
     {
@@ -140,10 +139,8 @@ class AttributeManager
     /**
      * Get a single hydrated Field by attribute code.
      *
-     * @param  string $code
-     * @return Field|null
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function getField(string $code): ?Field
     {
@@ -153,7 +150,7 @@ class AttributeManager
 
         $attribute = $this->getAttributes()->firstWhere('code', $code);
 
-        if (!$attribute) {
+        if (! $attribute) {
             return null;
         }
 
@@ -165,7 +162,7 @@ class AttributeManager
     /**
      * Get a single attribute value for the entity.
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function get(string $code, ?int $localeId = null): mixed
     {
@@ -175,8 +172,8 @@ class AttributeManager
     /**
      * Return attached entity_attribute records with their resolved typed values.
      *
-     * @param  array<string>|null $codes
-     * @return Collection<int, \Illuminate\Database\Eloquent\Model>
+     * @param  array<string>|null  $codes
+     * @return Collection<int, Model>
      *
      * @throws BindingResolutionException
      */
@@ -199,7 +196,7 @@ class AttributeManager
      * Return a Builder on the entity model scoped to entities whose attribute
      * with the given code matches the given value using the given operator.
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function attributeQuery(string $code, mixed $value, string $operator = '=', ?int $localeId = null): ?Builder
     {
@@ -207,9 +204,9 @@ class AttributeManager
             ?? $this->getAttributes()->firstWhere('code', $code)?->entity_type;
 
         $modelClass = $entityType ? Relation::getMorphedModel($entityType) : null;
-        $sub        = $this->buildSubquery($code, $value, $operator, $localeId);
+        $sub = $this->buildSubquery($code, $value, $operator, $localeId);
 
-        if (!$sub || !$modelClass) {
+        if (! $sub || ! $modelClass) {
             return null;
         }
 
@@ -219,15 +216,15 @@ class AttributeManager
     /**
      * Build a raw entity_attribute subquery for use in scopes or attributeQuery().
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function buildSubquery(string $code, mixed $value = null, string $operator = '=', ?int $localeId = null): ?Builder
     {
-        $field      = $this->getField($code);
+        $field = $this->getField($code);
         $entityType = $this->entity?->getAttributeEntityType()
             ?? $this->getAttributes()->firstWhere('code', $code)?->entity_type;
 
-        if (!$field || !$entityType) {
+        if (! $field || ! $entityType) {
             return null;
         }
 
@@ -240,12 +237,12 @@ class AttributeManager
             $sub->whereHas('translations', function ($q) use ($value, $operator, $localeId) {
                 $col = 'entity_translations.label';
                 match ($operator) {
-                    'like'     => $q->where($col, 'LIKE', "%{$value}%"),
-                    'in'       => $q->whereIn($col, (array) $value),
-                    'not_in'   => $q->whereNotIn($col, (array) $value),
-                    'null'     => $q->whereNull($col),
+                    'like' => $q->where($col, 'LIKE', "%{$value}%"),
+                    'in' => $q->whereIn($col, (array) $value),
+                    'not_in' => $q->whereNotIn($col, (array) $value),
+                    'null' => $q->whereNull($col),
                     'not_null' => $q->whereNotNull($col),
-                    default    => $q->where($col, $operator, $value),
+                    default => $q->where($col, $operator, $value),
                 };
                 if ($localeId) {
                     $q->where('entity_translations.locale_id', $localeId);
@@ -254,13 +251,13 @@ class AttributeManager
         } else {
             $col = $field->getStorageColumn();
             match ($operator) {
-                'like'     => $sub->where($col, 'LIKE', "%{$value}%"),
-                'in'       => $sub->whereIn($col, (array) $value),
-                'not_in'   => $sub->whereNotIn($col, (array) $value),
-                'null'     => $sub->whereNull($col),
+                'like' => $sub->where($col, 'LIKE', "%{$value}%"),
+                'in' => $sub->whereIn($col, (array) $value),
+                'not_in' => $sub->whereNotIn($col, (array) $value),
+                'null' => $sub->whereNull($col),
                 'not_null' => $sub->whereNotNull($col),
-                'between'  => $sub->whereBetween($col, $value),
-                default    => $sub->where($col, $operator, $value),
+                'between' => $sub->whereBetween($col, $value),
+                default => $sub->where($col, $operator, $value),
             };
         }
 
@@ -270,7 +267,7 @@ class AttributeManager
     /**
      * Build an eager-loaded Builder for entity_attribute records of the current entity.
      *
-     * @param  array<string>|null $codes
+     * @param  array<string>|null  $codes
      */
     public function valuesQuery(?array $codes = null): Builder
     {
@@ -294,11 +291,11 @@ class AttributeManager
      */
     public function distinctValues(string $code): Collection
     {
-        $field      = $this->getField($code);
+        $field = $this->getField($code);
         $entityType = $this->entity?->getAttributeEntityType()
             ?? $this->getAttributes()->firstWhere('code', $code)?->entity_type;
 
-        if (!$field || !$entityType) {
+        if (! $field || ! $entityType) {
             return collect();
         }
 
@@ -313,25 +310,25 @@ class AttributeManager
     /**
      * Aggregate numeric attribute values across all entities of this type.
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function aggregate(string $code, string $aggregate): ?float
     {
-        $field      = $this->getField($code);
+        $field = $this->getField($code);
         $entityType = $this->entity?->getAttributeEntityType()
             ?? $this->getAttributes()->firstWhere('code', $code)?->entity_type;
 
-        if (!$field || !$entityType) {
+        if (! $field || ! $entityType) {
             return null;
         }
 
         $col = $field->getStorageColumn();
 
-        if (!in_array($col, [Field::STORAGE_FLOAT, Field::STORAGE_INTEGER], true)) {
+        if (! in_array($col, [Field::STORAGE_FLOAT, Field::STORAGE_INTEGER], true)) {
             return null;
         }
 
-        if (!in_array($aggregate, ['sum', 'avg', 'min', 'max'], true)) {
+        if (! in_array($aggregate, ['sum', 'avg', 'min', 'max'], true)) {
             throw new InvalidArgumentException("Invalid aggregate '$aggregate'. Allowed: sum, avg, min, max.");
         }
 
@@ -346,13 +343,12 @@ class AttributeManager
 
     /**
      * Return a closure that resolves and assigns the typed value on an entity_attribute record.
-     *
-     * @return \Closure
      */
     public function hydrator(): \Closure
     {
         return function ($record) {
             $record->value = $this->fieldRegistry->make($record->attribute)->getValueFromRecord($record);
+
             return $record;
         };
     }
@@ -360,7 +356,7 @@ class AttributeManager
     /**
      * Find a single entity whose attribute with the given code equals the given value.
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function findBy(string $code, mixed $operatorOrValue, mixed $value = null, ?int $localeId = null): ?Model
     {
@@ -374,7 +370,7 @@ class AttributeManager
      *
      * @return Collection<int, Model>
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function findAllBy(string $code, mixed $operatorOrValue, mixed $value = null, ?int $localeId = null): Collection
     {
@@ -400,7 +396,7 @@ class AttributeManager
     /**
      * Set an attribute value in memory (does not persist to the database).
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function set(string $code, mixed $value, ?int $localeId = null): static
     {
@@ -412,13 +408,13 @@ class AttributeManager
     /**
      * Persist a single attribute value to the database.
      *
-     * @throws \JsonException|BindingResolutionException
+     * @throws JsonException|BindingResolutionException
      */
     public function save(string $code): void
     {
         $field = $this->getField($code);
 
-        if (!$field?->isFilled()) {
+        if (! $field?->isFilled()) {
             return;
         }
 
@@ -428,7 +424,7 @@ class AttributeManager
     /**
      * Persist the given fields, merging with any existing ones (no deletions).
      *
-     * @param  array<string, Field> $fields
+     * @param  array<string, Field>  $fields
      */
     public function attach(array $fields): bool
     {
@@ -442,13 +438,13 @@ class AttributeManager
     /**
      * Persist the given fields and remove any existing rows not in this set.
      *
-     * @param  array<string, Field> $fields
+     * @param  array<string, Field>  $fields
      */
     public function sync(array $fields): bool
     {
         $this->fields = $fields;
 
-        $filled    = collect($this->fields)->filter(fn (Field $f) => $f->isFilled());
+        $filled = collect($this->fields)->filter(fn (Field $f) => $f->isFilled());
         $filledIds = $filled->map(fn (Field $f) => $f->getAttribute()->id)->values()->all();
 
         $persister = $this->persister();
@@ -461,7 +457,7 @@ class AttributeManager
     /**
      * Remove entity_attribute rows for the given attribute IDs.
      *
-     * @param array<int> $ids
+     * @param  array<int>  $ids
      */
     public function detach(array $ids): void
     {
@@ -471,7 +467,7 @@ class AttributeManager
     /**
      * Return the raw Builder for available attributes.
      *
-     * @param  array<string, mixed> $params
+     * @param  array<string, mixed>  $params
      */
     public function availableAttributesQuery(array $params = []): ?Builder
     {
@@ -494,10 +490,10 @@ class AttributeManager
     }
 
     /**
-     * @param  array<string, mixed>       $params
+     * @param  array<string, mixed>  $params
      * @return Collection<int, mixed>
      *
-     * @throws \JsonException
+     * @throws JsonException
      */
     protected function getAttributes(array $params = []): Collection
     {
@@ -507,7 +503,8 @@ class AttributeManager
     }
 
     /**
-     * @param  Collection<int, mixed> $attributes
+     * @param  Collection<int, mixed>  $attributes
+     *
      * @throws BindingResolutionException
      */
     protected function hydrateAttributes(Collection $attributes): void
@@ -551,7 +548,7 @@ class AttributeManager
      */
     private function buildIndexData(): array
     {
-        if (!$this->entity) {
+        if (! $this->entity) {
             return [];
         }
 

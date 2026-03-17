@@ -15,13 +15,13 @@ class AttributeInheritanceResolver
     /**
      * Expand a collection of entities by appending their attribute-inheriting ancestors.
      *
-     * @param  Collection<int, mixed> $entities  Pre-loaded entities (must have shouldInheritAttributes()).
-     * @param  string                 $model     Fully-qualified model class to query ancestors from.
+     * @param  Collection<int, mixed>  $entities  Pre-loaded entities (must have shouldInheritAttributes()).
+     * @param  string  $model  Fully-qualified model class to query ancestors from.
      * @return Collection<int, mixed>
      */
     public function resolve(Collection $entities, string $model): Collection
     {
-        $base      = $entities->values();
+        $base = $entities->values();
         $toInherit = $entities->filter(fn ($e) => $e->shouldInheritAttributes());
 
         if ($toInherit->isEmpty()) {
@@ -38,8 +38,8 @@ class AttributeInheritanceResolver
     /**
      * Collect ancestors using nested-set _lft / _rgt bounds (single query).
      *
-     * @param  Collection<int, mixed> $toInherit
-     * @param  Collection<int, mixed> $base
+     * @param  Collection<int, mixed>  $toInherit
+     * @param  Collection<int, mixed>  $base
      */
     protected function resolveWithNestedSet(Collection $toInherit, Collection $base, string $model): Collection
     {
@@ -82,14 +82,14 @@ class AttributeInheritanceResolver
     /**
      * Collect ancestors by walking the parent_id chain level-by-level (batched queries).
      *
-     * @param  Collection<int, mixed> $toInherit
-     * @param  Collection<int, mixed> $base
+     * @param  Collection<int, mixed>  $toInherit
+     * @param  Collection<int, mixed>  $base
      */
     protected function resolveWithParentId(Collection $toInherit, Collection $base, string $model): Collection
     {
         $currentIds = $toInherit->pluck('parent_id')->filter()->unique();
         $allParents = collect();
-        $maxDepth   = 10;
+        $maxDepth = 10;
 
         while ($currentIds->isNotEmpty() && $maxDepth-- > 0) {
             $parents = $model::query()
@@ -118,20 +118,19 @@ class AttributeInheritanceResolver
      * Walk the parent_id chain through a pre-loaded ancestor map,
      * stopping when an ancestor does not inherit attributes.
      *
-     * @param  mixed                  $entity
-     * @param  Collection<int, mixed> $ancestors  Keyed by id.
+     * @param  Collection<int, mixed>  $ancestors  Keyed by id.
      * @return Collection<int, mixed>
      */
     protected function walkInheritanceChain(mixed $entity, Collection $ancestors): Collection
     {
-        $result    = collect();
+        $result = collect();
         $currentId = $entity->parent_id;
 
         while ($currentId && $ancestors->has($currentId)) {
             $ancestor = $ancestors->get($currentId);
             $result->push($ancestor);
 
-            if (!$ancestor->shouldInheritAttributes()) {
+            if (! $ancestor->shouldInheritAttributes()) {
                 break;
             }
 

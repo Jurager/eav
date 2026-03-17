@@ -14,8 +14,8 @@ trait InteractsWithStorage
     /**
      * Get public URL(s) for stored file(s).
      *
-     * @param string $disk Storage disk name
-     * @param int|null $localeId Locale ID for localized fields
+     * @param  string  $disk  Storage disk name
+     * @param  int|null  $localeId  Locale ID for localized fields
      * @return string|array|null URL string, array of URLs, or null
      */
     public function getUrl(string $disk = 'public', ?int $localeId = null): string|array|null
@@ -36,8 +36,8 @@ trait InteractsWithStorage
     /**
      * Get first URL from multiple file field.
      *
-     * @param string $disk Storage disk name
-     * @param int|null $localeId Locale ID for localized fields
+     * @param  string  $disk  Storage disk name
+     * @param  int|null  $localeId  Locale ID for localized fields
      * @return string|null First URL or null
      */
     public function getFirstUrl(string $disk = 'public', ?int $localeId = null): ?string
@@ -50,8 +50,8 @@ trait InteractsWithStorage
     /**
      * Check if file exists in storage.
      *
-     * @param string $disk Storage disk name
-     * @param int|null $localeId Locale ID for localized fields
+     * @param  string  $disk  Storage disk name
+     * @param  int|null  $localeId  Locale ID for localized fields
      * @return bool True if file exists
      */
     public function exists(string $disk = 'public', ?int $localeId = null): bool
@@ -91,7 +91,7 @@ trait InteractsWithStorage
     {
         $parsed = parse_url($path);
 
-        if ($parsed === false || !isset($parsed['scheme'], $parsed['host'])) {
+        if ($parsed === false || ! isset($parsed['scheme'], $parsed['host'])) {
             return false;
         }
 

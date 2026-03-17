@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Jurager\Eav\EavModels;
 
 /**
- * @property int    $id
+ * @property int $id
  * @property string $code
  */
 class AttributeType extends Model

@@ -2,10 +2,10 @@
 
 namespace Jurager\Eav;
 
-use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\Fields\Field;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Validation\ValidationException;
+use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Fields\Field;
 
 /**
  * Validates incoming attribute payloads against field rules and uniqueness.
@@ -13,6 +13,7 @@ use Illuminate\Validation\ValidationException;
 class AttributeValidator
 {
     private AttributeManager $manager;
+
     private Attributable $entity;
 
     /**
@@ -23,7 +24,7 @@ class AttributeValidator
      */
     public function __construct(Attributable $entity, ?AttributeManager $manager = null)
     {
-        $this->entity  = $entity;
+        $this->entity = $entity;
         $this->manager = $manager ?? AttributeManager::for($entity);
         $this->manager->loadSchema();
     }
@@ -41,8 +42,8 @@ class AttributeValidator
     /**
      * Validate and fill attributes.
      *
-     * @param array $input
      * @return array<string, Field>
+     *
      * @throws ValidationException|\JsonException
      */
     public function validate(array $input): array
@@ -101,19 +102,19 @@ class AttributeValidator
 
             if ($field->hasErrors()) {
                 $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $field->getErrors());
-            } elseif ($field->isMandatory() && !$field->isFilled()) {
+            } elseif ($field->isMandatory() && ! $field->isFilled()) {
                 $errors[$attributeCode][] = __('eav::attributes.validation.required');
             }
 
             if ($field->isUnique() && $field->isFilled()) {
                 $uniqueErrors = $this->validateUniqueness($field);
-                if (!empty($uniqueErrors)) {
+                if (! empty($uniqueErrors)) {
                     $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $uniqueErrors);
                 }
             }
         }
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             throw ValidationException::withMessages($errors);
         }
     }
@@ -125,10 +126,10 @@ class AttributeValidator
      */
     private function validateUniqueness(Field $field): array
     {
-        $errors        = [];
-        $entityType    = $this->entity->getAttributeEntityType();
-        $entityId      = $this->entity->id ?? null;
-        $attributeId   = $field->getAttribute()->id;
+        $errors = [];
+        $entityType = $this->entity->getAttributeEntityType();
+        $entityId = $this->entity->id ?? null;
+        $attributeId = $field->getAttribute()->id;
         $storageColumn = $field->getStorageColumn();
 
         foreach ($field->toStorage() as $item) {

@@ -2,10 +2,11 @@
 
 namespace Jurager\Eav;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Collection;
 
 /**
  * Handles low-level persistence of attribute field values and translations.
@@ -14,8 +15,7 @@ class AttributePersister
 {
     public function __construct(
         private readonly Attributable $entity
-    ) {
-    }
+    ) {}
 
     /**
      * Persist filled fields to the database.
@@ -101,13 +101,13 @@ class AttributePersister
     /**
      * Synchronize one field against existing records (update, insert, delete overflow).
      *
-     * @param Collection<int, \Illuminate\Database\Eloquent\Model> $existing
+     * @param  Collection<int, Model>  $existing
      */
     protected function syncField(Field $field, Collection $existing): void
     {
-        $items    = $field->toStorage();
-        $column   = $field->getStorageColumn();
-        $now      = now();
+        $items = $field->toStorage();
+        $column = $field->getStorageColumn();
+        $now = now();
         $toUpdate = $existing->take(count($items));
         $toInsert = array_slice($items, $existing->count());
         $toDelete = $existing->skip(count($items));
@@ -121,12 +121,12 @@ class AttributePersister
         // Insert new records beyond the existing count.
         foreach ($toInsert as $item) {
             $id = EavModels::query('entity_attribute')->insertGetId([
-                'entity_type'  => $this->entity->getAttributeEntityType(),
-                'entity_id'    => $this->entity->id,
+                'entity_type' => $this->entity->getAttributeEntityType(),
+                'entity_id' => $this->entity->id,
                 'attribute_id' => $field->getAttribute()->id,
-                $column        => $item['value'],
-                'created_at'   => $now,
-                'updated_at'   => $now,
+                $column => $item['value'],
+                'created_at' => $now,
+                'updated_at' => $now,
             ]);
 
             $this->syncTranslations($id, $item['translations']);
@@ -141,7 +141,7 @@ class AttributePersister
     /**
      * Synchronize translation rows for a single entity attribute record.
      *
-     * @param array<int, array{locale_id: int, value: mixed}> $translations
+     * @param  array<int, array{locale_id: int, value: mixed}>  $translations
      */
     protected function syncTranslations(int $recordId, array $translations): void
     {
@@ -162,11 +162,11 @@ class AttributePersister
 
         $rows = array_map(fn ($t) => [
             'entity_type' => 'entity_attribute',
-            'entity_id'   => $recordId,
-            'locale_id'   => $t['locale_id'],
-            'label'       => $t['value'],
-            'created_at'  => $now,
-            'updated_at'  => $now,
+            'entity_id' => $recordId,
+            'locale_id' => $t['locale_id'],
+            'label' => $t['value'],
+            'created_at' => $now,
+            'updated_at' => $now,
         ], $translations);
 
         EavModels::query('entity_translation')->upsert(

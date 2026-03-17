@@ -14,7 +14,7 @@ class NumberField extends Field
 
     protected function validateValue(mixed $value): bool
     {
-        if (!is_numeric($value)) {
+        if (! is_numeric($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 

@@ -38,6 +38,7 @@ class EavModels
     public static function make(string $key): Model
     {
         $class = static::class($key);
-        return new $class();
+
+        return new $class;
     }
 }

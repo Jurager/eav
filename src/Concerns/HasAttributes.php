@@ -2,15 +2,15 @@
 
 namespace Jurager\Eav\Concerns;
 
-use Jurager\Eav\AttributeInheritanceResolver;
-use Jurager\Eav\AttributeManager;
-use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\EavModels;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
 use JsonException;
+use Jurager\Eav\AttributeInheritanceResolver;
+use Jurager\Eav\AttributeManager;
+use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\EavModels;
 
 /**
  * Adds dynamic attribute support to Eloquent models.
@@ -37,7 +37,7 @@ trait HasAttributes
     /**
      * Get available attribute definitions for this entity.
      *
-     * @param  array<string, mixed> $params
+     * @param  array<string, mixed>  $params
      * @return Collection<int, mixed>
      */
     public function getAvailableAttributes(array $params = []): Collection
@@ -50,13 +50,13 @@ trait HasAttributes
     /**
      * Get query builder for available attributes (global or by relation).
      *
-     * @param  array<string, mixed> $params
+     * @param  array<string, mixed>  $params
      */
     public function getAvailableAttributesQuery(array $params = []): ?Builder
     {
         return match ($this->getAttributeScope()) {
             'byRelation' => $this->getAttributesByRelationQuery($params),
-            default      => $this->getGlobalAttributesQuery(),
+            default => $this->getGlobalAttributesQuery(),
         };
     }
 
@@ -111,7 +111,8 @@ trait HasAttributes
      *
      * Each condition: ['code' => string, 'value' => mixed, 'operator' => string (optional)].
      *
-     * @param  array<int, array{code: string, value: mixed, operator?: string}> $conditions
+     * @param  array<int, array{code: string, value: mixed, operator?: string}>  $conditions
+     *
      * @throws JsonException|BindingResolutionException
      */
     public function scopeWhereAttributes(Builder $query, array $conditions): Builder
@@ -170,7 +171,7 @@ trait HasAttributes
      * Build the attribute query scoped by related entities (e.g. categories for a product).
      * Returns null when params are empty or the relation model is invalid.
      *
-     * @param  array<string, mixed> $params
+     * @param  array<string, mixed>  $params
      */
     protected function getAttributesByRelationQuery(array $params = []): ?Builder
     {
@@ -180,7 +181,7 @@ trait HasAttributes
 
         $model = static::getAttributeRelationModel();
 
-        if (!is_subclass_of($model, Attributable::class)) {
+        if (! is_subclass_of($model, Attributable::class)) {
             return null;
         }
 
@@ -196,8 +197,8 @@ trait HasAttributes
 
         $allEntities = app(AttributeInheritanceResolver::class)->resolve($entities, $model);
 
-        $relation   = 'available' . ucfirst($this->getAttributeEntityType()) . 'Attributes';
-        $instance   = new $model()->{$relation}();
+        $relation = 'available'.ucfirst($this->getAttributeEntityType()).'Attributes';
+        $instance = new $model()->{$relation}();
         $pivotTable = $instance->getTable();
         $foreignKey = $instance->getForeignPivotKeyName();
         $relatedKey = $instance->getRelatedPivotKeyName();

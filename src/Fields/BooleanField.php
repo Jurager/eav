@@ -30,7 +30,7 @@ class BooleanField extends Field
     {
         $code = $this->getCode();
 
-        if (!$this->isLocalizable()) {
+        if (! $this->isLocalizable()) {
             return [$code => $this->getValue() ?? false];
         }
 

@@ -1,12 +1,5 @@
 <?php
 
-use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Models\AttributeGroup;
-use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Models\EntityTranslation;
-use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Fields\BooleanField;
 use Jurager\Eav\Fields\DateField;
 use Jurager\Eav\Fields\FileField;
@@ -16,6 +9,13 @@ use Jurager\Eav\Fields\NumberField;
 use Jurager\Eav\Fields\SelectField;
 use Jurager\Eav\Fields\TextAreaField;
 use Jurager\Eav\Fields\TextField;
+use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Models\AttributeGroup;
+use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Models\EntityAttribute;
+use Jurager\Eav\Models\EntityTranslation;
+use Jurager\Eav\Models\Locale;
 
 return [
 
@@ -31,13 +31,13 @@ return [
     | here — add them in your app's published config if you use MeasurementField.
     */
     'models' => [
-        'attribute'          => Attribute::class,
-        'attribute_type'     => AttributeType::class,
-        'attribute_group'    => AttributeGroup::class,
-        'attribute_enum'     => AttributeEnum::class,
-        'entity_attribute'   => EntityAttribute::class,
+        'attribute' => Attribute::class,
+        'attribute_type' => AttributeType::class,
+        'attribute_group' => AttributeGroup::class,
+        'attribute_enum' => AttributeEnum::class,
+        'entity_attribute' => EntityAttribute::class,
         'entity_translation' => EntityTranslation::class,
-        'locale'             => Locale::class,
+        'locale' => Locale::class,
     ],
 
     /*
@@ -56,15 +56,15 @@ return [
     |   ],
     */
     'types' => [
-        'text'     => TextField::class,
+        'text' => TextField::class,
         'textarea' => TextAreaField::class,
-        'number'   => NumberField::class,
-        'date'     => DateField::class,
-        'boolean'  => BooleanField::class,
-        'select'   => SelectField::class,
-        'image'    => ImageField::class,
-        'file'     => FileField::class,
-        'link'     => LinkField::class,
+        'number' => NumberField::class,
+        'date' => DateField::class,
+        'boolean' => BooleanField::class,
+        'select' => SelectField::class,
+        'image' => ImageField::class,
+        'file' => FileField::class,
+        'link' => LinkField::class,
     ],
 
 ];

@@ -8,10 +8,10 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\EavModels;
 
 /**
- * @property int    $id
- * @property int    $attribute_id
+ * @property int $id
+ * @property int $attribute_id
  * @property string $code
- * @property int    $sort
+ * @property int $sort
  */
 class AttributeEnum extends Model
 {

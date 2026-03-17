@@ -14,7 +14,7 @@ class TextField extends Field
 
     protected function validateValue(mixed $value): bool
     {
-        if (!is_string($value)) {
+        if (! is_string($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 

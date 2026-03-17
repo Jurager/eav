@@ -9,9 +9,9 @@ use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\EavModels;
 
 /**
- * @property int    $id
+ * @property int $id
  * @property string $code
- * @property int    $sort
+ * @property int $sort
  */
 class AttributeGroup extends Model
 {

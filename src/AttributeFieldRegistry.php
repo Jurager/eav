@@ -2,9 +2,9 @@
 
 namespace Jurager\Eav;
 
+use InvalidArgumentException;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
-use InvalidArgumentException;
 
 /**
  * Registry for attribute field types.
@@ -31,13 +31,14 @@ class AttributeFieldRegistry
     /**
      * Register a new field type.
      *
-     * @param string $type Field type code
-     * @param class-string<Field> $class Field class name
+     * @param  string  $type  Field type code
+     * @param  class-string<Field>  $class  Field class name
+     *
      * @throws InvalidArgumentException If class does not extend Field
      */
     public function register(string $type, string $class): void
     {
-        if (!is_subclass_of($class, Field::class)) {
+        if (! is_subclass_of($class, Field::class)) {
             throw new InvalidArgumentException("Class '$class' must extend Field.");
         }
 
@@ -55,13 +56,14 @@ class AttributeFieldRegistry
     /**
      * Get field class by type code.
      *
-     * @param string $type Field type code
+     * @param  string  $type  Field type code
      * @return class-string<Field>
+     *
      * @throws InvalidArgumentException If type is not registered
      */
     public function get(string $type): string
     {
-        if (!$this->has($type)) {
+        if (! $this->has($type)) {
             throw new InvalidArgumentException("Field type '$type' is not registered.");
         }
 
@@ -71,8 +73,9 @@ class AttributeFieldRegistry
     /**
      * Create field instance from attribute.
      *
-     * @param Attribute $attribute Attribute model
+     * @param  Attribute  $attribute  Attribute model
      * @return Field Field instance
+     *
      * @throws InvalidArgumentException If attribute type is not registered
      */
     public function make(Attribute $attribute): Field

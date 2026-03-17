@@ -7,12 +7,12 @@ use Illuminate\Database\Eloquent\Relations\MorphPivot;
 use Jurager\Eav\EavModels;
 
 /**
- * @property int    $id
- * @property int    $entity_id
+ * @property int $id
+ * @property int $entity_id
  * @property string $entity_type
- * @property int    $locale_id
+ * @property int $locale_id
  * @property string $label
- * @property array  $params
+ * @property array $params
  */
 class EntityTranslation extends MorphPivot
 {
