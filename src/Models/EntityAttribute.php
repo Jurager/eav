@@ -29,6 +29,12 @@ class EntityAttribute extends Model
         'value_boolean', 'value_date', 'value_datetime',
     ];
 
+    protected $casts = [
+        'value_boolean'  => 'boolean',
+        'value_date'     => 'date',
+        'value_datetime' => 'datetime',
+    ];
+
     protected static function booted(): void
     {
         static::deleting(static function (EntityAttribute $entityAttribute) {

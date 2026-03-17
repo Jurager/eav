@@ -38,12 +38,18 @@ class Attribute extends Model
     ];
 
     protected $casts = [
-        'validations' => 'array',
+        'validations'  => 'array',
+        'mandatory'    => 'boolean',
+        'localizable'  => 'boolean',
+        'multiple'     => 'boolean',
+        'unique'       => 'boolean',
+        'filterable'   => 'boolean',
+        'searchable'   => 'boolean',
     ];
 
     protected static function booted(): void
     {
-        static::deleting(static function (Attribute $attribute) {
+        static::forceDeleting(static function (Attribute $attribute) {
             $attribute->translations()->delete();
         });
 
@@ -93,7 +99,7 @@ class Attribute extends Model
     /**
      * Scope: filter filterable attributes.
      */
-    public function scopeFilterable(Builder $query): Builder
+    public function scopeWhereFilterable(Builder $query): Builder
     {
         return $query->where('filterable', true);
     }

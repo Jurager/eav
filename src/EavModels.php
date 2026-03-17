@@ -27,7 +27,8 @@ class EavModels
 
     public static function class(string $key): string
     {
-        return config("eav.models.{$key}");
+        return config("eav.models.{$key}")
+            ?? throw new \InvalidArgumentException("EAV model '{$key}' is not configured in eav.models.");
     }
 
     public static function query(string $key): Builder
@@ -39,6 +40,6 @@ class EavModels
     {
         $class = static::class($key);
 
-        return new $class;
+        return new $class();
     }
 }

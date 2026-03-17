@@ -145,16 +145,12 @@ trait HasAttributes
     }
 
     /**
-     * Return the attribute scope strategy for this entity.
-     * Override in models that scope attributes by a relation (e.g. category).
-     */
-    /**
      * Build the array of data to index for search engines.
      * Override in the model when Scout is used to include the scout key.
      */
     public function toSearchableArray(): array
     {
-        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()?->getIndexData() ?? []];
+        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()->getIndexData()];
     }
 
     /**
@@ -162,12 +158,29 @@ trait HasAttributes
      */
     public function shouldBeSearchable(): bool
     {
-        return !empty($this->attributes()->getIndexData());
+        return ! empty($this->attributes()->getIndexData());
     }
 
+    /**
+     * Return the attribute scope strategy for this entity.
+     * Override in models that scope attributes by a relation (e.g. category).
+     */
     protected function getAttributeScope(): string
     {
         return 'global';
+    }
+
+    /**
+     * Return the fully-qualified model class used to resolve relation-scoped attributes.
+     * Must be overridden in any model that returns 'byRelation' from getAttributeScope().
+     *
+     * @return class-string
+     */
+    protected static function getAttributeRelationModel(): string
+    {
+        throw new \LogicException(
+            static::class.' must implement getAttributeRelationModel() when getAttributeScope() returns "byRelation".'
+        );
     }
 
     /**

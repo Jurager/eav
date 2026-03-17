@@ -15,7 +15,8 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
     public function __construct(
         protected string $entityType,
         protected int $attributeId,
-    ) {}
+    ) {
+    }
 
     public function uniqueId(): string
     {
@@ -35,7 +36,8 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
             ->where('attribute_id', $this->attributeId)
             ->where('entity_type', $this->entityType);
 
-        $modelClass::whereIn((new $modelClass)->getKeyName(), $subquery)->searchable();
+        $keyName = (new $modelClass)->getKeyName();
+        $modelClass::whereIn($keyName, $subquery)->searchable();
 
         $attribute = EavModels::query('attribute')->withTrashed()->find($this->attributeId);
 

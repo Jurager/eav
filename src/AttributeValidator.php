@@ -3,6 +3,8 @@
 namespace Jurager\Eav;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
@@ -120,7 +122,7 @@ class AttributeValidator
     }
 
     /**
-     * Validate field value uniqueness.
+     * Validate field value uniqueness, excluding soft-deleted entities.
      *
      * @return array<string>
      */
@@ -131,6 +133,9 @@ class AttributeValidator
         $entityId = $this->entity->id ?? null;
         $attributeId = $field->getAttribute()->id;
         $storageColumn = $field->getStorageColumn();
+
+        $modelClass = Relation::getMorphedModel($entityType);
+        $usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
 
         foreach ($field->toStorage() as $item) {
             $value = $item['value'];
@@ -147,6 +152,11 @@ class AttributeValidator
 
             if ($entityId) {
                 $query->where('entity_id', '!=', $entityId);
+            }
+
+            if ($usesSoftDeletes) {
+                $keyName = (new $modelClass)->getKeyName();
+                $query->whereIn('entity_id', $modelClass::query()->select($keyName));
             }
 
             if ($query->exists()) {

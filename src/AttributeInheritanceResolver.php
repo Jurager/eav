@@ -52,7 +52,8 @@ class AttributeInheritanceResolver
         $ancestors = $model::query()
             ->where(function ($query) use ($valid) {
                 foreach ($valid as $entity) {
-                    $query->orWhere(fn ($q) => $q
+                    $query->orWhere(
+                        fn ($q) => $q
                         ->where('_lft', '<', $entity->_lft)
                         ->where('_rgt', '>', $entity->_rgt)
                     );

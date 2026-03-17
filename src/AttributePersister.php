@@ -15,7 +15,8 @@ class AttributePersister
 {
     public function __construct(
         private readonly Attributable $entity
-    ) {}
+    ) {
+    }
 
     /**
      * Persist filled fields to the database.

@@ -42,7 +42,7 @@ abstract class Field
      */
     public function __construct(protected Attribute $attribute, ?AttributeLocaleRegistry $localeRegistry = null)
     {
-        $this->localeRegistry = $localeRegistry ?? new AttributeLocaleRegistry;
+        $this->localeRegistry = $localeRegistry ?? new AttributeLocaleRegistry();
     }
 
     /**
@@ -447,7 +447,7 @@ abstract class Field
                 return $this->addError(__('eav::attributes.validation.invalid_format'));
             }
 
-            if (array_any($group, fn ($translation) => ! $this->validateTranslation($translation))) {
+            if (! array_all($group, fn ($translation) => $this->validateTranslation($translation))) {
                 return false;
             }
         }
