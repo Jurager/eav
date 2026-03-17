@@ -22,6 +22,8 @@ class EavServiceProvider extends ServiceProvider
             __DIR__.'/../config/eav.php' => config_path('eav.php'),
         ], 'eav-config');
 
+        $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
+
         $this->publishes([
             __DIR__.'/../database/migrations/' => database_path('migrations'),
         ], 'eav-migrations');

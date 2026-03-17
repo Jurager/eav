@@ -218,6 +218,6 @@ trait HasAttributes
 
         return EavModels::query('attribute')
             ->whereIn('id', fn ($q) => $q->select($relatedKey)->from($pivotTable)->whereIn($foreignKey, $allEntities->pluck('id')))
-            ->with(['type', 'group.translations', 'measurement.translations', 'measurement.units', 'translations']);
+            ->withRelations();
     }
 }

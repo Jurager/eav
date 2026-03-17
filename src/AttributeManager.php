@@ -276,8 +276,6 @@ class AttributeManager
             ->with([
                 'attribute.type',
                 'attribute.group.translations',
-                'attribute.measurement.translations',
-                'attribute.measurement.units',
                 'attribute.translations',
                 'attribute.enums.translations',
                 'translations',
