@@ -10,6 +10,15 @@ use Jurager\Eav\Models\AttributeEnum;
  */
 class SelectField extends Field
 {
+    /**
+     * In-memory cache of valid enum IDs keyed by attribute_id.
+     * Shared across all instances for the lifetime of the process (one request / job run).
+     * Values are dummy true-s so membership can be tested with isset() in O(1).
+     *
+     * @var array<int, array<int, true>>
+     */
+    private static array $enumCache = [];
+
     public function getStorageColumn(): string
     {
         return self::STORAGE_INTEGER;
@@ -173,14 +182,8 @@ class SelectField extends Field
             }
         }
 
-        $requested = array_map('intval', $values);
-        $valid = EavModels::query('attribute_enum')
-            ->where('attribute_id', $this->attribute->id)
-            ->whereIn('id', $requested)
-            ->pluck('id')
-            ->all();
-
-        $invalid = array_diff($requested, $valid);
+        $validIds = $this->cachedEnumIds();
+        $invalid  = array_filter(array_map('intval', $values), fn ($id) => ! isset($validIds[$id]));
 
         if (! empty($invalid)) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));
@@ -212,17 +215,33 @@ class SelectField extends Field
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
-        $enumId = (int) $value;
-        $exists = EavModels::query('attribute_enum')
-            ->where('attribute_id', $this->attribute->id)
-            ->where('id', $enumId)
-            ->exists();
-
-        if (! $exists) {
+        if (! isset($this->cachedEnumIds()[(int) $value])) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));
         }
 
         return true;
+    }
+
+    /**
+     * Return valid enum IDs for this attribute as a flip-array (id => true) for O(1) lookup.
+     * The result is cached statically per attribute_id for the lifetime of the process.
+     *
+     * @return array<int, true>
+     */
+    private function cachedEnumIds(): array
+    {
+        $attrId = $this->attribute->id;
+
+        if (! isset(self::$enumCache[$attrId])) {
+            $ids = EavModels::query('attribute_enum')
+                ->where('attribute_id', $attrId)
+                ->pluck('id')
+                ->all();
+
+            self::$enumCache[$attrId] = array_fill_keys($ids, true);
+        }
+
+        return self::$enumCache[$attrId];
     }
 
     protected function processValue(mixed $value): int

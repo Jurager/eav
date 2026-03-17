@@ -581,6 +581,7 @@ class AttributeManager
         $records = $this->entity
             ? $this->entityQuery()
                 ->whereIn('attribute_id', $attributes->pluck('id')->all())
+                ->with('translations')
                 ->get()
                 ->groupBy('attribute_id')
             : collect();
