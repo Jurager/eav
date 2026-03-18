@@ -42,7 +42,7 @@ abstract class Field
      */
     public function __construct(protected Attribute $attribute, ?AttributeLocaleRegistry $localeRegistry = null)
     {
-        $this->localeRegistry = $localeRegistry ?? new AttributeLocaleRegistry();
+        $this->localeRegistry = $localeRegistry ?? app(AttributeLocaleRegistry::class);
     }
 
     /**
