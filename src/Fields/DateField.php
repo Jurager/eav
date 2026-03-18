@@ -70,7 +70,7 @@ class DateField extends Field
 
         $values = array_values(array_filter(
             array_map(fn (array $item) => $this->toTimestamp($this->parseDate($item['value'])), $this->values),
-            fn ($v) => $v !== null
+            static fn ($v) => $v !== null
         ));
 
         return $values ? [$code => $values] : [];

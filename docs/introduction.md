@@ -18,7 +18,7 @@ weight: 10
 
 ## Requirements
 
-- PHP >= 8.2
+- PHP >= 8.3
 - Laravel 11+
 
 ## How It Works

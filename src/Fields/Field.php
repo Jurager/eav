@@ -4,8 +4,8 @@ namespace Jurager\Eav\Fields;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
-use Jurager\Eav\Registry\AttributeLocaleRegistry;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\AttributeLocaleRegistry;
 
 /**
  * Base attribute field abstraction for validation, localization and storage mapping.
@@ -37,8 +37,8 @@ abstract class Field
     protected AttributeLocaleRegistry $localeRegistry;
 
     /**
-     * @param  Attribute                     $attribute      Attribute definition model.
-     * @param  AttributeLocaleRegistry|null  $localeRegistry Locale registry dependency.
+     * @param  Attribute  $attribute  Attribute definition model.
+     * @param  AttributeLocaleRegistry|null  $localeRegistry  Locale registry dependency.
      */
     public function __construct(protected Attribute $attribute, ?AttributeLocaleRegistry $localeRegistry = null)
     {
@@ -267,32 +267,32 @@ abstract class Field
 
     public function isLocalizable(): bool
     {
-        return (bool) $this->attribute->localizable;
+        return $this->attribute->localizable;
     }
 
     public function isMultiple(): bool
     {
-        return (bool) $this->attribute->multiple;
+        return $this->attribute->multiple;
     }
 
     public function isMandatory(): bool
     {
-        return (bool) $this->attribute->mandatory;
+        return $this->attribute->mandatory;
     }
 
     public function isUnique(): bool
     {
-        return (bool) $this->attribute->unique;
+        return $this->attribute->unique;
     }
 
     public function isFilterable(): bool
     {
-        return (bool) ($this->attribute->filterable ?? false);
+        return $this->attribute->filterable ?? false;
     }
 
     public function isSearchable(): bool
     {
-        return (bool) ($this->attribute->searchable ?? false);
+        return $this->attribute->searchable ?? false;
     }
 
     /**
@@ -327,7 +327,7 @@ abstract class Field
 
         $values = array_values(array_filter(
             array_column($this->values, 'value'),
-            fn ($v) => $v !== null && $v !== ''
+            static fn ($v) => $v !== null && $v !== ''
         ));
 
         return $values ? [$code => $values] : [];
@@ -340,7 +340,6 @@ abstract class Field
     {
         return $record->{$this->column()};
     }
-
 
     /**
      * Validate the full incoming payload, handling cardinality and localization.
@@ -489,16 +488,16 @@ abstract class Field
             $param = $validation['value'] ?? null;
 
             $rule = match ($type) {
-                'min_length' => "min:{$param}",
-                'max_length' => "max:{$param}",
-                'min' => "min:{$param}",
-                'max' => "max:{$param}",
-                'regex' => "regex:{$param}",
+                'min_length' => "min:$param",
+                'max_length' => "max:$param",
+                'min' => "min:$param",
+                'max' => "max:$param",
+                'regex' => "regex:$param",
                 'email' => 'email',
                 'url' => 'url',
-                'date_format' => "date_format:{$param}",
-                'after' => "after:{$param}",
-                'before' => "before:{$param}",
+                'date_format' => "date_format:$param",
+                'after' => "after:$param",
+                'before' => "before:$param",
                 default => null,
             };
 

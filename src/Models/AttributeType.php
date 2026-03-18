@@ -12,7 +12,7 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeType extends Model
 {
-    protected $fillable = ['code'];
+    protected array $fillable = ['code'];
 
     public function attributes(): HasMany
     {

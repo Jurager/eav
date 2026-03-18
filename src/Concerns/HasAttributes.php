@@ -6,12 +6,15 @@ use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Support\AttributeManager;
 use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
+use LogicException;
 
 /**
  * Adds dynamic attribute support to Eloquent models.
@@ -38,10 +41,10 @@ trait HasAttributes
     /**
      * Validate and fill attribute input, returning filled Field instances keyed by code.
      *
-     * @param  array<int, array{code: string, values: mixed}>  $input
-     * @return array<string, \Jurager\Eav\Fields\Field>
+     * @param array<int, array{code: string, values: mixed}> $input
+     * @return array<string, Field>
      *
-     * @throws \Illuminate\Validation\ValidationException
+     * @throws ValidationException|JsonException
      */
     public function validate(array $input): array
     {
@@ -192,7 +195,7 @@ trait HasAttributes
      */
     protected static function getAttributeRelationModel(): string
     {
-        throw new \LogicException(
+        throw new LogicException(
             static::class.' must implement getAttributeRelationModel() when getAttributeScope() returns "byRelation".'
         );
     }

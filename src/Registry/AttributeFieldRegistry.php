@@ -31,10 +31,10 @@ class AttributeFieldRegistry
     /**
      * Register a new field type.
      *
-     * @param  string               $type   Field type code.
+     * @param  string  $type  Field type code.
      * @param  class-string<Field>  $class  Field class name.
      *
-     * @throws InvalidArgumentException  If class does not extend Field.
+     * @throws InvalidArgumentException If class does not extend Field.
      */
     public function register(string $type, string $class): void
     {
@@ -56,10 +56,10 @@ class AttributeFieldRegistry
     /**
      * Resolve the Field class name for a given type code.
      *
-     * @param   string  $type  Field type code.
-     * @return  class-string<Field>
+     * @param  string  $type  Field type code.
+     * @return class-string<Field>
      *
-     * @throws InvalidArgumentException  If the type is not registered.
+     * @throws InvalidArgumentException If the type is not registered.
      */
     public function resolve(string $type): string
     {
@@ -73,10 +73,9 @@ class AttributeFieldRegistry
     /**
      * Create a Field instance from an Attribute model.
      *
-     * @param   Attribute  $attribute  Attribute model.
-     * @return  Field
+     * @param  Attribute  $attribute  Attribute model.
      *
-     * @throws InvalidArgumentException  If the attribute type is not registered.
+     * @throws InvalidArgumentException If the attribute type is not registered.
      */
     public function make(Attribute $attribute): Field
     {

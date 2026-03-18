@@ -44,11 +44,11 @@ class AttributePersister
      * @var array<string, null>
      */
     private const array NULL_COLUMNS = [
-        'value_text'     => null,
-        'value_integer'  => null,
-        'value_float'    => null,
-        'value_boolean'  => null,
-        'value_date'     => null,
+        'value_text' => null,
+        'value_integer' => null,
+        'value_float' => null,
+        'value_boolean' => null,
+        'value_date' => null,
         'value_datetime' => null,
     ];
 
@@ -64,7 +64,8 @@ class AttributePersister
      */
     public function __construct(
         private readonly ?Attributable $entity = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Persist a collection of filled fields for the current entity.
@@ -73,7 +74,7 @@ class AttributePersister
      */
     public function persist(Collection $filled): void
     {
-        if ($filled->isEmpty() || $this->entity === null) {
+        if ($this->entity === null || $filled->isEmpty()) {
             return;
         }
 
@@ -162,8 +163,8 @@ class AttributePersister
     /**
      * Stage fields for a single entity. Call flush() when the batch is complete.
      *
-     * @param  Attributable           $entity  The entity whose attributes are being written.
-     * @param  Collection<int, Field> $fields  Filled Field instances to persist.
+     * @param  Attributable  $entity  The entity whose attributes are being written.
+     * @param  Collection<int, Field>  $fields  Filled Field instances to persist.
      */
     public function add(Attributable $entity, Collection $fields): void
     {
@@ -193,7 +194,7 @@ class AttributePersister
      * fields into update / insert / delete buckets, executes the minimal set
      * of batch DB operations, and syncs translations for all touched records.
      *
-     * @param  string                                     $entityType      Morph-map key (e.g. 'product').
+     * @param  string  $entityType  Morph-map key (e.g. 'product').
      * @param  array<int|string, Collection<int, Field>>  $entitiesByType  Fields keyed by entity ID.
      */
     private function persistGroup(string $entityType, array $entitiesByType): void
@@ -224,8 +225,16 @@ class AttributePersister
         foreach ($entitiesByType as $entityId => $fields) {
             foreach ($fields as $field) {
                 $this->partitionField(
-                    $field, $entityType, $entityId, $existingByKey, $now,
-                    $toUpdate, $toInsert, $toDelete, $insertTranslations, $updateTranslations,
+                    $field,
+                    $entityType,
+                    $entityId,
+                    $existingByKey,
+                    $now,
+                    $toUpdate,
+                    $toInsert,
+                    $toDelete,
+                    $insertTranslations,
+                    $updateTranslations,
                 );
             }
         }
@@ -260,16 +269,12 @@ class AttributePersister
      * Called once per field inside the persistGroup() loop. All output arrays are
      * passed by reference so the caller accumulates results without extra allocations.
      *
-     * @param  Field                                      $field
-     * @param  string                                     $entityType
-     * @param  int|string                                 $entityId
-     * @param  Collection<string, Collection<int, mixed>> $existingByKey    Existing records keyed by attrKey().
-     * @param  Carbon                                     $now
-     * @param  array<int, array>                          $toUpdate         Accumulated rows to upsert.
-     * @param  array<int, array>                          $toInsert         Accumulated rows to insert.
-     * @param  array<int, int>                            $toDelete         Accumulated record IDs to delete.
-     * @param  array<int, array>                          $insertTranslations Parallel to $toInsert.
-     * @param  array<int, array>                          $updateTranslations Map of record_id => translations.
+     * @param  Collection<string, Collection<int, mixed>>  $existingByKey  Existing records keyed by attrKey().
+     * @param  array<int, array>  $toUpdate  Accumulated rows to upsert.
+     * @param  array<int, array>  $toInsert  Accumulated rows to insert.
+     * @param  array<int, int>  $toDelete  Accumulated record IDs to delete.
+     * @param  array<int, array>  $insertTranslations  Parallel to $toInsert.
+     * @param  array<int, array>  $updateTranslations  Map of record_id => translations.
      */
     private function partitionField(
         Field $field,
@@ -322,11 +327,11 @@ class AttributePersister
      * returned in (entity_id, attribute_id, id) order map positionally to the
      * same order.
      *
-     * @param  string             $entityType          Morph-map key of the entity type.
-     * @param  array<int, array>  $toInsert            Rows to insert.
+     * @param  string  $entityType  Morph-map key of the entity type.
+     * @param  array<int, array>  $toInsert  Rows to insert.
      * @param  array<int, array>  $insertTranslations  Translation payloads, parallel to $toInsert.
-     * @param  array<int, int>    $existingIds         Record IDs that existed before this call.
-     * @return array<int, array>                       Map of new record ID => translation payload.
+     * @param  array<int, int>  $existingIds  Record IDs that existed before this call.
+     * @return array<int, array> Map of new record ID => translation payload.
      */
     private function insertAndResolveTranslations(
         string $entityType,
@@ -374,7 +379,6 @@ class AttributePersister
      * Handling all records together avoids a DELETE + UPSERT pair per record.
      *
      * @param  array<int, array<int, array{locale_id: int, value: mixed}>>  $translationsByRecordId
-     * @param  Carbon                                                        $now
      */
     private function syncTranslations(array $translationsByRecordId, Carbon $now): void
     {
@@ -391,11 +395,11 @@ class AttributePersister
                 $validLocales[] = $t['locale_id'];
                 $rows[] = [
                     'entity_type' => 'entity_attribute',
-                    'entity_id'   => $recordId,
-                    'locale_id'   => $t['locale_id'],
-                    'label'       => $t['value'],
-                    'created_at'  => $now,
-                    'updated_at'  => $now,
+                    'entity_id' => $recordId,
+                    'locale_id' => $t['locale_id'],
+                    'label' => $t['value'],
+                    'created_at' => $now,
+                    'updated_at' => $now,
                 ];
             }
         }
@@ -440,8 +444,6 @@ class AttributePersister
 
     /**
      * Return a Builder scoped to entity_attribute rows for the current entity.
-     *
-     * @return Builder
      */
     private function entityQuery(): Builder
     {
@@ -454,34 +456,30 @@ class AttributePersister
      * Build a row with all value columns set to null and all required metadata filled in.
      * The caller sets the single typed column it needs before adding the row to a batch.
      *
-     * @param  string      $entityType  Morph-map key.
-     * @param  int|string  $entityId    Primary key of the entity.
-     * @param  int         $attrId      Primary key of the attribute.
-     * @param  Carbon      $now         Timestamp applied to created_at and updated_at.
+     * @param  string  $entityType  Morph-map key.
+     * @param  int|string  $entityId  Primary key of the entity.
+     * @param  int  $attrId  Primary key of the attribute.
+     * @param  Carbon  $now  Timestamp applied to created_at and updated_at.
      * @return array<string, mixed>
      */
     private function blankRow(string $entityType, int|string $entityId, int $attrId, Carbon $now): array
     {
         return [
-            'entity_type'  => $entityType,
-            'entity_id'    => $entityId,
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
             'attribute_id' => $attrId,
             ...self::NULL_COLUMNS,
-            'created_at'   => $now,
-            'updated_at'   => $now,
+            'created_at' => $now,
+            'updated_at' => $now,
         ];
     }
 
     /**
      * Build the composite lookup key used to group and retrieve records
      * by (entity_id, attribute_id) pair.
-     *
-     * @param int|string $entityId
-     * @param int $attrId
-     * @return string
      */
     private static function attrKey(int|string $entityId, int $attrId): string
     {
-        return $entityId . ':' . $attrId;
+        return $entityId.':'.$attrId;
     }
 }

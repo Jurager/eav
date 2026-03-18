@@ -11,5 +11,5 @@ use Illuminate\Database\Eloquent\Model;
  */
 class Locale extends Model
 {
-    protected $fillable = ['code', 'name'];
+    protected array $fillable = ['code', 'name'];
 }

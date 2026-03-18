@@ -2,6 +2,7 @@
 
 namespace Jurager\Eav\Support;
 
+use Closure;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -50,8 +51,8 @@ class AttributeManager
     private ?array $indexData = null;
 
     /**
-     * @param  Attributable|null              $entity               Concrete entity instance, or null for schema-only mode.
-     * @param  Collection<int, mixed>|null    $preloadedAttributes  Pre-fetched attributes to skip the initial DB query.
+     * @param  Attributable|null  $entity  Concrete entity instance, or null for schema-only mode.
+     * @param  Collection<int, mixed>|null  $preloadedAttributes  Pre-fetched attributes to skip the initial DB query.
      */
     public function __construct(
         protected ?Attributable $entity = null,
@@ -70,7 +71,7 @@ class AttributeManager
      *
      * @param  string|Attributable  $entity  Entity instance, FQCN, or morph-map key (e.g. 'product').
      *
-     * @throws InvalidArgumentException  If a class string is passed that does not implement Attributable.
+     * @throws InvalidArgumentException If a class string is passed that does not implement Attributable.
      */
     public static function for(string|Attributable $entity): static
     {
@@ -114,7 +115,7 @@ class AttributeManager
      *   ]));
      *
      * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
-     * @param  int                                                                        $chunkSize  Number of entities per flush (default 500).
+     * @param  int  $chunkSize  Number of entities per flush (default 500).
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -134,7 +135,7 @@ class AttributeManager
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
                 $params = $entity->getDefaultParameters();
-                $cacheKey = $entity->getAttributeEntityType() . ':' . md5(serialize($params));
+                $cacheKey = $entity->getAttributeEntityType().':'.md5(serialize($params));
 
                 if (! isset($schemaCache[$cacheKey])) {
                     $schemaCache[$cacheKey] = static::for($entity);
@@ -234,7 +235,7 @@ class AttributeManager
      * Return the typed value of a single attribute for the current entity.
      * Pass $localeId to get a locale-specific value for localizable fields.
      *
-     * @param  string    $code      Attribute code.
+     * @param  string  $code  Attribute code.
      * @param  int|null  $localeId  Locale ID, or null for the default locale.
      *
      * @throws JsonException
@@ -249,8 +250,8 @@ class AttributeManager
      * Set an attribute value in memory without persisting to the database.
      * Chain multiple calls and then call save() or sync() to persist.
      *
-     * @param  string    $code      Attribute code.
-     * @param  mixed     $value     Value to set.
+     * @param  string  $code  Attribute code.
+     * @param  mixed  $value  Value to set.
      * @param  int|null  $localeId  Target locale for localizable fields.
      *
      * @throws JsonException
@@ -333,7 +334,7 @@ class AttributeManager
      * schema is warm; subsequent calls are O(n fields) with no DB queries.
      *
      * @param  array<string, mixed>  $data  Raw attribute values keyed by attribute code.
-     * @return Collection<int, Field>       Filled Field instances (unfilled fields are excluded).
+     * @return Collection<int, Field> Filled Field instances (unfilled fields are excluded).
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -377,9 +378,9 @@ class AttributeManager
      * Return a closure that resolves and assigns the typed value on an entity_attribute record.
      * Useful when mapping over paginated results: ->through($manager->valueMapper()).
      *
-     * @return \Closure(Model): Model
+     * @return Closure(Model): Model
      */
-    public function valueMapper(): \Closure
+    public function valueMapper(): Closure
     {
         return function ($record) {
             $record->value = $this->fieldRegistry->make($record->attribute)->fromRecord($record);
@@ -411,7 +412,7 @@ class AttributeManager
      * Return memoized search index data for all searchable attributes of the current entity.
      * Result is cached for the lifetime of the manager instance.
      *
-     * @return array<string, mixed>  Empty array when entity is not set or has no searchable attributes.
+     * @return array<string, mixed> Empty array when entity is not set or has no searchable attributes.
      */
     public function indexData(): array
     {
@@ -452,10 +453,10 @@ class AttributeManager
      * across all entities of this type. Returns null if the attribute is not numeric
      * or cannot be resolved.
      *
-     * @param  string  $code       Attribute code.
+     * @param  string  $code  Attribute code.
      * @param  string  $aggregate  One of: sum, avg, min, max.
      *
-     * @throws InvalidArgumentException  If $aggregate is not one of the allowed values.
+     * @throws InvalidArgumentException If $aggregate is not one of the allowed values.
      * @throws JsonException
      * @throws BindingResolutionException
      */
@@ -493,9 +494,9 @@ class AttributeManager
      * with the given code matches the given value using the given operator.
      * Returns null if the attribute or entity type cannot be resolved.
      *
-     * @param  string    $code      Attribute code.
-     * @param  mixed     $value     Value to compare against.
-     * @param  string    $operator  Comparison operator: =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
+     * @param  string  $code  Attribute code.
+     * @param  mixed  $value  Value to compare against.
+     * @param  string  $operator  Comparison operator: =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
      * @param  int|null  $localeId  Restrict localizable field search to this locale.
      *
      * @throws JsonException
@@ -523,9 +524,9 @@ class AttributeManager
      *
      * Supported operators: =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
      *
-     * @param  string    $code      Attribute code.
-     * @param  mixed     $value     Value(s) to compare against. For 'between' pass [min, max].
-     * @param  string    $operator  Comparison operator (default '=').
+     * @param  string  $code  Attribute code.
+     * @param  mixed  $value  Value(s) to compare against. For 'between' pass [min, max].
+     * @param  string  $operator  Comparison operator (default '=').
      * @param  int|null  $localeId  For localizable fields, restrict to this locale.
      *
      * @throws JsonException
@@ -550,13 +551,13 @@ class AttributeManager
             $sub->whereHas('translations', function ($q) use ($value, $operator, $localeId) {
                 $col = 'entity_translations.label';
                 match ($operator) {
-                    'like'     => $q->where($col, 'LIKE', "%{$value}%"),
-                    'in'       => $q->whereIn($col, (array) $value),
-                    'not_in'   => $q->whereNotIn($col, (array) $value),
-                    'null'     => $q->whereNull($col),
+                    'like' => $q->where($col, 'LIKE', "%$value%"),
+                    'in' => $q->whereIn($col, (array) $value),
+                    'not_in' => $q->whereNotIn($col, (array) $value),
+                    'null' => $q->whereNull($col),
                     'not_null' => $q->whereNotNull($col),
-                    'between'  => $q->whereBetween($col, $value),
-                    default    => $q->where($col, $operator, $value),
+                    'between' => $q->whereBetween($col, $value),
+                    default => $q->where($col, $operator, $value),
                 };
                 if ($localeId) {
                     $q->where('entity_translations.locale_id', $localeId);
@@ -567,13 +568,13 @@ class AttributeManager
             $col = $field->column();
 
             match ($operator) {
-                'like'     => $sub->where($col, 'LIKE', "%{$value}%"),
-                'in'       => $sub->whereIn($col, (array) $value),
-                'not_in'   => $sub->whereNotIn($col, (array) $value),
-                'null'     => $sub->whereNull($col),
+                'like' => $sub->where($col, 'LIKE', "%$value%"),
+                'in' => $sub->whereIn($col, (array) $value),
+                'not_in' => $sub->whereNotIn($col, (array) $value),
+                'null' => $sub->whereNull($col),
                 'not_null' => $sub->whereNotNull($col),
-                'between'  => $sub->whereBetween($col, $value),
-                default    => $sub->where($col, $operator, $value),
+                'between' => $sub->whereBetween($col, $value),
+                default => $sub->where($col, $operator, $value),
             };
         }
 
@@ -584,10 +585,10 @@ class AttributeManager
      * Find a single entity whose attribute with the given code matches the given value.
      * Supports an optional operator as the second argument (findBy-operator-value style).
      *
-     * @param  string    $code             Attribute code.
-     * @param  mixed     $operatorOrValue  Operator string ('=', '>', 'like', …) or value when operator is '='.
-     * @param  mixed     $value            Value to compare against; used only when $operatorOrValue is an operator.
-     * @param  int|null  $localeId         Restrict localizable field search to this locale.
+     * @param  string  $code  Attribute code.
+     * @param  mixed  $operatorOrValue  Operator string ('=', '>', 'like', …) or value when operator is '='.
+     * @param  mixed  $value  Value to compare against; used only when $operatorOrValue is an operator.
+     * @param  int|null  $localeId  Restrict localizable field search to this locale.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -603,10 +604,10 @@ class AttributeManager
      * Find all entities whose attribute with the given code matches the given value.
      * Supports an optional operator as the second argument (findAllBy-operator-value style).
      *
-     * @param  string    $code             Attribute code.
-     * @param  mixed     $operatorOrValue  Operator string or value when operator is '='.
-     * @param  mixed     $value            Value to compare against; used only when $operatorOrValue is an operator.
-     * @param  int|null  $localeId         Restrict localizable field search to this locale.
+     * @param  string  $code  Attribute code.
+     * @param  mixed  $operatorOrValue  Operator string or value when operator is '='.
+     * @param  mixed  $value  Value to compare against; used only when $operatorOrValue is an operator.
+     * @param  int|null  $localeId  Restrict localizable field search to this locale.
      * @return Collection<int, Model>
      *
      * @throws JsonException
@@ -633,7 +634,7 @@ class AttributeManager
     /**
      * Return the current entity, throwing when the manager was built in schema-only mode.
      *
-     * @throws LogicException  When no entity was provided to the constructor.
+     * @throws LogicException When no entity was provided to the constructor.
      */
     protected function entityOrFail(): Attributable
     {

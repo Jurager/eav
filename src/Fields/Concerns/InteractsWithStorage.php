@@ -14,9 +14,9 @@ trait InteractsWithStorage
     /**
      * Return the public URL(s) for stored file(s).
      *
-     * @param  string   $disk      Storage disk name.
-     * @param  int|null $localeId  Locale ID for localized fields.
-     * @return string|array|null   URL string, array of URLs, or null.
+     * @param  string  $disk  Storage disk name.
+     * @param  int|null  $localeId  Locale ID for localized fields.
+     * @return string|array|null URL string, array of URLs, or null.
      */
     public function url(string $disk = 'public', ?int $localeId = null): string|array|null
     {
@@ -36,8 +36,8 @@ trait InteractsWithStorage
     /**
      * Return the first URL from a multiple-file field.
      *
-     * @param  string   $disk      Storage disk name.
-     * @param  int|null $localeId  Locale ID for localized fields.
+     * @param  string  $disk  Storage disk name.
+     * @param  int|null  $localeId  Locale ID for localized fields.
      */
     public function firstUrl(string $disk = 'public', ?int $localeId = null): ?string
     {
@@ -49,8 +49,8 @@ trait InteractsWithStorage
     /**
      * Determine if the stored file exists in the given disk.
      *
-     * @param  string   $disk      Storage disk name.
-     * @param  int|null $localeId  Locale ID for localized fields.
+     * @param  string  $disk  Storage disk name.
+     * @param  int|null  $localeId  Locale ID for localized fields.
      */
     public function exists(string $disk = 'public', ?int $localeId = null): bool
     {

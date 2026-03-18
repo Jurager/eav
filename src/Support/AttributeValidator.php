@@ -6,6 +6,7 @@ use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
+use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 
@@ -22,7 +23,7 @@ class AttributeValidator
      * Pass an existing AttributeManager to reuse its schema cache.
      *
      * @throws BindingResolutionException
-     * @throws \JsonException
+     * @throws JsonException
      */
     public function __construct(Attributable $entity, ?AttributeManager $manager = null)
     {
@@ -34,7 +35,7 @@ class AttributeValidator
     /**
      * Static factory for a cleaner call site.
      *
-     * @throws BindingResolutionException|\JsonException
+     * @throws BindingResolutionException|JsonException
      */
     public static function make(Attributable $entity, ?AttributeManager $manager = null): static
     {
@@ -46,7 +47,7 @@ class AttributeValidator
      *
      * @return array<string, Field>
      *
-     * @throws ValidationException|\JsonException
+     * @throws ValidationException|JsonException
      */
     public function validate(array $input): array
     {
@@ -59,7 +60,7 @@ class AttributeValidator
     /**
      * Fill fields with input data.
      *
-     * @throws \JsonException
+     * @throws JsonException
      * @throws BindingResolutionException
      */
     private function fillFields(array $input): void
@@ -155,7 +156,7 @@ class AttributeValidator
             }
 
             if ($usesSoftDeletes) {
-                $keyName = (new $modelClass)->getKeyName();
+                $keyName = new $modelClass()->getKeyName();
                 $query->whereIn('entity_id', $modelClass::query()->select($keyName));
             }
 

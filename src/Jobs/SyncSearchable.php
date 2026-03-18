@@ -36,7 +36,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
             ->where('attribute_id', $this->attributeId)
             ->where('entity_type', $this->entityType);
 
-        $keyName = (new $modelClass)->getKeyName();
+        $keyName = new $modelClass()->getKeyName();
         $modelClass::whereIn($keyName, $subquery)->searchable();
 
         $attribute = EavModels::query('attribute')->withTrashed()->find($this->attributeId);

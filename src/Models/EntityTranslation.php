@@ -16,14 +16,14 @@ use Jurager\Eav\Support\EavModels;
  */
 class EntityTranslation extends MorphPivot
 {
-    protected $table = 'entity_translations';
+    protected string $table = 'entity_translations';
 
-    protected $fillable = [
+    protected array $fillable = [
         'entity_id', 'entity_type', 'locale_id', 'label', 'params',
         'params->short_name', 'params->hint', 'params->placeholder',
     ];
 
-    protected $casts = [
+    protected array $casts = [
         'params' => 'array',
     ];
 

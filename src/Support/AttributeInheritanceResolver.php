@@ -54,8 +54,8 @@ class AttributeInheritanceResolver
                 foreach ($valid as $entity) {
                     $query->orWhere(
                         fn ($q) => $q
-                        ->where('_lft', '<', $entity->_lft)
-                        ->where('_rgt', '>', $entity->_rgt)
+                            ->where('_lft', '<', $entity->_lft)
+                            ->where('_rgt', '>', $entity->_rgt)
                     );
                 }
             })

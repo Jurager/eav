@@ -2,8 +2,8 @@
 
 namespace Jurager\Eav\Fields;
 
-use Jurager\Eav\Support\EavModels;
 use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * Enum-backed select field storing selected enum IDs in integer column.
@@ -174,7 +174,7 @@ class SelectField extends Field
         }
 
         $validIds = $this->cachedEnumIds();
-        $invalid = array_filter(array_map('intval', $values), fn ($id) => ! isset($validIds[$id]));
+        $invalid = array_filter(array_map('intval', $values), static fn ($id) => ! isset($validIds[$id]));
 
         if (! empty($invalid)) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));

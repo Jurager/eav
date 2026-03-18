@@ -35,8 +35,8 @@ class BooleanField extends Field
         }
 
         $values = array_values(array_filter(
-            array_map(fn (array $item) => isset($item['value']) ? (bool) $item['value'] : null, $this->values),
-            fn ($v) => $v !== null
+            array_map(static fn (array $item) => isset($item['value']) ? (bool) $item['value'] : null, $this->values),
+            static fn ($v) => $v !== null
         ));
 
         return $values ? [$code => $values] : [];
@@ -52,10 +52,8 @@ class BooleanField extends Field
             return true;
         }
 
-        if (is_string($value)) {
-            if (in_array(strtolower($value), ['0', '1', 'true', 'false', 'yes', 'no', 'on', 'off'], true)) {
-                return true;
-            }
+        if (is_string($value) && in_array(strtolower($value), ['0', '1', 'true', 'false', 'yes', 'no', 'on', 'off'], true)) {
+            return true;
         }
 
         return $this->addError(__('eav::attributes.validation.invalid_value'));

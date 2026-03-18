@@ -31,20 +31,20 @@ class Attribute extends Model
 {
     use SoftDeletes;
 
-    protected $fillable = [
+    protected array $fillable = [
         'entity_type', 'attribute_type_id', 'attribute_group_id',
         'code', 'sort', 'mandatory', 'localizable', 'multiple', 'unique',
         'filterable', 'searchable', 'validations',
     ];
 
-    protected $casts = [
-        'validations'  => 'array',
-        'mandatory'    => 'boolean',
-        'localizable'  => 'boolean',
-        'multiple'     => 'boolean',
-        'unique'       => 'boolean',
-        'filterable'   => 'boolean',
-        'searchable'   => 'boolean',
+    protected array $casts = [
+        'validations' => 'array',
+        'mandatory' => 'boolean',
+        'localizable' => 'boolean',
+        'multiple' => 'boolean',
+        'unique' => 'boolean',
+        'filterable' => 'boolean',
+        'searchable' => 'boolean',
     ];
 
     protected static function booted(): void
