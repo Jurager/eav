@@ -21,19 +21,22 @@ use Jurager\Eav\Support\EavModels;
  */
 class EntityAttribute extends Model
 {
-    protected string $table = 'entity_attribute';
+    protected $table = 'entity_attribute';
 
-    protected array $fillable = [
+    protected $fillable = [
         'entity_id', 'entity_type', 'attribute_id',
         'value_text', 'value_integer', 'value_float',
         'value_boolean', 'value_date', 'value_datetime',
     ];
 
-    protected array $casts = [
-        'value_boolean' => 'boolean',
-        'value_date' => 'date',
-        'value_datetime' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'value_boolean' => 'boolean',
+            'value_date' => 'date',
+            'value_datetime' => 'datetime',
+        ];
+    }
 
     protected static function booted(): void
     {
