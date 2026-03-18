@@ -15,7 +15,7 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeEnum extends Model
 {
-    protected array $fillable = ['attribute_id', 'code', 'sort'];
+    protected $fillable = ['attribute_id', 'code', 'sort'];
 
     protected static function booted(): void
     {

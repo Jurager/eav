@@ -15,7 +15,7 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeGroup extends Model
 {
-    protected array $fillable = ['code', 'sort'];
+    protected $fillable = ['code', 'sort'];
 
     protected static function booted(): void
     {
