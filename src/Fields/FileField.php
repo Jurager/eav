@@ -11,7 +11,7 @@ class FileField extends Field
 {
     use InteractsWithStorage;
 
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return self::STORAGE_TEXT;
     }

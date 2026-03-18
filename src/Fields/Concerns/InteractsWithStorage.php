@@ -12,15 +12,15 @@ use Illuminate\Support\Facades\Storage;
 trait InteractsWithStorage
 {
     /**
-     * Get public URL(s) for stored file(s).
+     * Return the public URL(s) for stored file(s).
      *
-     * @param  string  $disk  Storage disk name
-     * @param  int|null  $localeId  Locale ID for localized fields
-     * @return string|array|null URL string, array of URLs, or null
+     * @param  string   $disk      Storage disk name.
+     * @param  int|null $localeId  Locale ID for localized fields.
+     * @return string|array|null   URL string, array of URLs, or null.
      */
-    public function getUrl(string $disk = 'public', ?int $localeId = null): string|array|null
+    public function url(string $disk = 'public', ?int $localeId = null): string|array|null
     {
-        $value = $this->getValue($localeId);
+        $value = $this->value($localeId);
 
         if ($value === null) {
             return null;
@@ -34,29 +34,27 @@ trait InteractsWithStorage
     }
 
     /**
-     * Get first URL from multiple file field.
+     * Return the first URL from a multiple-file field.
      *
-     * @param  string  $disk  Storage disk name
-     * @param  int|null  $localeId  Locale ID for localized fields
-     * @return string|null First URL or null
+     * @param  string   $disk      Storage disk name.
+     * @param  int|null $localeId  Locale ID for localized fields.
      */
-    public function getFirstUrl(string $disk = 'public', ?int $localeId = null): ?string
+    public function firstUrl(string $disk = 'public', ?int $localeId = null): ?string
     {
-        $urls = $this->getUrl($disk, $localeId);
+        $urls = $this->url($disk, $localeId);
 
         return is_array($urls) ? ($urls[0] ?? null) : $urls;
     }
 
     /**
-     * Check if file exists in storage.
+     * Determine if the stored file exists in the given disk.
      *
-     * @param  string  $disk  Storage disk name
-     * @param  int|null  $localeId  Locale ID for localized fields
-     * @return bool True if file exists
+     * @param  string   $disk      Storage disk name.
+     * @param  int|null $localeId  Locale ID for localized fields.
      */
     public function exists(string $disk = 'public', ?int $localeId = null): bool
     {
-        $value = $this->getValue($localeId);
+        $value = $this->value($localeId);
 
         if ($value === null) {
             return false;

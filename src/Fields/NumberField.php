@@ -7,7 +7,7 @@ namespace Jurager\Eav\Fields;
  */
 class NumberField extends Field
 {
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return self::STORAGE_FLOAT;
     }

@@ -13,55 +13,91 @@ Attribute values are accessed through the `AttributeManager` via `$model->attrib
 $product = Product::find(1);
 
 // Get a value (default locale)
-$value = $product->attributes()->get('color');
+$value = $product->attributes()->value('color');
 
 // Get a value for a specific locale ID
-$value = $product->attributes()->get('description', localeId: 2);
+$value = $product->attributes()->value('description', localeId: 2);
 ```
 
-## Writing Values
+## Writing a Single Value
+
+Set a value in memory, then persist it:
 
 ```php
 // Simple (non-localizable) value
-$product->attributes()->set('color', 'red');
+$product->attributes()->set('color', 'red')->save('color');
 
 // Localizable value — pass array of locale translations
 $product->attributes()->set('description', [
     ['locale_id' => 1, 'values' => 'English description'],
     ['locale_id' => 2, 'values' => 'Russian description'],
-]);
+])->save('description');
 
 // Multiple values (when attribute has multiple: true)
-$product->attributes()->set('tags', ['sale', 'new', 'featured']);
+$product->attributes()->set('tags', ['sale', 'new', 'featured'])->save('tags');
 ```
 
-## Bulk Fill
+`set()` returns `$this` for chaining. `save(string $code)` persists a single attribute code.
+
+## Syncing All Values
+
+To persist a full set of attribute values and remove any others:
 
 ```php
-$product->attributes()->fill([
-    'color'  => 'blue',
-    'weight' => 1.5,
-    'name'   => [
-        ['locale_id' => 1, 'values' => 'T-Shirt'],
-        ['locale_id' => 2, 'values' => 'Футболка'],
-    ],
+// Build and fill Field instances, then sync
+$fields = [/* array of Field instances keyed by code */];
+
+$product->attributes()->sync($fields);
+```
+
+To persist fields without removing existing ones:
+
+```php
+$product->attributes()->attach($fields);
+```
+
+## Validated Fill
+
+Use `AttributeValidator` to validate user input before writing:
+
+```php
+use Jurager\Eav\AttributeValidator;
+
+$fields = AttributeValidator::make($product)->validate([
+    ['code' => 'color',  'values' => 'red'],
+    ['code' => 'weight', 'values' => 1.5],
 ]);
+
+// $fields is array<string, Field> — pass to attach() or sync()
+$product->attributes()->attach($fields);
 ```
 
-## Persisting Changes
+`validate()` throws `ValidationException` if any field fails. Errors are keyed by attribute code.
+
+## Batch Import
+
+For bulk imports use `AttributeManager::syncBatch()`. The schema is loaded once per unique
+`(entity_type, params)` combination and reused across all chunks:
 
 ```php
-$product->attributes()->save();
+use Jurager\Eav\AttributeManager;
+
+AttributeManager::syncBatch(collect([
+    ['entity' => $product1, 'data' => ['color' => 'red',  'weight' => 1.5]],
+    ['entity' => $product2, 'data' => ['color' => 'blue', 'weight' => 2.0]],
+    // …
+]));
+
+// Custom chunk size (default 500)
+AttributeManager::syncBatch($batch, chunkSize: 200);
 ```
 
-`save()` upserts all pending changes to the `entity_attribute` table in a single operation.
+Each chunk is flushed in ~7 DB queries, regardless of entity or attribute count.
 
-## Validation Errors
+## Detaching Attributes
 
-`fill()` validates each value against the attribute's field type and configured validation rules. If validation fails, the manager collects errors per attribute:
+Remove stored values for specific attribute IDs:
 
 ```php
-if (! $product->attributes()->fill($input)) {
-    $errors = $product->attributes()->errors(); // ['color' => ['Invalid value.'], ...]
-}
+$product->attributes()->detach([12, 34]);
 ```

@@ -7,14 +7,14 @@ namespace Jurager\Eav\Fields;
  */
 class BooleanField extends Field
 {
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return self::STORAGE_BOOLEAN;
     }
 
-    public function getValue(?int $localeId = null): ?bool
+    public function value(?int $localeId = null): ?bool
     {
-        $raw = parent::getValue($localeId);
+        $raw = parent::value($localeId);
 
         if ($raw === null) {
             return null;
@@ -26,12 +26,12 @@ class BooleanField extends Field
     /**
      * @return array<string, bool>
      */
-    public function getIndexData(): array
+    public function indexData(): array
     {
-        $code = $this->getCode();
+        $code = $this->code();
 
         if (! $this->isLocalizable()) {
-            return [$code => $this->getValue() ?? false];
+            return [$code => $this->value() ?? false];
         }
 
         $values = array_values(array_filter(
@@ -52,7 +52,7 @@ class BooleanField extends Field
             return true;
         }
 
-        if (($value === 0 || $value === 1)) {
+        if ($value === 0 || $value === 1) {
             return true;
         }
 

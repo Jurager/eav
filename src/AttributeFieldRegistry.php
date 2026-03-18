@@ -31,10 +31,10 @@ class AttributeFieldRegistry
     /**
      * Register a new field type.
      *
-     * @param  string  $type  Field type code
-     * @param  class-string<Field>  $class  Field class name
+     * @param  string               $type   Field type code.
+     * @param  class-string<Field>  $class  Field class name.
      *
-     * @throws InvalidArgumentException If class does not extend Field
+     * @throws InvalidArgumentException  If class does not extend Field.
      */
     public function register(string $type, string $class): void
     {
@@ -46,7 +46,7 @@ class AttributeFieldRegistry
     }
 
     /**
-     * Check if field type is registered.
+     * Determine if a field type is registered.
      */
     public function has(string $type): bool
     {
@@ -54,14 +54,14 @@ class AttributeFieldRegistry
     }
 
     /**
-     * Get field class by type code.
+     * Resolve the Field class name for a given type code.
      *
-     * @param  string  $type  Field type code
-     * @return class-string<Field>
+     * @param   string  $type  Field type code.
+     * @return  class-string<Field>
      *
-     * @throws InvalidArgumentException If type is not registered
+     * @throws InvalidArgumentException  If the type is not registered.
      */
-    public function get(string $type): string
+    public function resolve(string $type): string
     {
         if (! $this->has($type)) {
             throw new InvalidArgumentException("Field type '$type' is not registered.");
@@ -71,21 +71,23 @@ class AttributeFieldRegistry
     }
 
     /**
-     * Create field instance from attribute.
+     * Create a Field instance from an Attribute model.
      *
-     * @param  Attribute  $attribute  Attribute model
-     * @return Field Field instance
+     * @param   Attribute  $attribute  Attribute model.
+     * @return  Field
      *
-     * @throws InvalidArgumentException If attribute type is not registered
+     * @throws InvalidArgumentException  If the attribute type is not registered.
      */
     public function make(Attribute $attribute): Field
     {
-        $class = $this->get($attribute->type->code);
+        $class = $this->resolve($attribute->type->code);
 
         return new $class($attribute, $this->localeRegistry);
     }
 
     /**
+     * Return all registered type mappings.
+     *
      * @return array<string, class-string<Field>>
      */
     public function all(): array

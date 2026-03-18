@@ -23,9 +23,9 @@ class AttributeLocaleRegistry
     protected ?array $localeCodes = null;
 
     /**
-     * Get default locale ID from application configuration.
+     * Return the default locale ID from application configuration.
      */
-    public function getDefaultLocaleId(): int
+    public function defaultLocaleId(): int
     {
         if ($this->defaultLocaleId === null) {
             $this->defaultLocaleId = EavModels::query('locale')
@@ -37,27 +37,29 @@ class AttributeLocaleRegistry
     }
 
     /**
-     * Get all valid locale IDs.
+     * Return all valid locale IDs.
      *
      * @return array<int>
      */
-    public function getValidLocaleIds(): array
+    public function validLocaleIds(): array
     {
-        return array_keys($this->getLocaleCodes());
+        return array_keys($this->localeCodes());
     }
 
     /**
-     * Check if locale ID is valid.
+     * Determine if the given locale ID is registered.
      */
     public function isValidLocaleId(int $localeId): bool
     {
-        return in_array($localeId, $this->getValidLocaleIds(), true);
+        return in_array($localeId, $this->validLocaleIds(), true);
     }
 
     /**
+     * Return all locale codes keyed by locale ID.
+     *
      * @return array<int, string>
      */
-    public function getLocaleCodes(): array
+    public function localeCodes(): array
     {
         if ($this->localeCodes === null) {
             $this->localeCodes = EavModels::query('locale')->pluck('code', 'id')->all();
@@ -67,36 +69,37 @@ class AttributeLocaleRegistry
     }
 
     /**
-     * Get locale code by locale ID.
+     * Return the locale code for a given locale ID, or null if not found.
      */
-    public function getLocaleCode(int $localeId): ?string
+    public function localeCode(int $localeId): ?string
     {
-        return $this->getLocaleCodes()[$localeId] ?? null;
+        return $this->localeCodes()[$localeId] ?? null;
     }
 
     /**
-     * Get locale ID by locale code.
+     * Return the locale ID for a given locale code, or null if not found.
      */
-    public function getLocaleId(string $code): ?int
+    public function localeId(string $code): ?int
     {
-        $result = array_search($code, $this->getLocaleCodes(), true);
+        $result = array_search($code, $this->localeCodes(), true);
 
         return $result !== false ? $result : null;
     }
 
     /**
-     * Resolve locale ID from code or get default.
+     * Resolve a locale ID from a code string, falling back to the default locale.
      */
     public function resolveLocaleId(?string $code = null): int
     {
         if ($code !== null) {
-            $localeId = $this->getLocaleId($code);
+            $localeId = $this->localeId($code);
+
             if ($localeId !== null) {
                 return $localeId;
             }
         }
 
-        return $this->getDefaultLocaleId();
+        return $this->defaultLocaleId();
     }
 
     /**

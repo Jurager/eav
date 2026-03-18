@@ -16,7 +16,7 @@ use Jurager\Eav\Fields\Field;
 
 class MeasurementField extends Field
 {
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return Field::STORAGE_FLOAT;
     }

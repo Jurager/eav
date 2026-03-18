@@ -53,7 +53,7 @@ class AttributeValidator
         $this->fillFields($input);
         $this->validateFields();
 
-        return $this->manager->getFields();
+        return $this->manager->fields();
     }
 
     /**
@@ -79,7 +79,7 @@ class AttributeValidator
                 continue;
             }
 
-            $field = $this->manager->getField($code);
+            $field = $this->manager->field($code);
 
             if ($field === null) {
                 continue;
@@ -98,12 +98,12 @@ class AttributeValidator
     {
         $errors = [];
 
-        foreach ($this->manager->getFields() as $field) {
+        foreach ($this->manager->fields() as $field) {
 
-            $attributeCode = $field->getAttribute()->code;
+            $attributeCode = $field->attribute()->code;
 
             if ($field->hasErrors()) {
-                $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $field->getErrors());
+                $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $field->errors());
             } elseif ($field->isMandatory() && ! $field->isFilled()) {
                 $errors[$attributeCode][] = __('eav::attributes.validation.required');
             }
@@ -131,8 +131,8 @@ class AttributeValidator
         $errors = [];
         $entityType = $this->entity->getAttributeEntityType();
         $entityId = $this->entity->id ?? null;
-        $attributeId = $field->getAttribute()->id;
-        $storageColumn = $field->getStorageColumn();
+        $attributeId = $field->attribute()->id;
+        $column = $field->column();
 
         $modelClass = Relation::getMorphedModel($entityType);
         $usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
@@ -147,8 +147,8 @@ class AttributeValidator
             $query = EavModels::query('entity_attribute')
                 ->where('entity_type', $entityType)
                 ->where('attribute_id', $attributeId)
-                ->whereNotNull($storageColumn)
-                ->where($storageColumn, $value);
+                ->whereNotNull($column)
+                ->where($column, $value);
 
             if ($entityId) {
                 $query->where('entity_id', '!=', $entityId);

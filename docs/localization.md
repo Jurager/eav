@@ -16,13 +16,13 @@ use Jurager\Eav\AttributeLocaleRegistry;
 
 $registry = app(AttributeLocaleRegistry::class);
 
-$registry->getDefaultLocaleId();         // ID for app.locale config value
-$registry->getLocaleId('en');            // locale ID by code
-$registry->getLocaleCode(1);            // locale code by ID
-$registry->getValidLocaleIds();         // all valid locale IDs
-$registry->isValidLocaleId(2);          // check if locale ID exists
-$registry->resolveLocaleId('ru');       // ID by code, or default if not found
-$registry->reset();                     // clear cache (e.g. in tests)
+$registry->defaultLocaleId();        // ID for app.locale config value
+$registry->localeId('en');           // locale ID by code
+$registry->localeCode(1);            // locale code by ID
+$registry->validLocaleIds();         // all valid locale IDs
+$registry->isValidLocaleId(2);       // check if locale ID exists
+$registry->resolveLocaleId('ru');    // ID by code, or default if not found
+$registry->reset();                  // clear cache (e.g. in tests)
 ```
 
 ## Translating Custom Models
@@ -55,7 +55,7 @@ $product->attributes()->set('name', [
 Read back for a specific locale:
 
 ```php
-$product->attributes()->get('name', localeId: 2); // 'Футболка'
+$product->attributes()->value('name', localeId: 2); // 'Футболка'
 ```
 
-When no locale is specified, the default locale from `AttributeLocaleRegistry::getDefaultLocaleId()` is used.
+When no locale is specified, the default locale from `AttributeLocaleRegistry::defaultLocaleId()` is used.

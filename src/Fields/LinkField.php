@@ -7,7 +7,7 @@ namespace Jurager\Eav\Fields;
  */
 class LinkField extends Field
 {
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return self::STORAGE_TEXT;
     }

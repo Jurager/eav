@@ -67,7 +67,7 @@ trait HasAttributes
      */
     public function scopeWhereAttribute(Builder $query, string $code, mixed $value, string $operator = '='): Builder
     {
-        $sub = $this->attributes()->buildSubquery($code, $value, $operator);
+        $sub = $this->attributes()->subquery($code, $value, $operator);
 
         return $sub ? $query->whereIn('id', $sub) : $query;
     }
@@ -89,7 +89,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeBetween(Builder $query, string $code, float|int $min, float|int $max): Builder
     {
-        $sub = $this->attributes()->buildSubquery($code, [$min, $max], 'between');
+        $sub = $this->attributes()->subquery($code, [$min, $max], 'between');
 
         return $sub ? $query->whereIn('id', $sub) : $query;
     }
@@ -101,7 +101,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeIn(Builder $query, string $code, array $values): Builder
     {
-        $sub = $this->attributes()->buildSubquery($code, $values, 'in');
+        $sub = $this->attributes()->subquery($code, $values, 'in');
 
         return $sub ? $query->whereIn('id', $sub) : $query;
     }
@@ -120,7 +120,7 @@ trait HasAttributes
         $manager = $this->attributes();
 
         foreach ($conditions as $condition) {
-            $sub = $manager->buildSubquery(
+            $sub = $manager->subquery(
                 $condition['code'],
                 $condition['value'],
                 $condition['operator'] ?? '=',
@@ -150,7 +150,7 @@ trait HasAttributes
      */
     public function toSearchableArray(): array
     {
-        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()->getIndexData()];
+        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()->indexData()];
     }
 
     /**
@@ -158,7 +158,7 @@ trait HasAttributes
      */
     public function shouldBeSearchable(): bool
     {
-        return ! empty($this->attributes()->getIndexData());
+        return ! empty($this->attributes()->indexData());
     }
 
     /**

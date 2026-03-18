@@ -19,7 +19,7 @@ class SelectField extends Field
      */
     private static array $enumCache = [];
 
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return self::STORAGE_INTEGER;
     }
@@ -36,9 +36,9 @@ class SelectField extends Field
     }
 
     /**
-     * SelectField always returns enum_id from value column.
+     * Return the stored enum ID(s). Ignores $localeId as enums are not locale-scoped.
      */
-    public function getValue(?int $localeId = null): int|array|null
+    public function value(?int $localeId = null): int|array|null
     {
         if (empty($this->values)) {
             return null;
@@ -57,9 +57,12 @@ class SelectField extends Field
         return (int) $raw;
     }
 
-    public function getEnum(?int $localeId = null): ?AttributeEnum
+    /**
+     * Return the AttributeEnum model for the current single-select value.
+     */
+    public function enum(?int $localeId = null): ?AttributeEnum
     {
-        $enumId = $this->getValue($localeId);
+        $enumId = $this->value($localeId);
 
         if ($enumId === null || is_array($enumId)) {
             return null;
@@ -69,11 +72,13 @@ class SelectField extends Field
     }
 
     /**
+     * Return AttributeEnum models for the current multi-select values.
+     *
      * @return AttributeEnum[]
      */
-    public function getEnums(?int $localeId = null): array
+    public function enums(?int $localeId = null): array
     {
-        $value = $this->getValue($localeId);
+        $value = $this->value($localeId);
 
         if ($value === null) {
             return [];
@@ -84,12 +89,15 @@ class SelectField extends Field
         return $this->attribute->enums->whereIn('id', $enumIds)->values()->all();
     }
 
-    public function getLabel(?int $localeId = null): string|array|null
+    /**
+     * Return the translated label(s) for the current value.
+     */
+    public function label(?int $localeId = null): string|array|null
     {
-        $localeId ??= $this->localeRegistry->getDefaultLocaleId();
+        $localeId ??= $this->localeRegistry->defaultLocaleId();
 
         if ($this->isMultiple()) {
-            $enums = $this->getEnums($localeId);
+            $enums = $this->enums($localeId);
 
             return array_map(
                 static fn (AttributeEnum $enum) => $enum->translations
@@ -100,7 +108,7 @@ class SelectField extends Field
             );
         }
 
-        $enum = $this->getEnum($localeId);
+        $enum = $this->enum($localeId);
 
         return $enum?->translations
             ->first(fn ($t) => $t->pivot->locale_id === $localeId)
@@ -108,24 +116,27 @@ class SelectField extends Field
             ?->label;
     }
 
-    public function getEnumCode(?int $localeId = null): string|array|null
+    /**
+     * Return the enum code(s) for the current value.
+     */
+    public function enumCode(?int $localeId = null): string|array|null
     {
         if ($this->isMultiple()) {
-            $enums = $this->getEnums($localeId);
+            $enums = $this->enums($localeId);
 
             return array_map(static fn (AttributeEnum $enum) => $enum->code, $enums);
         }
 
-        return $this->getEnum($localeId)?->code;
+        return $this->enum($localeId)?->code;
     }
 
     /**
      * @return array<string, mixed>
      */
-    public function getIndexData(): array
+    public function indexData(): array
     {
-        $code = $this->getCode();
-        $value = $this->getValue();
+        $code = $this->code();
+        $value = $this->value();
 
         if ($value === null) {
             return [];
@@ -133,12 +144,12 @@ class SelectField extends Field
 
         $result = [
             $code => $value,
-            "{$code}_code" => $this->getEnumCode(),
+            "{$code}_code" => $this->enumCode(),
         ];
 
         $labels = [];
-        foreach (array_keys($this->localeRegistry->getLocaleCodes()) as $localeId) {
-            foreach ((array) $this->getLabel($localeId) as $label) {
+        foreach (array_keys($this->localeRegistry->localeCodes()) as $localeId) {
+            foreach ((array) $this->label($localeId) as $label) {
                 if ($label !== null && $label !== '') {
                     $labels[] = $label;
                 }

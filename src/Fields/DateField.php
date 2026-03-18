@@ -11,7 +11,7 @@ use Exception;
  */
 class DateField extends Field
 {
-    public function getStorageColumn(): string
+    public function column(): string
     {
         return self::STORAGE_DATETIME;
     }
@@ -19,9 +19,9 @@ class DateField extends Field
     /**
      * @return Carbon|array<int, Carbon>|null
      */
-    public function getValue(?int $localeId = null): Carbon|array|null
+    public function value(?int $localeId = null): Carbon|array|null
     {
-        $raw = parent::getValue($localeId);
+        $raw = parent::value($localeId);
 
         if ($raw === null) {
             return null;
@@ -39,11 +39,13 @@ class DateField extends Field
     }
 
     /**
+     * Return the date formatted as a string (or array of strings for multiple values).
+     *
      * @return string|array<int, string>|null
      */
     public function format(string $format = 'Y-m-d', ?int $localeId = null): string|array|null
     {
-        $value = $this->getValue($localeId);
+        $value = $this->value($localeId);
 
         if ($value === null) {
             return null;
@@ -59,12 +61,12 @@ class DateField extends Field
         return $value->format($format);
     }
 
-    public function getIndexData(): array
+    public function indexData(): array
     {
-        $code = $this->getCode();
+        $code = $this->code();
 
         if (! $this->isLocalizable()) {
-            $value = $this->toTimestamp($this->getValue());
+            $value = $this->toTimestamp($this->value());
 
             return $value !== null ? [$code => $value] : [];
         }
