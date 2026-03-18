@@ -4,7 +4,7 @@ namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Jurager\Eav\EavModels;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * @property int $id

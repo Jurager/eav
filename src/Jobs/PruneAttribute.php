@@ -4,7 +4,7 @@ namespace Jurager\Eav\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Jurager\Eav\EavModels;
+use Jurager\Eav\Support\EavModels;
 
 class PruneAttribute implements ShouldQueue
 {

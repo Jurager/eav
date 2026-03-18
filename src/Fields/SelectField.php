@@ -2,7 +2,7 @@
 
 namespace Jurager\Eav\Fields;
 
-use Jurager\Eav\EavModels;
+use Jurager\Eav\Support\EavModels;
 use Jurager\Eav\Models\AttributeEnum;
 
 /**
@@ -50,11 +50,7 @@ class SelectField extends Field
             return null;
         }
 
-        if (is_array($raw)) {
-            return array_map('intval', $raw);
-        }
-
-        return (int) $raw;
+        return is_array($raw) ? array_map('intval', $raw) : (int) $raw;
     }
 
     /**
@@ -97,37 +93,19 @@ class SelectField extends Field
         $localeId ??= $this->localeRegistry->defaultLocaleId();
 
         if ($this->isMultiple()) {
-            $enums = $this->enums($localeId);
-
             return array_map(
                 static fn (AttributeEnum $enum) => $enum->translations
                     ->first(fn ($t) => $t->pivot->locale_id === $localeId)
                     ?->pivot
                     ?->label,
-                $enums
+                $this->enums($localeId)
             );
         }
 
-        $enum = $this->enum($localeId);
-
-        return $enum?->translations
+        return $this->enum($localeId)?->translations
             ->first(fn ($t) => $t->pivot->locale_id === $localeId)
             ?->pivot
             ?->label;
-    }
-
-    /**
-     * Return the enum code(s) for the current value.
-     */
-    public function enumCode(?int $localeId = null): string|array|null
-    {
-        if ($this->isMultiple()) {
-            $enums = $this->enums($localeId);
-
-            return array_map(static fn (AttributeEnum $enum) => $enum->code, $enums);
-        }
-
-        return $this->enum($localeId)?->code;
     }
 
     /**
@@ -144,7 +122,9 @@ class SelectField extends Field
 
         $result = [
             $code => $value,
-            "{$code}_code" => $this->enumCode(),
+            "{$code}_code" => $this->isMultiple()
+                ? array_map(static fn (AttributeEnum $e) => $e->code, $this->enums())
+                : $this->enum()?->code,
         ];
 
         $labels = [];
@@ -168,10 +148,10 @@ class SelectField extends Field
      * SelectField stores enum_id directly in value column,
      * ignoring attribute localizable flag (labels are translated in enums table).
      */
-    protected function validate(mixed $values): bool
+    protected function validatePayload(mixed $values): bool
     {
         if (! $this->isMultiple()) {
-            return $this->validateValue($values);
+            return $this->validate($values);
         }
 
         if (! is_array($values)) {
@@ -181,7 +161,7 @@ class SelectField extends Field
         return $this->validateMultipleValues($values);
     }
 
-    protected function validateMultipleValues(array $values): bool
+    private function validateMultipleValues(array $values): bool
     {
         foreach ($values as $value) {
             if (is_array($value)) {
@@ -194,7 +174,7 @@ class SelectField extends Field
         }
 
         $validIds = $this->cachedEnumIds();
-        $invalid  = array_filter(array_map('intval', $values), fn ($id) => ! isset($validIds[$id]));
+        $invalid = array_filter(array_map('intval', $values), fn ($id) => ! isset($validIds[$id]));
 
         if (! empty($invalid)) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));
@@ -207,16 +187,16 @@ class SelectField extends Field
      * @param  array<int, int|string>|int|string  $values
      * @return array<int, array{locale_id: int|null, value: int|array<int, int>}>
      */
-    protected function processValues(array|string|int $values): array
+    protected function normalizeValues(array|string|int $values): array
     {
-        $processed = is_array($values)
-            ? array_map(fn ($v) => $this->processValue($v), $values)
-            : $this->processValue($values);
+        $normalized = is_array($values)
+            ? array_map(fn ($v) => $this->normalize($v), $values)
+            : $this->normalize($values);
 
-        return [['locale_id' => null, 'value' => $processed]];
+        return [['locale_id' => null, 'value' => $normalized]];
     }
 
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         if ($value === null) {
             return true;
@@ -255,7 +235,7 @@ class SelectField extends Field
         return self::$enumCache[$attrId];
     }
 
-    protected function processValue(mixed $value): int
+    protected function normalize(mixed $value): int
     {
         return (int) $value;
     }

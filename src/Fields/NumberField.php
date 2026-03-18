@@ -12,7 +12,7 @@ class NumberField extends Field
         return self::STORAGE_FLOAT;
     }
 
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         if (! is_numeric($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
@@ -21,12 +21,7 @@ class NumberField extends Field
         return true;
     }
 
-    protected function processValue(mixed $value): int|float
-    {
-        return $this->toNumber($value);
-    }
-
-    protected function toNumber(mixed $value): int|float
+    protected function normalize(mixed $value): int|float
     {
         $numeric = $value + 0;
 

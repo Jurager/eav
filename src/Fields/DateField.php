@@ -52,10 +52,7 @@ class DateField extends Field
         }
 
         if (is_array($value)) {
-            return array_map(
-                static fn (Carbon $date): string => $date->format($format),
-                $value
-            );
+            return array_map(static fn (Carbon $date): string => $date->format($format), $value);
         }
 
         return $value->format($format);
@@ -72,30 +69,14 @@ class DateField extends Field
         }
 
         $values = array_values(array_filter(
-            array_map(
-                fn (array $item) => $this->toTimestamp($this->parseDate($item['value'])),
-                $this->values
-            ),
+            array_map(fn (array $item) => $this->toTimestamp($this->parseDate($item['value'])), $this->values),
             fn ($v) => $v !== null
         ));
 
         return $values ? [$code => $values] : [];
     }
 
-    protected function parseDate(mixed $value): ?Carbon
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        try {
-            return Carbon::parse($value);
-        } catch (InvalidFormatException) {
-            return null;
-        }
-    }
-
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         if ($value === null || $value === '') {
             return true;
@@ -120,13 +101,26 @@ class DateField extends Field
         }
     }
 
-    protected function processValue(mixed $value): ?string
+    protected function normalize(mixed $value): ?string
     {
         if ($value instanceof Carbon) {
             return $value->toDateTimeString();
         }
 
         return $this->parseDate($value)?->toDateTimeString();
+    }
+
+    protected function parseDate(mixed $value): ?Carbon
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        try {
+            return Carbon::parse($value);
+        } catch (InvalidFormatException) {
+            return null;
+        }
     }
 
     protected function toTimestamp(Carbon|array|null $value): int|array|null

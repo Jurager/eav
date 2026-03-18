@@ -27,7 +27,6 @@ Accessed via `$model->attributes()`. One instance per model instance (cached).
 - `fields(): array` — return all currently loaded Field objects keyed by code
 - `value(string $code, ?int $localeId = null): mixed` — return the typed value for an attribute
 - `values(?array $codes = null): Collection` — return entity_attribute records with resolved `value` property
-- `valuesQuery(?array $codes = null): Builder` — eager-loaded Builder for entity_attribute records
 - `indexData(): array` — searchable values for all `searchable: true` attributes (memoized)
 - `distinctValues(string $code): Collection` — distinct stored values for a given attribute across all entities
 - `aggregate(string $code, string $aggregate): ?float` — SQL aggregate (`sum`, `avg`, `min`, `max`) over a numeric attribute
@@ -40,10 +39,11 @@ Accessed via `$model->attributes()`. One instance per model instance (cached).
 - `attach(array $fields): bool` — persist fields, leaving other existing rows untouched
 - `sync(array $fields): bool` — full replace: persist fields and delete all other existing rows
 - `detach(array $ids): void` — delete rows for given attribute IDs
-- `fillFrom(array $data): Collection` — fill fields from raw data reusing cached schema (no DB queries after warm-up)
+- `fill(array $data): Collection` — fill fields from raw data reusing cached schema (no DB queries after warm-up)
 
 ### Querying
 
+- `valuesQuery(?array $codes = null): Builder` — eager-loaded Builder for entity_attribute records
 - `subquery(string $code, mixed $value, string $operator, ?int $localeId): ?Builder` — subquery used by Eloquent scopes
 - `attributeQuery(string $code, mixed $value, string $operator, ?int $localeId): ?Builder` — Builder scoped to matching entity IDs
 - `findBy(string $code, mixed $operatorOrValue, mixed $value, ?int $localeId): ?Model`
@@ -63,6 +63,10 @@ Query scopes added to the model:
 - `scopeWhereAttributeBetween(Builder $query, string $code, float|int $min, float|int $max)`
 - `scopeWhereAttributeIn(Builder $query, string $code, array $values)`
 - `scopeWhereAttributes(Builder $query, array $conditions)`
+
+Validation:
+
+- `validate(array $input): array` — validate and fill attributes; returns `array<string, Field>`; throws `ValidationException` on failure
 
 Relation:
 
@@ -148,8 +152,8 @@ Base class for all field type implementations.
 ### Abstract
 
 - `column(): string` — typed storage column name (e.g. `value_text`)
-- `validateValue(mixed $value): bool` — type-specific validation
-- `processValue(mixed $value): mixed` — normalize raw input before storing
+- `validate(mixed $value): bool` — type-specific validation for a single value
+- `normalize(mixed $value): mixed` — normalize raw input to the stored type
 
 ### Lifecycle
 
@@ -203,7 +207,6 @@ Additional methods on top of `Field`:
 - `enum(?int $localeId = null): ?AttributeEnum` — the AttributeEnum model for a single-select value
 - `enums(?int $localeId = null): array` — AttributeEnum models for multi-select values
 - `label(?int $localeId = null): string|array|null` — translated label(s)
-- `enumCode(?int $localeId = null): string|array|null` — enum code(s)
 
 ---
 

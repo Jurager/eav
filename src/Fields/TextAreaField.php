@@ -12,7 +12,7 @@ class TextAreaField extends Field
         return self::STORAGE_TEXT;
     }
 
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         if (! is_string($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
@@ -21,7 +21,7 @@ class TextAreaField extends Field
         return true;
     }
 
-    protected function processValue(mixed $value): string
+    protected function normalize(mixed $value): string
     {
         return (string) $value;
     }

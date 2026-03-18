@@ -1,6 +1,6 @@
 <?php
 
-namespace Jurager\Eav;
+namespace Jurager\Eav\Support;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Relations\Relation;

@@ -9,7 +9,7 @@ Domain-specific field types (e.g. `measurement`) are not included in the package
 
 ## Implement a Field
 
-Extend `Jurager\Eav\Fields\Field` and implement the two abstract methods:
+Extend `Jurager\Eav\Fields\Field` and implement the three abstract methods:
 
 ```php
 use Jurager\Eav\Fields\Field;
@@ -21,7 +21,7 @@ class MeasurementField extends Field
         return Field::STORAGE_FLOAT;
     }
 
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         if (! is_array($value) || ! isset($value['value'], $value['measurement_unit_id'])) {
             return $this->addError('Measurement value must contain value and measurement_unit_id.');
@@ -34,13 +34,34 @@ class MeasurementField extends Field
         return true;
     }
 
-    protected function processValue(mixed $value): mixed
+    protected function normalize(mixed $value): float
     {
         // convert to base unit and return float
         return (float) $value['value'];
     }
 }
 ```
+
+### Overriding cardinality / localization validation
+
+If your field has a non-standard payload shape (e.g. measurement accepts `{value, unit_id}` instead of a plain scalar), override `validatePayload()` instead of `validate()`:
+
+```php
+protected function validatePayload(mixed $values): bool
+{
+    if ($this->isMultiple()) {
+        if (! is_array($values)) {
+            return $this->addError('Expected an array of measurement objects.');
+        }
+
+        return array_all($values, fn ($v) => $this->validate($v));
+    }
+
+    return $this->validate($values);
+}
+```
+
+`validate()` receives a single value. `validatePayload()` handles the outer cardinality and localization envelope before delegating to `validate()`.
 
 ## Available Storage Column Constants
 

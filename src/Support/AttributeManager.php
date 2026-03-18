@@ -1,6 +1,6 @@
 <?php
 
-namespace Jurager\Eav;
+namespace Jurager\Eav\Support;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
@@ -11,6 +11,7 @@ use InvalidArgumentException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Registry\AttributeFieldRegistry;
 use LogicException;
 
 /**
@@ -140,7 +141,7 @@ class AttributeManager
                     $schemaCache[$cacheKey]->loadSchema();
                 }
 
-                $fields = $schemaCache[$cacheKey]->fillFrom($item['data']);
+                $fields = $schemaCache[$cacheKey]->fill($item['data']);
 
                 if ($fields->isNotEmpty()) {
                     $persister->add($entity, $fields);
@@ -337,7 +338,7 @@ class AttributeManager
      * @throws BindingResolutionException
      * @throws JsonException
      */
-    public function fillFrom(array $data): Collection
+    public function fill(array $data): Collection
     {
         $this->loadSchema();
 

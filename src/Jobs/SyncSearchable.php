@@ -6,7 +6,7 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
-use Jurager\Eav\EavModels;
+use Jurager\Eav\Support\EavModels;
 
 class SyncSearchable implements ShouldBeUnique, ShouldQueue
 {

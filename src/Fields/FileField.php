@@ -20,12 +20,12 @@ class FileField extends Field
      * File value validation is intentionally permissive here.
      * Concrete upload flow should validate file type and size before saving path.
      */
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         return true;
     }
 
-    protected function processValue(mixed $value): string|array
+    protected function normalize(mixed $value): string|array
     {
         return $this->processFileValue($value);
     }

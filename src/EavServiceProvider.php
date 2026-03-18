@@ -4,6 +4,9 @@ namespace Jurager\Eav;
 
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Observers\AttributeObserver;
+use Jurager\Eav\Registry\AttributeFieldRegistry;
+use Jurager\Eav\Registry\AttributeLocaleRegistry;
+use Jurager\Eav\Support\AttributeInheritanceResolver;
 
 class EavServiceProvider extends ServiceProvider
 {

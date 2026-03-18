@@ -58,12 +58,11 @@ $product->attributes()->attach($fields);
 
 ## Validated Fill
 
-Use `AttributeValidator` to validate user input before writing:
+Call `validate()` directly on the model. The method is provided by the `HasAttributes` trait
+and delegates to `AttributeValidator` internally:
 
 ```php
-use Jurager\Eav\AttributeValidator;
-
-$fields = AttributeValidator::make($product)->validate([
+$fields = $product->validate([
     ['code' => 'color',  'values' => 'red'],
     ['code' => 'weight', 'values' => 1.5],
 ]);
@@ -73,6 +72,15 @@ $product->attributes()->attach($fields);
 ```
 
 `validate()` throws `ValidationException` if any field fails. Errors are keyed by attribute code.
+
+If you need to reuse an existing `AttributeManager` instance (e.g. inside a service that already
+holds one), you can still call `AttributeValidator` directly:
+
+```php
+use Jurager\Eav\AttributeValidator;
+
+$fields = AttributeValidator::make($product, $manager)->validate($input);
+```
 
 ## Batch Import
 

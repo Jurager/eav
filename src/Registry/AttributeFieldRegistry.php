@@ -1,6 +1,6 @@
 <?php
 
-namespace Jurager\Eav;
+namespace Jurager\Eav\Registry;
 
 use InvalidArgumentException;
 use Jurager\Eav\Fields\Field;

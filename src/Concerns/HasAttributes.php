@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
 use JsonException;
-use Jurager\Eav\AttributeInheritanceResolver;
-use Jurager\Eav\AttributeManager;
 use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\EavModels;
+use Jurager\Eav\Support\AttributeInheritanceResolver;
+use Jurager\Eav\Support\AttributeManager;
+use Jurager\Eav\Support\AttributeValidator;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * Adds dynamic attribute support to Eloquent models.
@@ -32,6 +33,19 @@ trait HasAttributes
     public function attributes(): AttributeManager
     {
         return $this->attributeManager ??= AttributeManager::for($this);
+    }
+
+    /**
+     * Validate and fill attribute input, returning filled Field instances keyed by code.
+     *
+     * @param  array<int, array{code: string, values: mixed}>  $input
+     * @return array<string, \Jurager\Eav\Fields\Field>
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    public function validate(array $input): array
+    {
+        return AttributeValidator::make($this, $this->attributeManager)->validate($input);
     }
 
     /**

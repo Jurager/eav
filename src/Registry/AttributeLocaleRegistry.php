@@ -1,6 +1,8 @@
 <?php
 
-namespace Jurager\Eav;
+namespace Jurager\Eav\Registry;
+
+use Jurager\Eav\Support\EavModels;
 
 /**
  * Registry for locale management in attribute system.

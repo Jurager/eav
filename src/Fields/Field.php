@@ -4,7 +4,7 @@ namespace Jurager\Eav\Fields;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
-use Jurager\Eav\AttributeLocaleRegistry;
+use Jurager\Eav\Registry\AttributeLocaleRegistry;
 use Jurager\Eav\Models\Attribute;
 
 /**
@@ -37,8 +37,8 @@ abstract class Field
     protected AttributeLocaleRegistry $localeRegistry;
 
     /**
-     * @param  Attribute                    $attribute      Attribute definition model.
-     * @param  AttributeLocaleRegistry|null $localeRegistry  Locale registry dependency.
+     * @param  Attribute                     $attribute      Attribute definition model.
+     * @param  AttributeLocaleRegistry|null  $localeRegistry Locale registry dependency.
      */
     public function __construct(protected Attribute $attribute, ?AttributeLocaleRegistry $localeRegistry = null)
     {
@@ -49,6 +49,39 @@ abstract class Field
      * Return the storage column name for this field type.
      */
     abstract public function column(): string;
+
+    /**
+     * Validate a single typed value. Implemented by each concrete field type.
+     * Return false and call $this->addError() to report failures.
+     */
+    abstract protected function validate(mixed $value): bool;
+
+    /**
+     * Normalize raw input to the stored type. Implemented by each concrete field type.
+     */
+    abstract protected function normalize(mixed $value): mixed;
+
+    /**
+     * Validate and normalize an incoming value payload.
+     * Returns false when validation fails; errors are available via errors().
+     */
+    public function fill(mixed $values): bool
+    {
+        $this->validationErrors = [];
+        $this->values = [];
+
+        if ($values === null) {
+            return true;
+        }
+
+        if (! $this->validatePayload($values)) {
+            return false;
+        }
+
+        $this->values = $this->normalizeValues($values);
+
+        return true;
+    }
 
     /**
      * Hydrate field values from stored entity attribute records.
@@ -90,53 +123,6 @@ abstract class Field
     }
 
     /**
-     * Validate and normalize incoming value payload.
-     */
-    public function fill(mixed $values): bool
-    {
-        $this->validationErrors = [];
-        $this->values = [];
-
-        if ($values === null) {
-            return true;
-        }
-
-        if (! $this->validate($values)) {
-            return false;
-        }
-
-        $this->values = $this->processValues($values);
-
-        return true;
-    }
-
-    /**
-     * Determine if the field currently has normalized value(s).
-     */
-    public function isFilled(): bool
-    {
-        return ! empty($this->values);
-    }
-
-    /**
-     * Determine if validation produced errors.
-     */
-    public function hasErrors(): bool
-    {
-        return ! empty($this->validationErrors);
-    }
-
-    /**
-     * Return all validation errors.
-     *
-     * @return array<string>
-     */
-    public function errors(): array
-    {
-        return $this->validationErrors;
-    }
-
-    /**
      * Return the storage representation of the current values.
      *
      * @return array<int, array{value: mixed, translations: array}>
@@ -150,7 +136,6 @@ abstract class Field
             return array_map(static fn ($v) => ['value' => $v, 'translations' => []], $items);
         }
 
-        // Localizable: transpose locale values into records with translations.
         $maxCount = 1;
         foreach ($this->values as $item) {
             if (is_array($item['value'])) {
@@ -180,8 +165,6 @@ abstract class Field
 
     /**
      * Return the typed value for a specific locale.
-     *
-     * @param  int|null  $localeId  Locale ID, or null for the default locale.
      */
     public function value(?int $localeId = null): mixed
     {
@@ -203,13 +186,10 @@ abstract class Field
 
     /**
      * Set the value for a specific locale without persisting.
-     *
-     * @param  mixed    $value     Value to set.
-     * @param  int|null $localeId  Target locale; null uses the default locale for localizable fields.
      */
     public function set(mixed $value, ?int $localeId = null): void
     {
-        $processedValue = $this->processValue($value);
+        $normalized = $this->normalize($value);
         $localeId = $this->isLocalizable()
             ? ($localeId ?? $this->localeRegistry->defaultLocaleId())
             : null;
@@ -218,15 +198,12 @@ abstract class Field
         $key = array_search($localeId, $localeIds, true);
 
         if ($key !== false) {
-            $this->values[$key]['value'] = $processedValue;
+            $this->values[$key]['value'] = $normalized;
 
             return;
         }
 
-        $this->values[] = [
-            'locale_id' => $localeId,
-            'value' => $processedValue,
-        ];
+        $this->values[] = ['locale_id' => $localeId, 'value' => $normalized];
     }
 
     /**
@@ -252,6 +229,24 @@ abstract class Field
     public function has(?int $localeId = null): bool
     {
         return $this->value($localeId) !== null;
+    }
+
+    public function isFilled(): bool
+    {
+        return ! empty($this->values);
+    }
+
+    public function hasErrors(): bool
+    {
+        return ! empty($this->validationErrors);
+    }
+
+    /**
+     * @return array<string>
+     */
+    public function errors(): array
+    {
+        return $this->validationErrors;
     }
 
     /**
@@ -301,8 +296,6 @@ abstract class Field
     }
 
     /**
-     * Return field metadata as an array (type, flags).
-     *
      * @return array<string, mixed>
      */
     public function toMetadata(): array
@@ -320,8 +313,6 @@ abstract class Field
     }
 
     /**
-     * Return data for search engine indexing.
-     *
      * @return array<string, mixed>
      */
     public function indexData(): array
@@ -350,10 +341,17 @@ abstract class Field
         return $record->{$this->column()};
     }
 
+
     /**
-     * Validate payload with cardinality/localization rules and field-specific checks.
+     * Validate the full incoming payload, handling cardinality and localization.
+     *
+     * Override in subclasses that have a non-standard payload shape
+     * (e.g. SelectField, MeasurementField). The default implementation:
+     *   - non-localizable, single  → calls validate() + laravelRules()
+     *   - non-localizable, multiple → iterates values, calls validate() + laravelRules() per item
+     *   - localizable              → iterates locale translations, calls validate() + laravelRules() per item
      */
-    protected function validate(mixed $values): bool
+    protected function validatePayload(mixed $values): bool
     {
         if (! $this->isLocalizable()) {
             if (! $this->isMultiple()) {
@@ -361,7 +359,7 @@ abstract class Field
                     return $this->addError(__('eav::attributes.validation.multiple_not_allowed'));
                 }
 
-                return $this->validateSingle($values);
+                return $this->applyRules($values);
             }
 
             if (! is_array($values)) {
@@ -372,7 +370,8 @@ abstract class Field
                 if (is_array($value)) {
                     return $this->addError(__('eav::attributes.validation.invalid_format'));
                 }
-                if (! $this->validateSingle($value)) {
+
+                if (! $this->applyRules($value)) {
                     return false;
                 }
             }
@@ -384,15 +383,76 @@ abstract class Field
             return $this->addError(__('eav::attributes.validation.translations_required'));
         }
 
-        return $this->validateLocalizableValues($values);
+        $groups = $this->isMultiple() ? $values : [$values];
+
+        foreach ($groups as $group) {
+            if (! is_array($group)) {
+                return $this->addError(__('eav::attributes.validation.invalid_format'));
+            }
+
+            foreach ($group as $translation) {
+                if (! isset($translation['locale_id'])) {
+                    return $this->addError(__('eav::attributes.validation.locale_required'));
+                }
+
+                if (! $this->localeRegistry->isValidLocaleId($translation['locale_id'])) {
+                    return $this->addError(__('eav::attributes.validation.invalid_locale'));
+                }
+
+                if (! $this->applyRules($translation['values'] ?? null)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**
-     * Run type-specific validation then apply any configurable Laravel rules stored on the attribute.
+     * Append a validation error and return false for fluent guards.
      */
-    protected function validateSingle(mixed $value): bool
+    protected function addError(string $message): bool
     {
-        if (! $this->validateValue($value)) {
+        $this->validationErrors[] = $message;
+
+        return false;
+    }
+
+    /**
+     * @return array<int, array{locale_id: int|null, value: mixed}>
+     */
+    protected function normalizeValues(array|string $values): array
+    {
+        if (! $this->isLocalizable()) {
+            $normalized = is_array($values)
+                ? array_map(fn ($v) => $this->normalize($v), $values)
+                : $this->normalize($values);
+
+            return [['locale_id' => null, 'value' => $normalized]];
+        }
+
+        $groups = $this->isMultiple() ? $values : [$values];
+
+        $byLocale = [];
+        foreach ($groups as $group) {
+            foreach ($group as $translation) {
+                $byLocale[$translation['locale_id']][] = $this->normalize($translation['values']);
+            }
+        }
+
+        return collect($byLocale)->map(fn ($values, $localeId) => [
+            'locale_id' => $localeId,
+            'value' => $this->isMultiple() ? $values : $values[0],
+        ])->values()->all();
+    }
+
+    /**
+     * Run validate() then apply any configurable Laravel rules stored on the attribute.
+     * Private — not part of the subclass extension API.
+     */
+    private function applyRules(mixed $value): bool
+    {
+        if (! $this->validate($value)) {
             return false;
         }
 
@@ -420,7 +480,7 @@ abstract class Field
      *
      * @return array<string>
      */
-    protected function laravelRules(): array
+    private function laravelRules(): array
     {
         $rules = [];
 
@@ -431,15 +491,15 @@ abstract class Field
             $rule = match ($type) {
                 'min_length' => "min:{$param}",
                 'max_length' => "max:{$param}",
-                'min'        => "min:{$param}",
-                'max'        => "max:{$param}",
-                'regex'      => "regex:{$param}",
-                'email'      => 'email',
-                'url'        => 'url',
+                'min' => "min:{$param}",
+                'max' => "max:{$param}",
+                'regex' => "regex:{$param}",
+                'email' => 'email',
+                'url' => 'url',
                 'date_format' => "date_format:{$param}",
-                'after'      => "after:{$param}",
-                'before'     => "before:{$param}",
-                default      => null,
+                'after' => "after:{$param}",
+                'before' => "before:{$param}",
+                default => null,
             };
 
             if ($rule !== null) {
@@ -449,85 +509,4 @@ abstract class Field
 
         return $rules;
     }
-
-    /**
-     * Validate a localized payload where each translation item contains locale and value.
-     *
-     * @param  array<int, mixed>  $values
-     */
-    protected function validateLocalizableValues(array $values): bool
-    {
-        $groups = $this->isMultiple() ? $values : [$values];
-
-        foreach ($groups as $group) {
-            if (! is_array($group)) {
-                return $this->addError(__('eav::attributes.validation.invalid_format'));
-            }
-
-            if (! array_all($group, fn ($translation) => $this->validateTranslation($translation))) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * @param  array{locale_id?: int, values?: mixed}  $translation
-     */
-    protected function validateTranslation(array $translation): bool
-    {
-        if (! isset($translation['locale_id'])) {
-            return $this->addError(__('eav::attributes.validation.locale_required'));
-        }
-
-        if (! $this->localeRegistry->isValidLocaleId($translation['locale_id'])) {
-            return $this->addError(__('eav::attributes.validation.invalid_locale'));
-        }
-
-        return $this->validateSingle($translation['values'] ?? null);
-    }
-
-    /**
-     * Append a validation error and return false for fluent guards.
-     */
-    protected function addError(string $message): bool
-    {
-        $this->validationErrors[] = $message;
-
-        return false;
-    }
-
-    /**
-     * @return array<int, array{locale_id: int|null, value: mixed}>
-     */
-    protected function processValues(array|string $values): array
-    {
-        if (! $this->isLocalizable()) {
-            $processed = is_array($values)
-                ? array_map(fn ($v) => $this->processValue($v), $values)
-                : $this->processValue($values);
-
-            return [['locale_id' => null, 'value' => $processed]];
-        }
-
-        $groups = $this->isMultiple() ? $values : [$values];
-
-        $byLocale = [];
-
-        foreach ($groups as $group) {
-            foreach ($group as $translation) {
-                $byLocale[$translation['locale_id']][] = $this->processValue($translation['values']);
-            }
-        }
-
-        return collect($byLocale)->map(fn ($values, $localeId) => [
-            'locale_id' => $localeId,
-            'value' => $this->isMultiple() ? $values : $values[0],
-        ])->values()->all();
-    }
-
-    abstract protected function validateValue(mixed $value): bool;
-
-    abstract protected function processValue(mixed $value): mixed;
 }

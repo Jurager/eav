@@ -4,7 +4,7 @@ namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
-use Jurager\Eav\EavModels;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * @property int $id

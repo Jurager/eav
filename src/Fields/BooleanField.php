@@ -42,23 +42,18 @@ class BooleanField extends Field
         return $values ? [$code => $values] : [];
     }
 
-    protected function validateValue(mixed $value): bool
+    protected function validate(mixed $value): bool
     {
         if ($value === null) {
             return true;
         }
 
-        if (is_bool($value)) {
-            return true;
-        }
-
-        if ($value === 0 || $value === 1) {
+        if (is_bool($value) || $value === 0 || $value === 1) {
             return true;
         }
 
         if (is_string($value)) {
-            $lower = strtolower($value);
-            if (in_array($lower, ['0', '1', 'true', 'false', 'yes', 'no', 'on', 'off'], true)) {
+            if (in_array(strtolower($value), ['0', '1', 'true', 'false', 'yes', 'no', 'on', 'off'], true)) {
                 return true;
             }
         }
@@ -66,7 +61,7 @@ class BooleanField extends Field
         return $this->addError(__('eav::attributes.validation.invalid_value'));
     }
 
-    protected function processValue(mixed $value): int
+    protected function normalize(mixed $value): int
     {
         return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
     }
