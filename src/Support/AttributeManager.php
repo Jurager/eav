@@ -51,6 +51,13 @@ class AttributeManager
     private ?array $indexData = null;
 
     /**
+     * Marks params keys for which the schema is already built in $this->fields.
+     *
+     * @var array<string, true>
+     */
+    private array $loadedSchemaKeys = [];
+
+    /**
      * @param  Attributable|null  $entity  Concrete entity instance, or null for schema-only mode.
      * @param  Collection<int, mixed>|null  $preloadedAttributes  Pre-fetched attributes to skip the initial DB query.
      */
@@ -95,78 +102,152 @@ class AttributeManager
     }
 
     /**
+     * Process-level schema registry: params-key → manager.
+     *
+     * Persists across syncBatch() calls within the same PHP process so subsequent
+     * batches never reload schemas that were already fetched. Reset explicitly with
+     * flushSchemaRegistry() between unrelated jobs or when attribute definitions
+     * may have changed.
+     *
+     * @var array<string, static>
+     */
+    private static array $schemaRegistry = [];
+
+    /**
+     * Clear the process-level schema registry.
+     */
+    public static function flushSchemaRegistry(): void
+    {
+        static::$schemaRegistry = [];
+    }
+
+    /**
+     * Build a schema-only manager from a pre-loaded attribute collection.
+     *
+     * Use this when you already have all attribute definitions in memory (e.g. from
+     * a setup query at the start of an import). Passing the result to syncBatch()
+     * as $prebuiltSchema skips all per-entity schema DB queries entirely.
+     *
+     * The collection must have the 'type' relation loaded so that
+     * AttributeFieldRegistry::make() can resolve the correct Field class.
+     *
+     * @param  Collection<int, \Jurager\Eav\Models\Attribute>  $attributes
+     */
+    public static function fromAttributes(Collection $attributes): static
+    {
+        if (method_exists($attributes, 'loadMissing')) {
+            $attributes->loadMissing('type');
+        }
+
+        $instance = new static(null, $attributes);
+
+        foreach ($attributes as $attribute) {
+            $instance->fields[$attribute->code] = $instance->fieldRegistry->make($attribute);
+        }
+
+        $instance->loadedSchemaKeys['default'] = true;
+
+        return $instance;
+    }
+
+    /**
      * Persist attribute values for multiple entities in a memory-safe, chunked batch.
      *
-     * The attribute schema is loaded once per unique (entity_type, params) combination
-     * and reused across all chunks — so 50,000 products sharing the same category set
-     * produce exactly 1 schema query and ~7 DB queries per chunk, regardless of entity
-     * or attribute count.
+     * When $prebuiltSchema is provided, it is used for all entities — no per-entity
+     * schema queries are executed. This is the fast path for bulk imports where all
+     * attribute definitions are already loaded (see fromAttributes()).
      *
-     * Each chunk is flushed independently so the DB is never overwhelmed by a single
-     * massive upsert. The default chunk size of 500 entities is a safe starting point;
-     * tune it down if you have many attributes or long translations.
-     *
-     * Typical usage in an importer:
-     *
-     *   AttributeManager::syncBatch(collect([
-     *       ['entity' => $product1, 'data' => ['color' => 'red',  'weight' => 1.5]],
-     *       ['entity' => $product2, 'data' => ['color' => 'blue', 'weight' => 2.0]],
-     *       // …
-     *   ]));
+     * Without $prebuiltSchema, the schema is loaded per unique (entity_type, params)
+     * combination and cached in the process-level $schemaRegistry so that subsequent
+     * syncBatch() calls (e.g. later chunks of the same import) reuse the same schema.
      *
      * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
-     * @param  int  $chunkSize  Number of entities per flush (default 500).
+     * @param  static|null  $prebuiltSchema  Optional pre-built schema to use for all entities.
+     * @param  int  $chunkSize  Number of entities per DB flush (default 500).
      *
      * @throws BindingResolutionException
      * @throws JsonException
      */
-    public static function syncBatch(Collection $batch, int $chunkSize = 500): void
+    public static function syncBatch(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500): void
     {
         if ($batch->isEmpty()) {
             return;
         }
 
-        // Schema cache persists across chunks — loaded once per unique (entity_type, params).
-        $schemaCache = [];
+        $chunkSize = max(1, $chunkSize);
 
         foreach ($batch->chunk($chunkSize) as $chunk) {
-            $persister = new AttributePersister();
-
-            foreach ($chunk as $item) {
-                $entity = $item['entity'];
-                $params = $entity->getDefaultParameters();
-                $cacheKey = $entity->getAttributeEntityType().':'.md5(serialize($params));
-
-                if (! isset($schemaCache[$cacheKey])) {
-                    $schemaCache[$cacheKey] = static::for($entity);
-                    $schemaCache[$cacheKey]->loadSchema();
-                }
-
-                $fields = $schemaCache[$cacheKey]->fill($item['data']);
-
-                if ($fields->isNotEmpty()) {
-                    $persister->add($entity, $fields);
-                }
-            }
-
-            $persister->flush();
+            static::persistChunk($chunk, $prebuiltSchema);
         }
+    }
+
+    /**
+     * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $chunk
+     */
+    private static function persistChunk(Collection $chunk, ?self $prebuiltSchema): void
+    {
+        $persister = new AttributePersister();
+
+        foreach ($chunk as $item) {
+            $entity = $item['entity'];
+            $schema = $prebuiltSchema ?? static::schemaForEntity($entity);
+            $fields = $schema->fill($item['data']);
+
+            if ($fields->isNotEmpty()) {
+                $persister->add($entity, $fields);
+            }
+        }
+
+        $persister->flush();
+    }
+
+    private static function schemaForEntity(Attributable $entity): self
+    {
+        $cacheKey = static::schemaCacheKey($entity);
+
+        if (! isset(static::$schemaRegistry[$cacheKey])) {
+            static::$schemaRegistry[$cacheKey] = static::for($entity)->loadSchema();
+        }
+
+        return static::$schemaRegistry[$cacheKey];
+    }
+
+    /**
+     * Build the params-level cache key for a given entity.
+     *
+     * @throws JsonException
+     */
+    private static function schemaCacheKey(Attributable $entity): string
+    {
+        return $entity->getAttributeEntityType().':'.md5(serialize($entity->getDefaultParameters()));
     }
 
     /**
      * Load all attribute schemas (without values) into $this->fields.
      * Skips codes that are already loaded. Safe to call multiple times.
      *
+     * Returns $this for fluent chaining:
+     *   $manager = AttributeManager::for($entity)->loadSchema();
+     *
      * @throws BindingResolutionException
      * @throws JsonException
      */
-    public function loadSchema(): void
+    public function loadSchema(): static
     {
         $params = $this->entity?->getDefaultParameters() ?? [];
+        $schemaKey = $this->schemaParamsKey($params);
+
+        if (isset($this->loadedSchemaKeys[$schemaKey])) {
+            return $this;
+        }
 
         $this->resolveAttributes($params)
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
             ->each(fn ($attr) => $this->fields[$attr->code] = $this->fieldRegistry->make($attr));
+
+        $this->loadedSchemaKeys[$schemaKey] = true;
+
+        return $this;
     }
 
     /**
@@ -652,9 +733,21 @@ class AttributeManager
      */
     protected function resolveAttributes(array $params = []): Collection
     {
-        $key = empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
+        $key = $this->schemaParamsKey($params);
 
         return $this->cachedAttributes[$key] ??= $this->attributesQuery($params)?->get() ?? collect();
+    }
+
+    /**
+     * Build a stable key for params-based schema/attribute caches.
+     *
+     * @param  array<string, mixed>  $params
+     *
+     * @throws JsonException
+     */
+    private function schemaParamsKey(array $params): string
+    {
+        return empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
     }
 
     /**
