@@ -12,50 +12,46 @@ use InvalidArgumentException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\AttributeFieldRegistry;
 use LogicException;
 
 /**
- * Coordinates attribute schema loading, in-memory value changes and persistence.
+ * Coordinates attribute schema loading, in-memory value changes, and persistence.
  *
- * Supports three usage modes:
- *   - Entity instance: AttributeManager::for($product)
- *   - Entity class:    AttributeManager::for(Product::class)
- *   - Entity type:     AttributeManager::for('product')  ← schema only, no values
+ * Three usage modes:
+ *   Entity instance: AttributeManager::for($product)       — values + schema
+ *   Entity class:    AttributeManager::for(Product::class)  — schema only
+ *   Entity type:     AttributeManager::for('product')       — schema only
  */
 class AttributeManager
 {
-    /**
-     * Hydrated Field objects keyed by attribute code.
-     *
-     * @var array<string, Field>
-     */
+    private const array OPERATORS = [
+        '=', '!=', '>', '<', '>=', '<=', 'like', 'in', 'not_in', 'null', 'not_null', 'between',
+    ];
+
+    /** @var array<string, Field> */
     protected array $fields = [];
 
-    /**
-     * Available attribute collections keyed by parameter hash.
-     *
-     * @var array<string, Collection<int, mixed>>
-     */
+    /** @var array<string, Collection<int, mixed>> */
     protected array $cachedAttributes = [];
 
     protected AttributeFieldRegistry $fieldRegistry;
 
     private readonly ?AttributePersister $persister;
 
-    /**
-     * Memoized search index data for the current entity.
-     *
-     * @var array<string, mixed>|null
-     */
+    /** @var array<string, mixed>|null */
     private ?array $indexData = null;
 
-    /**
-     * Marks params keys for which the schema is already built in $this->fields.
-     *
-     * @var array<string, true>
-     */
+    /** @var array<string, true> */
     private array $loadedSchemaKeys = [];
+
+    /**
+     * Process-level schema cache shared across syncBatch() calls within the same PHP process.
+     *
+     * @var array<string, static>
+     */
+    private static array $schemaRegistry = [];
 
     /**
      * @param  Attributable|null  $entity  Concrete entity instance, or null for schema-only mode.
@@ -63,7 +59,7 @@ class AttributeManager
      */
     public function __construct(
         protected ?Attributable $entity = null,
-        ?Collection $preloadedAttributes = null
+        ?Collection $preloadedAttributes = null,
     ) {
         $this->fieldRegistry = app(AttributeFieldRegistry::class);
         $this->persister = $entity !== null ? new AttributePersister($entity) : null;
@@ -78,7 +74,7 @@ class AttributeManager
      *
      * @param  string|Attributable  $entity  Entity instance, FQCN, or morph-map key (e.g. 'product').
      *
-     * @throws InvalidArgumentException If a class string is passed that does not implement Attributable.
+     * @throws InvalidArgumentException
      */
     public static function for(string|Attributable $entity): static
     {
@@ -91,10 +87,10 @@ class AttributeManager
                 throw new InvalidArgumentException("$entity must implement Attributable");
             }
 
-            return new static(new $entity());
+            return new static(new $entity);
         }
 
-        // String entity type (e.g. 'product') — load schema without an instance.
+        // String entity type (e.g. 'product') — schema-only, no entity instance.
         return new static(null, EavModels::query('attribute')
             ->forEntity($entity)
             ->withRelations()
@@ -102,36 +98,15 @@ class AttributeManager
     }
 
     /**
-     * Process-level schema registry: params-key → manager.
-     *
-     * Persists across syncBatch() calls within the same PHP process so subsequent
-     * batches never reload schemas that were already fetched. Reset explicitly with
-     * flushSchemaRegistry() between unrelated jobs or when attribute definitions
-     * may have changed.
-     *
-     * @var array<string, static>
-     */
-    private static array $schemaRegistry = [];
-
-    /**
-     * Clear the process-level schema registry.
-     */
-    public static function flushSchemaRegistry(): void
-    {
-        static::$schemaRegistry = [];
-    }
-
-    /**
      * Build a schema-only manager from a pre-loaded attribute collection.
      *
-     * Use this when you already have all attribute definitions in memory (e.g. from
-     * a setup query at the start of an import). Passing the result to syncBatch()
-     * as $prebuiltSchema skips all per-entity schema DB queries entirely.
+     * Use when attribute definitions are already in memory (e.g. from a setup query at the
+     * start of an import). Passing the result to syncBatch() as $prebuiltSchema skips all
+     * per-entity schema DB queries.
      *
-     * The collection must have the 'type' relation loaded so that
-     * AttributeFieldRegistry::make() can resolve the correct Field class.
+     * The collection must have the 'type' relation loaded.
      *
-     * @param  Collection<int, \Jurager\Eav\Models\Attribute>  $attributes
+     * @param  Collection<int, Attribute>  $attributes
      */
     public static function fromAttributes(Collection $attributes): static
     {
@@ -151,18 +126,15 @@ class AttributeManager
     }
 
     /**
-     * Persist attribute values for multiple entities in a memory-safe, chunked batch.
+     * Persist attribute values for multiple entities in a chunked batch.
      *
-     * When $prebuiltSchema is provided, it is used for all entities — no per-entity
-     * schema queries are executed. This is the fast path for bulk imports where all
-     * attribute definitions are already loaded (see fromAttributes()).
-     *
-     * Without $prebuiltSchema, the schema is loaded per unique (entity_type, params)
-     * combination and cached in the process-level $schemaRegistry so that subsequent
-     * syncBatch() calls (e.g. later chunks of the same import) reuse the same schema.
+     * When $prebuiltSchema is provided it is used for all entities — no per-entity schema
+     * queries are executed (fast path for bulk imports).
+     * Without it, schemas are loaded per unique (entity_type, params) combination and
+     * cached in the process-level $schemaRegistry across calls.
      *
      * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
-     * @param  static|null  $prebuiltSchema  Optional pre-built schema to use for all entities.
+     * @param  static|null  $prebuiltSchema  Optional pre-built schema for all entities.
      * @param  int  $chunkSize  Number of entities per DB flush (default 500).
      *
      * @throws BindingResolutionException
@@ -174,9 +146,7 @@ class AttributeManager
             return;
         }
 
-        $chunkSize = max(1, $chunkSize);
-
-        foreach ($batch->chunk($chunkSize) as $chunk) {
+        foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
             static::persistChunk($chunk, $prebuiltSchema);
         }
     }
@@ -186,7 +156,7 @@ class AttributeManager
      */
     private static function persistChunk(Collection $chunk, ?self $prebuiltSchema): void
     {
-        $persister = new AttributePersister();
+        $persister = new AttributePersister;
 
         foreach ($chunk as $item) {
             $entity = $item['entity'];
@@ -212,11 +182,7 @@ class AttributeManager
         return static::$schemaRegistry[$cacheKey];
     }
 
-    /**
-     * Build the params-level cache key for a given entity.
-     *
-     * @throws JsonException
-     */
+    /** @throws JsonException */
     private static function schemaCacheKey(Attributable $entity): string
     {
         return $entity->getAttributeEntityType().':'.md5(serialize($entity->getDefaultParameters()));
@@ -224,10 +190,7 @@ class AttributeManager
 
     /**
      * Load all attribute schemas (without values) into $this->fields.
-     * Skips codes that are already loaded. Safe to call multiple times.
-     *
-     * Returns $this for fluent chaining:
-     *   $manager = AttributeManager::for($entity)->loadSchema();
+     * Skips codes already loaded. Safe to call multiple times.
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -251,10 +214,9 @@ class AttributeManager
     }
 
     /**
-     * Batch-load and hydrate specific fields by attribute code.
-     * Already-loaded codes are skipped to avoid redundant queries.
+     * Batch-load and hydrate specific fields by attribute code. Already-loaded codes are skipped.
      *
-     * @param  array<string>  $codes  Attribute codes to load.
+     * @param  array<string>  $codes
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -290,8 +252,6 @@ class AttributeManager
      * Return a single hydrated Field by attribute code, loading it on demand if needed.
      * Returns null if no attribute with that code exists for this entity.
      *
-     * @param  string  $code  Attribute code.
-     *
      * @throws JsonException
      * @throws BindingResolutionException
      */
@@ -313,11 +273,8 @@ class AttributeManager
     }
 
     /**
-     * Return the typed value of a single attribute for the current entity.
+     * Return the typed value of a single attribute.
      * Pass $localeId to get a locale-specific value for localizable fields.
-     *
-     * @param  string  $code  Attribute code.
-     * @param  int|null  $localeId  Locale ID, or null for the default locale.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -328,12 +285,8 @@ class AttributeManager
     }
 
     /**
-     * Set an attribute value in memory without persisting to the database.
-     * Chain multiple calls and then call save() or sync() to persist.
-     *
-     * @param  string  $code  Attribute code.
-     * @param  mixed  $value  Value to set.
-     * @param  int|null  $localeId  Target locale for localizable fields.
+     * Set an attribute value in memory without persisting.
+     * Chain calls and then call save() or sync() to persist.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -347,9 +300,7 @@ class AttributeManager
 
     /**
      * Persist a single attribute value to the database.
-     * Silently returns when the field is not found or has no value filled.
-     *
-     * @param  string  $code  Attribute code.
+     * Silently returns when the field is not found or has no value.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -367,22 +318,26 @@ class AttributeManager
 
     /**
      * Persist the given fields, merging with any existing entity_attribute rows.
-     * Existing rows for other attributes are left untouched (no deletions).
+     * Only the provided fields are written; other attributes are left untouched.
      *
      * @param  array<string, Field>  $fields  Keyed by attribute code.
      */
     public function attach(array $fields): bool
     {
-        $this->fields = array_merge($this->fields, $fields);
+        foreach ($fields as $code => $field) {
+            $this->fields[$code] = $field;
+        }
 
-        $this->persister()->persist(collect($this->fields)->filter(fn (Field $f) => $f->isFilled()));
+        $this->persister()->persist(
+            collect($fields)->filter(fn (Field $f) => $f->isFilled()),
+        );
 
         return true;
     }
 
     /**
      * Persist the given fields and delete all existing entity_attribute rows not in this set.
-     * Use this for a full replace of the entity's attribute values.
+     * Use for a full replace of the entity's attribute values.
      *
      * @param  array<string, Field>  $fields  Keyed by attribute code.
      */
@@ -390,15 +345,15 @@ class AttributeManager
     {
         $this->fields = $fields;
 
-        $filled = collect($this->fields)->filter(fn (Field $f) => $f->isFilled());
-
-        $this->persister()->syncFields($filled);
+        $this->persister()->syncFields(
+            collect($this->fields)->filter(fn (Field $f) => $f->isFilled()),
+        );
 
         return true;
     }
 
     /**
-     * Delete entity_attribute rows for the given attribute IDs belonging to the current entity.
+     * Delete entity_attribute rows for the given attribute IDs.
      *
      * @param  array<int>  $ids  Attribute IDs (not record IDs).
      */
@@ -408,14 +363,13 @@ class AttributeManager
     }
 
     /**
-     * Fill fields from raw data, reusing this manager's cached schema.
+     * Fill fields from raw data, reusing the cached schema.
      *
      * Each field is cloned from the schema so state does not leak between entities.
-     * Call loadSchema() (or field()) at least once before using this method so the
-     * schema is warm; subsequent calls are O(n fields) with no DB queries.
+     * Call loadSchema() (or field()) at least once before using this method in batch mode.
      *
      * @param  array<string, mixed>  $data  Raw attribute values keyed by attribute code.
-     * @return Collection<int, Field> Filled Field instances (unfilled fields are excluded).
+     * @return Collection<int, Field> Filled Field instances (unfilled fields excluded).
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -442,7 +396,7 @@ class AttributeManager
     }
 
     /**
-     * Return entity_attribute records for the current entity with resolved typed values.
+     * Return entity_attribute records with resolved typed values.
      * Each record gets a virtual `value` property set to the typed field value.
      *
      * @param  array<string>|null  $codes  Limit to these attribute codes; null returns all.
@@ -471,8 +425,7 @@ class AttributeManager
     }
 
     /**
-     * Return an eager-loaded Builder for entity_attribute records of the current entity,
-     * with all relations needed to render attribute values and their metadata.
+     * Return an eager-loaded Builder for entity_attribute records of the current entity.
      *
      * @param  array<string>|null  $codes  Limit to these attribute codes; null returns all.
      */
@@ -490,10 +443,10 @@ class AttributeManager
     }
 
     /**
-     * Return memoized search index data for all searchable attributes of the current entity.
-     * Result is cached for the lifetime of the manager instance.
+     * Return memoized search index data for all searchable attributes.
+     * Cached for the lifetime of the manager instance.
      *
-     * @return array<string, mixed> Empty array when entity is not set or has no searchable attributes.
+     * @return array<string, mixed>
      */
     public function indexData(): array
     {
@@ -502,10 +455,7 @@ class AttributeManager
 
     /**
      * Return distinct stored values for a given attribute across all entities of this type.
-     * Useful for building filter facets. Returns an empty collection if the attribute
-     * cannot be resolved or does not exist.
      *
-     * @param  string  $code  Attribute code.
      * @return Collection<int, mixed>
      *
      * @throws JsonException
@@ -514,8 +464,7 @@ class AttributeManager
     public function distinctValues(string $code): Collection
     {
         $field = $this->field($code);
-        $entityType = $this->entity?->getAttributeEntityType()
-            ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
+        $entityType = $this->resolveEntityType($code);
 
         if (! $field || ! $entityType) {
             return collect();
@@ -530,22 +479,21 @@ class AttributeManager
     }
 
     /**
-     * Run a SQL aggregate (sum, avg, min, max) over a numeric attribute column
-     * across all entities of this type. Returns null if the attribute is not numeric
-     * or cannot be resolved.
+     * Run a SQL aggregate (sum, avg, min, max) over a numeric attribute column.
+     * Returns null if the attribute is not numeric or cannot be resolved.
      *
-     * @param  string  $code  Attribute code.
-     * @param  string  $aggregate  One of: sum, avg, min, max.
-     *
-     * @throws InvalidArgumentException If $aggregate is not one of the allowed values.
+     * @throws InvalidArgumentException
      * @throws JsonException
      * @throws BindingResolutionException
      */
     public function aggregate(string $code, string $aggregate): ?float
     {
+        if (! in_array($aggregate, ['sum', 'avg', 'min', 'max'], true)) {
+            throw new InvalidArgumentException("Invalid aggregate '$aggregate'. Allowed: sum, avg, min, max.");
+        }
+
         $field = $this->field($code);
-        $entityType = $this->entity?->getAttributeEntityType()
-            ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
+        $entityType = $this->resolveEntityType($code);
 
         if (! $field || ! $entityType) {
             return null;
@@ -555,10 +503,6 @@ class AttributeManager
 
         if (! in_array($col, [Field::STORAGE_FLOAT, Field::STORAGE_INTEGER], true)) {
             return null;
-        }
-
-        if (! in_array($aggregate, ['sum', 'avg', 'min', 'max'], true)) {
-            throw new InvalidArgumentException("Invalid aggregate '$aggregate'. Allowed: sum, avg, min, max.");
         }
 
         $result = EavModels::query('entity_attribute')
@@ -571,13 +515,10 @@ class AttributeManager
     }
 
     /**
-     * Return a Builder on the entity model scoped to entities whose attribute
-     * with the given code matches the given value using the given operator.
+     * Return a Builder on the entity model scoped to entities whose attribute matches the given condition.
      * Returns null if the attribute or entity type cannot be resolved.
      *
-     * @param  string  $code  Attribute code.
-     * @param  mixed  $value  Value to compare against.
-     * @param  string  $operator  Comparison operator: =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
+     * @param  string  $operator  =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
      * @param  int|null  $localeId  Restrict localizable field search to this locale.
      *
      * @throws JsonException
@@ -585,9 +526,7 @@ class AttributeManager
      */
     public function attributeQuery(string $code, mixed $value, string $operator = '=', ?int $localeId = null): ?Builder
     {
-        $entityType = $this->entity?->getAttributeEntityType()
-            ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
-
+        $entityType = $this->resolveEntityType($code);
         $modelClass = $entityType ? Relation::getMorphedModel($entityType) : null;
         $sub = $this->subquery($code, $value, $operator, $localeId);
 
@@ -599,15 +538,12 @@ class AttributeManager
     }
 
     /**
-     * Build a subquery on entity_attribute that selects entity_id rows matching the given condition.
-     * Intended for use inside whereIn() scopes. Returns null when the attribute or entity type
-     * cannot be resolved.
+     * Build a subquery on entity_attribute selecting entity_id rows matching the given condition.
+     * For localizable fields, matches against entity_translations.label instead of the value column.
      *
-     * Supported operators: =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
+     * Returns null when the attribute or entity type cannot be resolved.
      *
-     * @param  string  $code  Attribute code.
-     * @param  mixed  $value  Value(s) to compare against. For 'between' pass [min, max].
-     * @param  string  $operator  Comparison operator (default '=').
+     * @param  string  $operator  =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
      * @param  int|null  $localeId  For localizable fields, restrict to this locale.
      *
      * @throws JsonException
@@ -616,8 +552,7 @@ class AttributeManager
     public function subquery(string $code, mixed $value = null, string $operator = '=', ?int $localeId = null): ?Builder
     {
         $field = $this->field($code);
-        $entityType = $this->entity?->getAttributeEntityType()
-            ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
+        $entityType = $this->resolveEntityType($code);
 
         if (! $field || ! $entityType) {
             return null;
@@ -630,45 +565,24 @@ class AttributeManager
 
         if ($field->isLocalizable()) {
             $sub->whereHas('translations', function ($q) use ($value, $operator, $localeId) {
-                $col = 'entity_translations.label';
-                match ($operator) {
-                    'like' => $q->where($col, 'LIKE', "%$value%"),
-                    'in' => $q->whereIn($col, (array) $value),
-                    'not_in' => $q->whereNotIn($col, (array) $value),
-                    'null' => $q->whereNull($col),
-                    'not_null' => $q->whereNotNull($col),
-                    'between' => $q->whereBetween($col, $value),
-                    default => $q->where($col, $operator, $value),
-                };
+                $this->applyOperator($q, 'entity_translations.label', $operator, $value);
+
                 if ($localeId) {
                     $q->where('entity_translations.locale_id', $localeId);
                 }
             });
         } else {
-
-            $col = $field->column();
-
-            match ($operator) {
-                'like' => $sub->where($col, 'LIKE', "%$value%"),
-                'in' => $sub->whereIn($col, (array) $value),
-                'not_in' => $sub->whereNotIn($col, (array) $value),
-                'null' => $sub->whereNull($col),
-                'not_null' => $sub->whereNotNull($col),
-                'between' => $sub->whereBetween($col, $value),
-                default => $sub->where($col, $operator, $value),
-            };
+            $this->applyOperator($sub, $field->column(), $operator, $value);
         }
 
         return $sub;
     }
 
     /**
-     * Find a single entity whose attribute with the given code matches the given value.
-     * Supports an optional operator as the second argument (findBy-operator-value style).
+     * Find a single entity whose attribute matches the given value.
+     * Supports an optional operator as the second argument.
      *
-     * @param  string  $code  Attribute code.
-     * @param  mixed  $operatorOrValue  Operator string ('=', '>', 'like', …) or value when operator is '='.
-     * @param  mixed  $value  Value to compare against; used only when $operatorOrValue is an operator.
+     * @param  mixed  $operatorOrValue  Operator string or value when operator is '='.
      * @param  int|null  $localeId  Restrict localizable field search to this locale.
      *
      * @throws JsonException
@@ -682,12 +596,9 @@ class AttributeManager
     }
 
     /**
-     * Find all entities whose attribute with the given code matches the given value.
-     * Supports an optional operator as the second argument (findAllBy-operator-value style).
+     * Find all entities whose attribute matches the given value.
      *
-     * @param  string  $code  Attribute code.
      * @param  mixed  $operatorOrValue  Operator string or value when operator is '='.
-     * @param  mixed  $value  Value to compare against; used only when $operatorOrValue is an operator.
      * @param  int|null  $localeId  Restrict localizable field search to this locale.
      * @return Collection<int, Model>
      *
@@ -703,9 +614,8 @@ class AttributeManager
 
     /**
      * Return the raw Builder for available attributes scoped to the current entity.
-     * Delegates to the entity's getAvailableAttributesQuery() contract method.
      *
-     * @param  array<string, mixed>  $params  Extra filter parameters forwarded to the entity (e.g. category IDs).
+     * @param  array<string, mixed>  $params  Extra filter parameters (e.g. category IDs).
      */
     public function attributesQuery(array $params = []): ?Builder
     {
@@ -713,9 +623,9 @@ class AttributeManager
     }
 
     /**
-     * Return the current entity, throwing when the manager was built in schema-only mode.
+     * Return the current entity, throwing when the manager is in schema-only mode.
      *
-     * @throws LogicException When no entity was provided to the constructor.
+     * @throws LogicException
      */
     protected function entityOrFail(): Attributable
     {
@@ -723,8 +633,7 @@ class AttributeManager
     }
 
     /**
-     * Return the available attribute collection for the given params, using an in-memory cache.
-     * The cache key is 'default' for empty params, or an md5 hash of the serialised params.
+     * Return the available attribute collection for the given params, with in-memory caching.
      *
      * @param  array<string, mixed>  $params
      * @return Collection<int, mixed>
@@ -739,20 +648,8 @@ class AttributeManager
     }
 
     /**
-     * Build a stable key for params-based schema/attribute caches.
-     *
-     * @param  array<string, mixed>  $params
-     *
-     * @throws JsonException
-     */
-    private function schemaParamsKey(array $params): string
-    {
-        return empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
-    }
-
-    /**
-     * Create Field instances for the given attributes, hydrate them with the entity's stored
-     * values and register them in $this->fields. Skips the DB query in schema-only mode.
+     * Create Field instances for the given attributes, hydrate them with stored values,
+     * and register them in $this->fields. Skips the DB query in schema-only mode.
      *
      * @param  Collection<int, mixed>  $attributes
      *
@@ -777,7 +674,6 @@ class AttributeManager
 
     /**
      * Return a base Builder scoped to entity_attribute rows for the current entity.
-     * Used as the foundation for all per-entity queries in this manager.
      */
     protected function entityQuery(): Builder
     {
@@ -789,19 +685,13 @@ class AttributeManager
     }
 
     /**
-     * Return a Builder for entity_attribute rows that belong to searchable attributes,
-     * with all relations required for index data assembly eager-loaded.
-     * Only rows whose attribute has searchable = true are included (filtered at SQL level).
+     * Return a Builder for searchable attribute rows with required relations eager-loaded.
      */
     protected function indexQuery(): Builder
     {
         return $this->entityQuery()
             ->whereHas('attribute', fn ($q) => $q->where('searchable', true))
-            ->with([
-                'attribute',
-                'attribute.enums.translations',
-                'translations',
-            ]);
+            ->with(['attribute', 'attribute.enums.translations', 'translations']);
     }
 
     private function persister(): AttributePersister
@@ -809,13 +699,7 @@ class AttributeManager
         return $this->persister ?? throw new LogicException('Entity is required. Use AttributeManager::for($entity).');
     }
 
-    /**
-     * Build search index data by loading all searchable entity_attribute rows,
-     * hydrating their Field instances and collecting the index-ready key/value pairs.
-     * Returns an empty array when no entity is set or no searchable values exist.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function buildIndexData(): array
     {
         if (! $this->entity) {
@@ -835,20 +719,50 @@ class AttributeManager
     }
 
     /**
+     * Apply a comparison operator to a Builder column.
+     * Used for both localizable (entity_translations.label) and non-localizable (value_*) columns.
+     */
+    private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
+    {
+        match ($operator) {
+            'like' => $query->where($column, 'LIKE', "%$value%"),
+            'in' => $query->whereIn($column, (array) $value),
+            'not_in' => $query->whereNotIn($column, (array) $value),
+            'null' => $query->whereNull($column),
+            'not_null' => $query->whereNotNull($column),
+            'between' => $query->whereBetween($column, $value),
+            default => $query->where($column, $operator, $value),
+        };
+    }
+
+    /**
      * Parse the overloaded ($operatorOrValue, $value) signature used by findBy / findAllBy.
-     * When $operatorOrValue is a known operator string, returns [$operatorOrValue, $value].
-     * Otherwise, treats it as the value itself and returns ['=', $operatorOrValue].
      *
      * @return array{string, mixed}
      */
     private function normalizeOperator(mixed $operatorOrValue, mixed $value): array
     {
-        $operators = ['=', '!=', '>', '<', '>=', '<=', 'like', 'in', 'not_in', 'null', 'not_null', 'between'];
-
-        if (is_string($operatorOrValue) && in_array($operatorOrValue, $operators, true)) {
+        if (is_string($operatorOrValue) && in_array($operatorOrValue, self::OPERATORS, true)) {
             return [$operatorOrValue, $value];
         }
 
         return ['=', $operatorOrValue];
+    }
+
+    /** @throws JsonException */
+    private function schemaParamsKey(array $params): string
+    {
+        return empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * Resolve the entity type string for a given attribute code.
+     *
+     * @throws JsonException
+     */
+    private function resolveEntityType(string $code): ?string
+    {
+        return $this->entity?->getAttributeEntityType()
+            ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
     }
 }

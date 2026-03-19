@@ -41,6 +41,6 @@ class EavModels
     {
         $class = static::class($key);
 
-        return new $class();
+        return new $class;
     }
 }

@@ -41,7 +41,7 @@ trait HasAttributes
     /**
      * Validate and fill attribute input, returning filled Field instances keyed by code.
      *
-     * @param array<int, array{code: string, values: mixed}> $input
+     * @param  array<int, array{code: string, values: mixed}>  $input
      * @return array<string, Field>
      *
      * @throws ValidationException|JsonException
