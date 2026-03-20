@@ -375,6 +375,20 @@ class AttributeManager
         return $query->get()->map($transform);
     }
 
+    /** @param  array<string>|null  $codes */
+    private function valuesQuery(?array $codes = null): Builder
+    {
+        return $this->entityQuery()
+            ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
+            ->with([
+                'attribute.type',
+                'attribute.group.translations',
+                'attribute.translations',
+                'attribute.enums.translations',
+                'translations',
+            ]);
+    }
+
     /**
      * Return memoized search index data for all searchable attributes.
      *
