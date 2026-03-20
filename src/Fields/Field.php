@@ -86,18 +86,18 @@ abstract class Field
     /**
      * Hydrate field values from stored entity attribute records.
      *
-     * @param  Collection<int, object>  $records
+     * @param  Collection<int, object>  $models
      */
-    public function hydrate(Collection $records): void
+    public function hydrate(Collection $models): void
     {
-        if ($records->isEmpty()) {
+        if ($models->isEmpty()) {
             $this->values = [];
 
             return;
         }
 
         if (! $this->isLocalizable()) {
-            $values = $records->map(fn ($record) => $this->fromRecord($record))->all();
+            $values = $models->map(fn ($model) => $this->from($model))->all();
 
             $this->values = [[
                 'locale_id' => null,
@@ -107,11 +107,12 @@ abstract class Field
             return;
         }
 
-        $records->loadMissing('translations');
+        $models->loadMissing('translations');
 
         $byLocale = [];
-        foreach ($records as $record) {
-            foreach ($record->translations as $translation) {
+
+        foreach ($models as $model) {
+            foreach ($model->translations as $translation) {
                 $byLocale[$translation->id][] = $translation->pivot->label;
             }
         }
@@ -334,11 +335,11 @@ abstract class Field
     }
 
     /**
-     * Read the typed value directly from a DB record using the storage column.
+     * Read the typed value directly from a model using the storage column.
      */
-    public function fromRecord(object $record): mixed
+    public function from(object $model): mixed
     {
-        return $record->{$this->column()};
+        return $model->{$this->column()};
     }
 
     /**

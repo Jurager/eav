@@ -37,7 +37,7 @@ class AttributeValidator
      *
      * @return array<string, Field>
      *
-     * @throws ValidationException|JsonException
+     * @throws ValidationException|JsonException|BindingResolutionException
      */
     public function validate(array $input): array
     {

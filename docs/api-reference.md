@@ -7,15 +7,15 @@ weight: 120
 
 ## AttributeManager
 
-`Jurager\Eav\AttributeManager`
+`Jurager\Eav\Support\AttributeManager`
 
 Accessed via `$model->attributes()`. One instance per model instance (cached).
 
 ### Static
 
 - `for(string|Attributable $entity): static` — create a manager for an entity instance, class, or morph-map key
-- `schema(Collection $attributes): static` — create a schema-only manager from a pre-loaded attribute collection (fast path for bulk imports)
-- `syncBatch(Collection $batch, int $chunkSize = 500): void` — persist attribute values for multiple entities in chunked batches
+- `schema(Attributable|Collection $entityOrAttributes): static` — schema-only manager; when given an entity, result is cached by (entity_type, params); when given a Collection of Attribute models, built immediately from those attributes
+- `sync(Collection $batch, ?static $prebuiltSchema = null, int $chunkSize = 500): void` — persist attribute values for multiple entities in chunked batches
 
 ### Schema
 
@@ -27,24 +27,22 @@ Accessed via `$model->attributes()`. One instance per model instance (cached).
 - `field(string $code): ?Field` — return a hydrated Field by attribute code (loads on demand)
 - `fields(): array` — return all currently loaded Field objects keyed by code
 - `value(string $code, ?int $localeId = null): mixed` — return the typed value for an attribute
-- `values(?array $codes = null): Collection` — return entity_attribute records with resolved `value` property
+- `values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator` — entity_attribute records with resolved `value` property; pass `$paginated` to get a paginated result
 - `indexData(): array` — searchable values for all `searchable: true` attributes (memoized)
 - `distinctValues(string $code): Collection` — distinct stored values for a given attribute across all entities
 - `aggregate(string $code, string $aggregate): ?float` — SQL aggregate (`sum`, `avg`, `min`, `max`) over a numeric attribute
-- `valueMapper(): \Closure` — closure that sets `$record->value`; pass to paginator `->through()`
 
 ### Writing
 
 - `set(string $code, mixed $value, ?int $localeId = null): static` — set value in memory (chainable)
 - `save(string $code): void` — persist a single attribute value
 - `attach(array $fields): bool` — persist fields, leaving other existing rows untouched
-- `sync(array $fields): bool` — full replace: persist fields and delete all other existing rows
+- `replace(array $fields): bool` — full replace: persist fields and delete all other existing rows
 - `detach(array $ids): void` — delete rows for given attribute IDs
 - `fill(array $data): Collection` — fill fields from raw data reusing cached schema (no DB queries after warm-up)
 
 ### Querying
 
-- `valuesQuery(?array $codes = null): Builder` — eager-loaded Builder for entity_attribute records
 - `subquery(string $code, mixed $value, string $operator, ?int $localeId): ?Builder` — subquery used by Eloquent scopes
 - `attributeQuery(string $code, mixed $value, string $operator, ?int $localeId): ?Builder` — Builder scoped to matching entity IDs
 - `findBy(string $code, mixed $operatorOrValue, mixed $value, ?int $localeId): ?Model`
@@ -186,8 +184,8 @@ Base class for all field type implementations.
 
 - `fill(mixed $values): bool` — validate and normalize incoming payload; returns `false` on error
 - `hydrate(Collection $records): void` — load values from DB records
+- `from(object $model): mixed` — read raw value from a model via `column()`
 - `toStorage(): array` — format current values for persistence
-- `fromRecord(object $record): mixed` — read raw value from a DB record via `column()`
 
 ### Reading / Writing
 

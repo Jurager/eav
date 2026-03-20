@@ -3,6 +3,7 @@
 namespace Jurager\Eav\Concerns;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Contracts\Container\CircularDependencyException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -46,7 +47,7 @@ trait HasAttributes
      * @param  array<int, array{code: string, values: mixed}>  $input
      * @return array<string, Field>
      *
-     * @throws ValidationException|JsonException
+     * @throws ValidationException|JsonException|BindingResolutionException
      */
     public function validate(array $input): array
     {
@@ -235,7 +236,10 @@ trait HasAttributes
      * Return a query for attributes scoped through related entities (e.g. categories for products).
      * Returns null when params are empty or the relation model cannot be resolved.
      *
-     * @param  array<string, mixed>  $params  IDs of the related entities.
+     * @param array<string, mixed> $params IDs of the related entities.
+     * @return Builder|null
+     * @throws BindingResolutionException
+     * @throws CircularDependencyException
      */
     protected function getAttributesByRelationQuery(array $params = []): ?Builder
     {

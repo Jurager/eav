@@ -44,10 +44,10 @@ $product->attributes()->set('tags', ['sale', 'new', 'featured'])->save('tags');
 To persist a full set of attribute values and remove any others:
 
 ```php
-// Build and fill Field instances, then sync
+// Build and fill Field instances, then replace
 $fields = [/* array of Field instances keyed by code */];
 
-$product->attributes()->sync($fields);
+$product->attributes()->replace($fields);
 ```
 
 To persist fields without removing existing ones:
@@ -84,20 +84,28 @@ $fields = AttributeValidator::make($product, $manager)->validate($input);
 
 ## Batch Import
 
-For bulk imports use `AttributeManager::syncBatch()`. The schema is loaded once per unique
+For bulk imports use `AttributeManager::sync()`. The schema is loaded once per unique
 `(entity_type, params)` combination and reused across all chunks:
 
 ```php
-use Jurager\Eav\AttributeManager;
+use Jurager\Eav\Support\AttributeManager;
 
-AttributeManager::syncBatch(collect([
+AttributeManager::sync(collect([
     ['entity' => $product1, 'data' => ['color' => 'red',  'weight' => 1.5]],
     ['entity' => $product2, 'data' => ['color' => 'blue', 'weight' => 2.0]],
     // …
 ]));
 
 // Custom chunk size (default 500)
-AttributeManager::syncBatch($batch, chunkSize: 200);
+AttributeManager::sync($batch, chunkSize: 200);
+```
+
+For maximum performance when all entities share the same schema, build it once and pass it as `$prebuiltSchema`:
+
+```php
+$schema = AttributeManager::schema(Product::first());
+
+AttributeManager::sync($batch, prebuiltSchema: $schema, chunkSize: 200);
 ```
 
 Each chunk is flushed in ~7 DB queries, regardless of entity or attribute count.

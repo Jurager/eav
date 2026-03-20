@@ -2,8 +2,8 @@
 
 namespace Jurager\Eav\Support;
 
-use Closure;
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -46,16 +46,12 @@ class AttributeManager
     /** @var array<string, true> */
     private array $loadedSchemaKeys = [];
 
-    /**
-     * Process-level schema cache shared across syncBatch() calls within the same PHP process.
-     *
-     * @var array<string, static>
-     */
+    /** @var array<string, static> Process-level schema cache shared across sync() calls. */
     private static array $schemaRegistry = [];
 
     /**
-     * @param  Attributable|null  $entity  Concrete entity instance, or null for schema-only mode.
-     * @param  Collection<int, mixed>|null  $preloadedAttributes  Pre-fetched attributes to skip the initial DB query.
+     * @param  Attributable|null  $entity
+     * @param  Collection<int, mixed>|null  $preloadedAttributes
      */
     public function __construct(
         protected ?Attributable $entity = null,
@@ -70,9 +66,7 @@ class AttributeManager
     }
 
     /**
-     * Create a manager for a concrete entity instance, class, or string entity type.
-     *
-     * @param  string|Attributable  $entity  Entity instance, FQCN, or morph-map key (e.g. 'product').
+     * Create a manager for an entity instance, FQCN, or morph-map key.
      *
      * @throws InvalidArgumentException
      */
@@ -98,100 +92,70 @@ class AttributeManager
     }
 
     /**
-     * Build a schema-only manager from a pre-loaded attribute collection.
+     * Return a schema-only manager for an entity or a pre-loaded attribute collection.
      *
-     * Use when attribute definitions are already in memory (e.g. from a setup query at the
-     * start of an import). Passing the result to syncBatch() as $prebuiltSchema skips all
-     * per-entity schema DB queries.
-     *
-     * The collection must have the 'type' relation loaded.
-     *
-     * @param Collection<int, Attribute> $attributes
-     * @throws BindingResolutionException
-     */
-    public static function schema(Collection $attributes): static
-    {
-        if (method_exists($attributes, 'loadMissing')) {
-            $attributes->loadMissing('type');
-        }
-
-        $instance = new static(null, $attributes);
-
-        foreach ($attributes as $attribute) {
-            $instance->fields[$attribute->code] = $instance->fieldRegistry->make($attribute);
-        }
-
-        $instance->loadedSchemaKeys['default'] = true;
-
-        return $instance;
-    }
-
-    /**
-     * Persist attribute values for multiple entities in a chunked batch.
-     *
-     * When $prebuiltSchema is provided it is used for all entities — no per-entity schema
-     * queries are executed (fast path for bulk imports).
-     * Without it, schemas are loaded per unique (entity_type, params) combination and
-     * cached in the process-level $schemaRegistry across calls.
-     *
-     * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
-     * @param  static|null  $prebuiltSchema  Optional pre-built schema for all entities.
-     * @param  int  $chunkSize  Number of entities per DB flush (default 500).
+     * @param  Attributable|Collection<int, Attribute>  $entityOrAttributes
      *
      * @throws BindingResolutionException
      * @throws JsonException
      */
-    public static function syncBatch(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500): void
+    public static function schema(Attributable|Collection $entityOrAttributes): static
+    {
+        if ($entityOrAttributes instanceof Collection) {
+            // Build immediately from the given attributes; 'type' relation loaded if missing.
+            $entityOrAttributes->loadMissing('type');
+
+            $instance = new static(null, $entityOrAttributes);
+
+            foreach ($entityOrAttributes as $attribute) {
+                $instance->fields[$attribute->code] = $instance->fieldRegistry->make($attribute);
+            }
+
+            $instance->loadedSchemaKeys['default'] = true;
+
+            return $instance;
+        }
+
+        // Cache by (entity_type, params) — subsequent calls skip all database queries.
+        $cacheKey = $entityOrAttributes->getAttributeEntityType().':'.md5(serialize($entityOrAttributes->getDefaultParameters()));
+
+        return static::$schemaRegistry[$cacheKey] ??= static::for($entityOrAttributes)->loadSchema();
+    }
+
+    /**
+     * Persist attribute values for multiple entities in chunked batches.
+     *
+     * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
+     * @param  static|null  $prebuiltSchema  Shared schema for all entities; skips per-entity DB queries when provided.
+     *
+     * @throws BindingResolutionException
+     * @throws JsonException
+     */
+    public static function sync(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500): void
     {
         if ($batch->isEmpty()) {
             return;
         }
 
         foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
-            static::persistChunk($chunk, $prebuiltSchema);
-        }
-    }
+            $persister = new AttributePersister();
 
-    /**
-     * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $chunk
-     */
-    private static function persistChunk(Collection $chunk, ?self $prebuiltSchema): void
-    {
-        $persister = new AttributePersister();
+            foreach ($chunk as $item) {
+                $entity = $item['entity'];
+                $schema = $prebuiltSchema ?? static::schema($entity);
+                $fields = $schema->fill($item['data']);
 
-        foreach ($chunk as $item) {
-            $entity = $item['entity'];
-            $schema = $prebuiltSchema ?? static::schemaForEntity($entity);
-            $fields = $schema->fill($item['data']);
-
-            if ($fields->isNotEmpty()) {
-                $persister->add($entity, $fields);
+                if ($fields->isNotEmpty()) {
+                    $persister->add($entity, $fields);
+                }
             }
+
+            $persister->flush();
         }
-
-        $persister->flush();
-    }
-
-    private static function schemaForEntity(Attributable $entity): self
-    {
-        $cacheKey = static::schemaCacheKey($entity);
-
-        if (! isset(static::$schemaRegistry[$cacheKey])) {
-            static::$schemaRegistry[$cacheKey] = static::for($entity)->loadSchema();
-        }
-
-        return static::$schemaRegistry[$cacheKey];
-    }
-
-    /** @throws JsonException */
-    private static function schemaCacheKey(Attributable $entity): string
-    {
-        return $entity->getAttributeEntityType().':'.md5(serialize($entity->getDefaultParameters()));
     }
 
     /**
-     * Load all attribute schemas (without values) into $this->fields.
-     * Skips codes already loaded. Safe to call multiple times.
+     * Load all attribute schemas into $this->fields. Safe to call multiple times.
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -215,7 +179,7 @@ class AttributeManager
     }
 
     /**
-     * Batch-load and hydrate specific fields by attribute code. Already-loaded codes are skipped.
+     * Batch-load and hydrate specific fields by code; already-loaded codes are skipped.
      *
      * @param  array<string>  $codes
      *
@@ -240,7 +204,7 @@ class AttributeManager
     }
 
     /**
-     * Return all currently loaded Field objects keyed by attribute code.
+     * Return all loaded Field objects keyed by attribute code.
      *
      * @return array<string, Field>
      */
@@ -250,8 +214,7 @@ class AttributeManager
     }
 
     /**
-     * Return a single hydrated Field by attribute code, loading it on demand if needed.
-     * Returns null if no attribute with that code exists for this entity.
+     * Return a hydrated Field by code, loading it on demand if needed.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -274,8 +237,7 @@ class AttributeManager
     }
 
     /**
-     * Return the typed value of a single attribute.
-     * Pass $localeId to get a locale-specific value for localizable fields.
+     * Return the typed value for an attribute.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -286,8 +248,7 @@ class AttributeManager
     }
 
     /**
-     * Set an attribute value in memory without persisting.
-     * Chain calls and then call save() or sync() to persist.
+     * Set a value in memory without persisting.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -300,8 +261,7 @@ class AttributeManager
     }
 
     /**
-     * Persist a single attribute value to the database.
-     * Silently returns when the field is not found or has no value.
+     * Persist a single attribute value.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -314,14 +274,13 @@ class AttributeManager
             return;
         }
 
-        $this->persister()->saveField($field);
+        $this->persister()->save($field);
     }
 
     /**
-     * Persist the given fields, merging with any existing entity_attribute rows.
-     * Only the provided fields are written; other attributes are left untouched.
+     * Persist the given fields, leaving existing rows untouched.
      *
-     * @param  array<string, Field>  $fields  Keyed by attribute code.
+     * @param  array<string, Field>  $fields
      */
     public function attach(array $fields): bool
     {
@@ -337,16 +296,15 @@ class AttributeManager
     }
 
     /**
-     * Persist the given fields and delete all existing entity_attribute rows not in this set.
-     * Use for a full replace of the entity's attribute values.
+     * Replace all entity_attribute rows with the given fields.
      *
-     * @param  array<string, Field>  $fields  Keyed by attribute code.
+     * @param  array<string, Field>  $fields
      */
-    public function sync(array $fields): bool
+    public function replace(array $fields): bool
     {
         $this->fields = $fields;
 
-        $this->persister()->syncFields(
+        $this->persister()->replace(
             collect($this->fields)->filter(fn (Field $f) => $f->isFilled()),
         );
 
@@ -356,21 +314,18 @@ class AttributeManager
     /**
      * Delete entity_attribute rows for the given attribute IDs.
      *
-     * @param  array<int>  $ids  Attribute IDs (not record IDs).
+     * @param  array<int>  $ids
      */
     public function detach(array $ids): void
     {
-        $this->persister()->detachByAttributeIds($ids);
+        $this->persister()->detach($ids);
     }
 
     /**
      * Fill fields from raw data, reusing the cached schema.
      *
-     * Each field is cloned from the schema so state does not leak between entities.
-     * Call loadSchema() (or field()) at least once before using this method in batch mode.
-     *
-     * @param  array<string, mixed>  $data  Raw attribute values keyed by attribute code.
-     * @return Collection<int, Field> Filled Field instances (unfilled fields excluded).
+     * @param  array<string, mixed>  $data
+     * @return Collection<int, Field>
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -386,6 +341,7 @@ class AttributeManager
                 continue;
             }
 
+            // Clone so state does not leak between entities sharing the same schema.
             $field = clone $this->fields[$code];
 
             if ($field->fill($value)) {
@@ -397,55 +353,30 @@ class AttributeManager
     }
 
     /**
-     * Return entity_attribute records with resolved typed values.
-     * Each record gets a virtual `value` property set to the typed field value.
+     * Return entity_attribute records with a resolved typed `value` property.
      *
-     * @param  array<string>|null  $codes  Limit to these attribute codes; null returns all.
-     * @return Collection<int, Model>
-     *
+     * @param array<string>|null $codes
+     * @param int|null $paginated When set, returns a paginator instead of a collection.
+     * @return Collection<int, Model>|LengthAwarePaginator
      * @throws BindingResolutionException
      */
-    public function values(?array $codes = null): Collection
+    public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
-        return $this->valuesQuery($codes)->get()->map($this->valueMapper());
-    }
+        $query = $this->valuesQuery($codes);
 
-    /**
-     * Return a closure that resolves and assigns the typed value on an entity_attribute record.
-     * Useful when mapping over paginated results: ->through($manager->valueMapper()).
-     *
-     * @return Closure(Model): Model
-     */
-    public function valueMapper(): Closure
-    {
-        return function ($record) {
-            $record->value = $this->fieldRegistry->make($record->attribute)->fromRecord($record);
+        $transform = fn (Model $model): Model => tap($model, function ($model) {
+            $model->value = $this->fieldRegistry->make($model->attribute)->from($model);
+        });
 
-            return $record;
-        };
-    }
+        if ($paginated !== null) {
+            return $query->paginate($paginated)->through($transform);
+        }
 
-    /**
-     * Return an eager-loaded Builder for entity_attribute records of the current entity.
-     *
-     * @param  array<string>|null  $codes  Limit to these attribute codes; null returns all.
-     */
-    public function valuesQuery(?array $codes = null): Builder
-    {
-        return $this->entityQuery()
-            ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
-            ->with([
-                'attribute.type',
-                'attribute.group.translations',
-                'attribute.translations',
-                'attribute.enums.translations',
-                'translations',
-            ]);
+        return $query->get()->map($transform);
     }
 
     /**
      * Return memoized search index data for all searchable attributes.
-     * Cached for the lifetime of the manager instance.
      *
      * @return array<string, mixed>
      */
@@ -481,7 +412,6 @@ class AttributeManager
 
     /**
      * Run a SQL aggregate (sum, avg, min, max) over a numeric attribute column.
-     * Returns null if the attribute is not numeric or cannot be resolved.
      *
      * @throws InvalidArgumentException
      * @throws JsonException
@@ -516,11 +446,7 @@ class AttributeManager
     }
 
     /**
-     * Return a Builder on the entity model scoped to entities whose attribute matches the given condition.
-     * Returns null if the attribute or entity type cannot be resolved.
-     *
-     * @param  string  $operator  =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
-     * @param  int|null  $localeId  Restrict localizable field search to this locale.
+     * Return a Builder scoped to entities whose attribute matches the given condition.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -540,12 +466,6 @@ class AttributeManager
 
     /**
      * Build a subquery on entity_attribute selecting entity_id rows matching the given condition.
-     * For localizable fields, matches against entity_translations.label instead of the value column.
-     *
-     * Returns null when the attribute or entity type cannot be resolved.
-     *
-     * @param  string  $operator  =, !=, >, <, >=, <=, like, in, not_in, null, not_null, between.
-     * @param  int|null  $localeId  For localizable fields, restrict to this locale.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -565,6 +485,7 @@ class AttributeManager
             ->where('attribute_id', $field->attribute()->id);
 
         if ($field->isLocalizable()) {
+            // Localizable fields are matched against entity_translations.label.
             $sub->whereHas('translations', function ($q) use ($value, $operator, $localeId) {
                 $this->applyOperator($q, 'entity_translations.label', $operator, $value);
 
@@ -580,11 +501,7 @@ class AttributeManager
     }
 
     /**
-     * Find a single entity whose attribute matches the given value.
-     * Supports an optional operator as the second argument.
-     *
-     * @param  mixed  $operatorOrValue  Operator string or value when operator is '='.
-     * @param  int|null  $localeId  Restrict localizable field search to this locale.
+     * Find a single entity by attribute value. Accepts an optional operator as the second argument.
      *
      * @throws JsonException
      * @throws BindingResolutionException
@@ -597,10 +514,8 @@ class AttributeManager
     }
 
     /**
-     * Find all entities whose attribute matches the given value.
+     * Find all entities by attribute value. Accepts an optional operator as the second argument.
      *
-     * @param  mixed  $operatorOrValue  Operator string or value when operator is '='.
-     * @param  int|null  $localeId  Restrict localizable field search to this locale.
      * @return Collection<int, Model>
      *
      * @throws JsonException
@@ -614,28 +529,22 @@ class AttributeManager
     }
 
     /**
-     * Return the raw Builder for available attributes scoped to the current entity.
+     * Return available attributes Builder for the current entity.
      *
-     * @param  array<string, mixed>  $params  Extra filter parameters (e.g. category IDs).
+     * @param  array<string, mixed>  $params
      */
     public function attributesQuery(array $params = []): ?Builder
     {
         return $this->entityOrFail()->getAvailableAttributesQuery($params);
     }
 
-    /**
-     * Return the current entity, throwing when the manager is in schema-only mode.
-     *
-     * @throws LogicException
-     */
+    /** @throws LogicException */
     protected function entityOrFail(): Attributable
     {
         return $this->entity ?? throw new LogicException('Entity is required. Use AttributeManager::for($entity).');
     }
 
     /**
-     * Return the available attribute collection for the given params, with in-memory caching.
-     *
      * @param  array<string, mixed>  $params
      * @return Collection<int, mixed>
      *
@@ -649,8 +558,7 @@ class AttributeManager
     }
 
     /**
-     * Create Field instances for the given attributes, hydrate them with stored values,
-     * and register them in $this->fields. Skips the DB query in schema-only mode.
+     * Create and hydrate Field instances from the given attribute records.
      *
      * @param  Collection<int, mixed>  $attributes
      *
@@ -673,9 +581,7 @@ class AttributeManager
         }
     }
 
-    /**
-     * Return a base Builder scoped to entity_attribute rows for the current entity.
-     */
+    /** Return a Builder scoped to entity_attribute rows for the current entity. */
     protected function entityQuery(): Builder
     {
         $entity = $this->entityOrFail();
@@ -685,9 +591,7 @@ class AttributeManager
             ->where('entity_id', $entity->id);
     }
 
-    /**
-     * Return a Builder for searchable attribute rows with required relations eager-loaded.
-     */
+    /** Return a Builder for searchable attribute rows with required relations eager-loaded. */
     protected function indexQuery(): Builder
     {
         return $this->entityQuery()
@@ -719,10 +623,7 @@ class AttributeManager
         return $attributes->isNotEmpty() ? ['attributes' => $attributes->all()] : [];
     }
 
-    /**
-     * Apply a comparison operator to a Builder column.
-     * Used for both localizable (entity_translations.label) and non-localizable (value_*) columns.
-     */
+    /** Apply a comparison operator to a query column. */
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
         match ($operator) {
@@ -737,7 +638,7 @@ class AttributeManager
     }
 
     /**
-     * Parse the overloaded ($operatorOrValue, $value) signature used by findBy / findAllBy.
+     * Parse the overloaded ($operatorOrValue, $value) signature.
      *
      * @return array{string, mixed}
      */
@@ -756,11 +657,7 @@ class AttributeManager
         return empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
     }
 
-    /**
-     * Resolve the entity type string for a given attribute code.
-     *
-     * @throws JsonException
-     */
+    /** @throws JsonException */
     private function resolveEntityType(string $code): ?string
     {
         return $this->entity?->getAttributeEntityType()
