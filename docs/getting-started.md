@@ -7,12 +7,11 @@ weight: 30
 
 ## Make a Model Attributable
 
-Add the `HasAttributes` trait and implement the `Attributable` contract:
+Add the `HasAttributes` trait and implement the `Attributable` contract. Only `getAttributeEntityType()` is required — all other contract methods have defaults in `HasAttributes`:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
 use Jurager\Eav\Contracts\Attributable;
-use Illuminate\Database\Eloquent\Builder;
 
 class Product extends Model implements Attributable
 {
@@ -22,19 +21,23 @@ class Product extends Model implements Attributable
     {
         return 'product';
     }
-
-    public function getDefaultParameters(): array
-    {
-        return [];
-    }
 }
+```
+
+Register the morph map so the entity type resolves to the correct model:
+
+```php
+Relation::morphMap([
+    'product'  => Product::class,
+    'category' => Category::class,
+]);
 ```
 
 ## Attribute Scope
 
 By default all entities of the same type share the same attribute schema (`global` scope).
 
-If attribute definitions are scoped through a related model — for example, a product's attributes are defined on its categories — override `getAttributeScope()` and `getAttributeRelationModel()`:
+If attribute definitions are scoped through a related model — for example, a product's attributes are defined on its categories — override `getAttributeScope()`, `getAttributeRelationModel()`, and `getDefaultParameters()`:
 
 ```php
 protected function getAttributeScope(): string
@@ -55,11 +58,11 @@ public function getDefaultParameters(): array
 }
 ```
 
-The related model must also implement `Attributable` and expose an `available{EntityType}Attributes()` `BelongsToMany` relation pointing to the `attributes` table.
+The related model must also implement `Attributable` and override `available_attributes()` with a `BelongsToMany` relation pointing to the `attributes` table:
 
 ```php
 // Category.php
-public function availableProductAttributes(): BelongsToMany
+public function available_attributes(): BelongsToMany
 {
     return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id')
         ->withPivot(['id', 'created_at']);
@@ -67,4 +70,4 @@ public function availableProductAttributes(): BelongsToMany
 ```
 
 > [!NOTE]
-> The method name is resolved dynamically: `available` + ucfirst(entity type) + `Attributes`. For entity type `product` the method must be named `availableProductAttributes()`.
+> `available_attributes()` is defined in the `Attributable` contract and has a default implementation in `HasAttributes` that returns `null`. Override it on any model that acts as an attribute scope provider. The package calls this method directly — no dynamic method name resolution.

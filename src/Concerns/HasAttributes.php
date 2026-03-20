@@ -154,6 +154,24 @@ trait HasAttributes
     }
 
     /**
+     * Whether this entity should inherit attributes from its parent.
+     * Override in models that support attribute inheritance.
+     */
+    public function shouldInheritAttributes(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Default filter parameters passed to getAvailableAttributesQuery().
+     * Override in models that use byRelation scope (e.g. return category IDs for Product).
+     */
+    public function getDefaultParameters(): array
+    {
+        return [];
+    }
+
+    /**
      * Relation that provides available attributes for other entities scoped by this model.
      * Override in models that act as attribute scope providers (e.g. Category for Product).
      */

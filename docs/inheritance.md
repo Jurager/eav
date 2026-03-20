@@ -9,7 +9,7 @@ Entities in a hierarchy can inherit the attribute schema of their ancestors. A t
 
 ## Setup
 
-Implement `shouldInheritAttributes()` on the entity model:
+`shouldInheritAttributes()` is part of the `Attributable` contract and has a default implementation in `HasAttributes` that returns `false`. Override it when you need inheritance:
 
 ```php
 class Category extends Model implements Attributable

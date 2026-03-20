@@ -10,7 +10,9 @@ class PruneAttribute implements ShouldQueue
 {
     use Queueable;
 
-    public function __construct(protected int $attributeId) {}
+    public function __construct(protected int $attributeId)
+    {
+    }
 
     public function handle(): void
     {

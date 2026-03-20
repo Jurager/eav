@@ -21,6 +21,12 @@ interface Attributable
     public function getDefaultParameters(): array;
 
     /**
+     * Whether this entity should inherit attributes from its parent.
+     * Called by AttributeInheritanceResolver when resolving byRelation scope.
+     */
+    public function shouldInheritAttributes(): bool;
+
+    /**
      * Builder that returns Attribute records available for this entity.
      * Called by AttributeManager to load the attribute schema.
      */

@@ -68,9 +68,16 @@ Validation:
 
 - `validate(array $input): array` — validate and fill attributes; returns `array<string, Field>`; throws `ValidationException` on failure
 
-Relation:
+Relations:
 
-- `attributeRelation(): MorphToMany` — raw relation to `attributes` through `entity_attribute` pivot
+- `attribute_relation(): MorphToMany` — raw relation to `attributes` through `entity_attribute` pivot (with value columns)
+- `attribute_values(): HasMany` — raw relation to `entity_attribute` rows for this entity
+
+Default implementations of the `Attributable` contract (override as needed):
+
+- `shouldInheritAttributes(): bool` — returns `false`; override to enable attribute inheritance
+- `getDefaultParameters(): array` — returns `[]`; override to pass scope parameters (e.g. category IDs)
+- `available_attributes(): ?BelongsToMany` — returns `null`; override on scope-provider models (e.g. Category)
 
 Built-in Scout integration:
 
@@ -83,9 +90,15 @@ Built-in Scout integration:
 
 `Jurager\Eav\Contracts\Attributable`
 
-- `getAttributeEntityType(): string` — entity type string (e.g. `'product'`)
-- `getDefaultParameters(): array` — default scope parameters passed to `getAvailableAttributesQuery()`
-- `getAvailableAttributesQuery(array $params = []): ?Builder` — Builder returning available attribute definitions
+Only `getAttributeEntityType()` must be implemented. All other methods have defaults in `HasAttributes`.
+
+| Method | Required | Default in `HasAttributes` |
+|---|---|---|
+| `getAttributeEntityType(): string` | ✓ | — |
+| `getDefaultParameters(): array` | | `[]` |
+| `getAvailableAttributesQuery(array $params = []): ?Builder` | | provided by `HasAttributes` |
+| `shouldInheritAttributes(): bool` | | `false` |
+| `available_attributes(): ?BelongsToMany` | | `null` |
 
 ---
 

@@ -87,7 +87,7 @@ class AttributeManager
                 throw new InvalidArgumentException("$entity must implement Attributable");
             }
 
-            return new static(new $entity);
+            return new static(new $entity());
         }
 
         // String entity type (e.g. 'product') — schema-only, no entity instance.
@@ -156,7 +156,7 @@ class AttributeManager
      */
     private static function persistChunk(Collection $chunk, ?self $prebuiltSchema): void
     {
-        $persister = new AttributePersister;
+        $persister = new AttributePersister();
 
         foreach ($chunk as $item) {
             $entity = $item['entity'];

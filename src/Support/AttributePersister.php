@@ -46,7 +46,8 @@ class AttributePersister
      */
     public function __construct(
         private readonly ?Attributable $entity = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Persist a collection of filled fields for the current entity.
@@ -397,7 +398,9 @@ class AttributePersister
 
         $this->eachChunk($rows, count($rows[0]), function (array $chunk): void {
             EavModels::query('entity_attribute')->upsert(
-                $chunk, ['id'], [...self::VALUE_COLUMNS, 'updated_at'],
+                $chunk,
+                ['id'],
+                [...self::VALUE_COLUMNS, 'updated_at'],
             );
         });
     }

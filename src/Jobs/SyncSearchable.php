@@ -15,7 +15,8 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
     public function __construct(
         protected string $entityType,
         protected int $attributeId,
-    ) {}
+    ) {
+    }
 
     public function uniqueId(): string
     {
