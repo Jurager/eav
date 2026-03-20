@@ -4,6 +4,7 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
@@ -153,6 +154,15 @@ trait HasAttributes
     }
 
     /**
+     * Relation that provides available attributes for other entities scoped by this model.
+     * Override in models that act as attribute scope providers (e.g. Category for Product).
+     */
+    public function available_attributes(): ?BelongsToMany
+    {
+        return null;
+    }
+
+    /**
      * Raw Eloquent relation to Attribute through entity_attribute pivot.
      */
     public function attribute_relation(): MorphToMany
@@ -250,8 +260,12 @@ trait HasAttributes
 
         $allEntities = app(AttributeInheritanceResolver::class)->resolve($entities, $model);
 
-        $relation = 'available'.ucfirst($this->getAttributeEntityType()).'Attributes';
-        $instance = new $model()->{$relation}();
+        $instance = (new $model())->available_attributes();
+
+        if ($instance === null) {
+            return null;
+        }
+
         $pivotTable = $instance->getTable();
         $foreignKey = $instance->getForeignPivotKeyName();
         $relatedKey = $instance->getRelatedPivotKeyName();
