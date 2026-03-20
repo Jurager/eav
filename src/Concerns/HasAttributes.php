@@ -4,6 +4,7 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -21,7 +22,7 @@ use LogicException;
  *
  * Requires the model to implement Attributable.
  *
- * @property Collection $attributeRelation
+ * @property Collection $attribute_relation
  */
 trait HasAttributes
 {
@@ -154,11 +155,20 @@ trait HasAttributes
     /**
      * Raw Eloquent relation to Attribute through entity_attribute pivot.
      */
-    public function attributeRelation(): MorphToMany
+    public function attribute_relation(): MorphToMany
     {
         return $this->morphToMany(EavModels::class('attribute'), 'entity', 'entity_attribute')
             ->withTimestamps()
             ->withPivot(['id', 'value_text', 'value_integer', 'value_float', 'value_boolean', 'value_date', 'value_datetime']);
+    }
+
+    /**
+     * Raw Eloquent relation to entity_attribute rows for this entity.
+     */
+    public function attribute_values(): HasMany
+    {
+        return $this->hasMany(EavModels::class('entity_attribute'), 'entity_id')
+            ->where('entity_type', $this->getAttributeEntityType());
     }
 
     /**
