@@ -9,12 +9,12 @@ The package stores localized values via a polymorphic `entity_translations` tabl
 
 ## Locale Registry
 
-The `AttributeLocaleRegistry` singleton resolves locale IDs and codes with a single cached query per request:
+The `LocaleRegistry` singleton resolves locale IDs and codes with a single cached query per request:
 
 ```php
-use Jurager\Eav\AttributeLocaleRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 
-$registry = app(AttributeLocaleRegistry::class);
+$registry = app(LocaleRegistry::class);
 
 $registry->defaultLocaleId();        // ID for app.locale config value
 $registry->localeId('en');           // locale ID by code
@@ -58,4 +58,4 @@ Read back for a specific locale:
 $product->attributes()->value('name', localeId: 2); // 'Футболка'
 ```
 
-When no locale is specified, the default locale from `AttributeLocaleRegistry::defaultLocaleId()` is used.
+When no locale is specified, the default locale from `LocaleRegistry::defaultLocaleId()` is used.

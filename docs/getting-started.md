@@ -24,6 +24,30 @@ class Product extends Model implements Attributable
 }
 ```
 
+### With Scout Search
+
+If the model uses [Laravel Scout](https://laravel.com/docs/scout), also add `HasSearchableAttributes` and resolve the trait conflict:
+
+```php
+use Jurager\Eav\Concerns\HasAttributes;
+use Jurager\Eav\Concerns\HasSearchableAttributes;
+use Jurager\Eav\Contracts\Attributable;
+use Laravel\Scout\Searchable;
+
+class Product extends Model implements Attributable
+{
+    use HasAttributes, HasSearchableAttributes, Searchable {
+        HasSearchableAttributes::toSearchableArray insteadof Searchable;
+        HasSearchableAttributes::shouldBeSearchable insteadof Searchable;
+    }
+
+    public function getAttributeEntityType(): string
+    {
+        return 'product';
+    }
+}
+```
+
 Register the morph map so the entity type resolves to the correct model:
 
 ```php

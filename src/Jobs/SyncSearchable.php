@@ -8,6 +8,13 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Support\EavModels;
 
+/**
+ * Re-indexes all entities that have a stored value for the given attribute.
+ *
+ * Dispatched by AttributeObserver when an attribute's searchable flag changes
+ * or when an attribute is soft-deleted. Implements ShouldBeUnique so duplicate
+ * dispatches for the same (entity_type, attribute_id) pair are safely ignored.
+ */
 class SyncSearchable implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
@@ -15,8 +22,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
     public function __construct(
         protected string $entityType,
         protected int $attributeId,
-    ) {
-    }
+    ) {}
 
     public function uniqueId(): string
     {
@@ -36,13 +42,8 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
             ->where('attribute_id', $this->attributeId)
             ->where('entity_type', $this->entityType);
 
-        $keyName = new $modelClass()->getKeyName();
+        $keyName = (new $modelClass())->getKeyName();
+
         $modelClass::whereIn($keyName, $subquery)->searchable();
-
-        $attribute = EavModels::query('attribute')->withTrashed()->find($this->attributeId);
-
-        if ($attribute?->trashed()) {
-            PruneAttribute::dispatch($this->attributeId);
-        }
     }
 }

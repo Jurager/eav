@@ -19,7 +19,7 @@ use Jurager\Eav\Support\EavModels;
 use LogicException;
 
 /**
- * Adds dynamic attribute support to Eloquent models.
+ * Adds EAV attribute support to Eloquent models.
  *
  * Requires the model to implement Attributable.
  *
@@ -28,12 +28,12 @@ use LogicException;
 trait HasAttributes
 {
     /**
-     * Cached attribute manager instance. One manager per model instance.
+     * Cached AttributeManager instance — one per model instance.
      */
     protected ?AttributeManager $attributeManager = null;
 
     /**
-     * Return the cached AttributeManager for this entity.
+     * Return the AttributeManager for this entity (lazy-loaded, cached).
      */
     public function attributes(): AttributeManager
     {
@@ -50,11 +50,11 @@ trait HasAttributes
      */
     public function validate(array $input): array
     {
-        return AttributeValidator::make($this, $this->attributeManager)->validate($input);
+        return (new AttributeValidator($this, $this->attributeManager))->validate($input);
     }
 
     /**
-     * Get available attribute definitions for this entity.
+     * Return available attribute definitions for this entity.
      *
      * @param  array<string, mixed>  $params
      * @return Collection<int, mixed>
@@ -67,7 +67,7 @@ trait HasAttributes
     }
 
     /**
-     * Get query builder for available attributes (global or by relation).
+     * Return a query builder for available attributes (global or by relation).
      *
      * @param  array<string, mixed>  $params
      */
@@ -181,7 +181,7 @@ trait HasAttributes
     }
 
     /**
-     * Raw Eloquent relation to Attribute through entity_attribute pivot.
+     * Raw Eloquent relation to Attribute through entity_attribute pivot (with value columns).
      */
     public function attribute_relation(): MorphToMany
     {
@@ -200,25 +200,8 @@ trait HasAttributes
     }
 
     /**
-     * Build the array of data to index for search engines.
-     * Override in the model when Scout is used to include the scout key.
-     */
-    public function toSearchableArray(): array
-    {
-        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()->indexData()];
-    }
-
-    /**
-     * Determine if the model should be searchable.
-     */
-    public function shouldBeSearchable(): bool
-    {
-        return ! empty($this->attributes()->indexData());
-    }
-
-    /**
      * Return the attribute scope strategy for this entity.
-     * Override in models that scope attributes by a relation (e.g. category).
+     * Override in models that scope attributes by a related model.
      */
     protected function getAttributeScope(): string
     {
@@ -226,8 +209,8 @@ trait HasAttributes
     }
 
     /**
-     * Return the fully-qualified model class used to resolve relation-scoped attributes.
-     * Must be overridden in any model that returns 'byRelation' from getAttributeScope().
+     * Return the FQCN of the model used to resolve relation-scoped attributes.
+     * Must be overridden when getAttributeScope() returns 'byRelation'.
      *
      * @return class-string
      */
@@ -239,7 +222,7 @@ trait HasAttributes
     }
 
     /**
-     * Get all attributes shared globally for this entity type.
+     * Return a query for all attributes shared globally for this entity type.
      */
     protected function getGlobalAttributesQuery(): Builder
     {
@@ -249,10 +232,10 @@ trait HasAttributes
     }
 
     /**
-     * Build the attribute query scoped by related entities (e.g. categories for a product).
-     * Returns null when params are empty or the relation model is invalid.
+     * Return a query for attributes scoped through related entities (e.g. categories for products).
+     * Returns null when params are empty or the relation model cannot be resolved.
      *
-     * @param  array<string, mixed>  $params
+     * @param  array<string, mixed>  $params  IDs of the related entities.
      */
     protected function getAttributesByRelationQuery(array $params = []): ?Builder
     {
@@ -278,15 +261,15 @@ trait HasAttributes
 
         $allEntities = app(AttributeInheritanceResolver::class)->resolve($entities, $model);
 
-        $instance = (new $model())->available_attributes();
+        $relation = (new $model())->available_attributes();
 
-        if ($instance === null) {
+        if ($relation === null) {
             return null;
         }
 
-        $pivotTable = $instance->getTable();
-        $foreignKey = $instance->getForeignPivotKeyName();
-        $relatedKey = $instance->getRelatedPivotKeyName();
+        $pivotTable = $relation->getTable();
+        $foreignKey = $relation->getForeignPivotKeyName();
+        $relatedKey = $relation->getRelatedPivotKeyName();
 
         return EavModels::query('attribute')
             ->whereIn('id', fn ($q) => $q->select($relatedKey)->from($pivotTable)->whereIn($foreignKey, $allEntities->pluck('id')))

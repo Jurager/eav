@@ -90,11 +90,11 @@ Add the type in `config/eav.php`:
 Register in `AppServiceProvider::boot()` or any service provider:
 
 ```php
-use Jurager\Eav\AttributeFieldRegistry;
+use Jurager\Eav\Registry\FieldTypeRegistry;
 
 public function boot(): void
 {
-    $this->app->make(AttributeFieldRegistry::class)
+    $this->app->make(FieldTypeRegistry::class)
         ->register('measurement', \App\Fields\MeasurementField::class);
 }
 ```

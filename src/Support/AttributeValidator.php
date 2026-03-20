@@ -33,16 +33,6 @@ class AttributeValidator
     }
 
     /**
-     * Static factory for a cleaner call site.
-     *
-     * @throws BindingResolutionException|JsonException
-     */
-    public static function make(Attributable $entity, ?AttributeManager $manager = null): static
-    {
-        return new static($entity, $manager);
-    }
-
-    /**
      * Validate and fill attributes.
      *
      * @return array<string, Field>

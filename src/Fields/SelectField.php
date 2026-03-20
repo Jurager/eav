@@ -239,4 +239,18 @@ class SelectField extends Field
     {
         return (int) $value;
     }
+
+    /**
+     * Flush the cached enum IDs for a specific attribute, or all attributes.
+     * Call this when enums are created, updated, or deleted to prevent stale validation
+     * in long-running processes (queues, Octane).
+     */
+    public static function flushEnumCache(?int $attributeId = null): void
+    {
+        if ($attributeId === null) {
+            self::$enumCache = [];
+        } else {
+            unset(self::$enumCache[$attributeId]);
+        }
+    }
 }

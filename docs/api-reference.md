@@ -14,6 +14,7 @@ Accessed via `$model->attributes()`. One instance per model instance (cached).
 ### Static
 
 - `for(string|Attributable $entity): static` — create a manager for an entity instance, class, or morph-map key
+- `schema(Collection $attributes): static` — create a schema-only manager from a pre-loaded attribute collection (fast path for bulk imports)
 - `syncBatch(Collection $batch, int $chunkSize = 500): void` — persist attribute values for multiple entities in chunked batches
 
 ### Schema
@@ -79,9 +80,22 @@ Default implementations of the `Attributable` contract (override as needed):
 - `getDefaultParameters(): array` — returns `[]`; override to pass scope parameters (e.g. category IDs)
 - `available_attributes(): ?BelongsToMany` — returns `null`; override on scope-provider models (e.g. Category)
 
-Built-in Scout integration:
+---
 
-- `toSearchableArray(): array` — delegates to `attributes()->indexData()`
+## HasSearchableAttributes Trait
+
+`Jurager\Eav\Concerns\HasSearchableAttributes`
+
+Optional Scout integration. Use alongside `Laravel\Scout\Searchable`, resolving the conflict:
+
+```php
+use HasAttributes, HasSearchableAttributes, Searchable {
+    HasSearchableAttributes::toSearchableArray insteadof Searchable;
+    HasSearchableAttributes::shouldBeSearchable insteadof Searchable;
+}
+```
+
+- `toSearchableArray(): array` — delegates to `attributes()->indexData()`; override to include model-specific fields
 - `shouldBeSearchable(): bool` — returns `true` when `indexData()` is non-empty
 
 ---
@@ -115,11 +129,11 @@ Static resolver for config-mapped model classes:
 
 ---
 
-## AttributeFieldRegistry
+## FieldTypeRegistry
 
-`Jurager\Eav\AttributeFieldRegistry`
+`Jurager\Eav\Registry\FieldTypeRegistry`
 
-Registered as singleton. Maps type codes to `Field` classes.
+Registered as singleton. Maps attribute type codes to `Field` classes. Pre-populated from `config/eav.php`.
 
 - `register(string $type, string $class): void` — register a custom field type
 - `has(string $type): bool` — check if type is registered
@@ -129,11 +143,11 @@ Registered as singleton. Maps type codes to `Field` classes.
 
 ---
 
-## AttributeLocaleRegistry
+## LocaleRegistry
 
-`Jurager\Eav\AttributeLocaleRegistry`
+`Jurager\Eav\Registry\LocaleRegistry`
 
-Registered as singleton. Caches locale data per request.
+Registered as singleton. Caches locale data to avoid repeated DB queries.
 
 - `defaultLocaleId(): int` — ID for the `app.locale` config value
 - `validLocaleIds(): array` — all registered locale IDs
@@ -223,12 +237,13 @@ Additional methods on top of `Field`:
 
 ---
 
-## InteractsWithStorage Trait
+## HasFileStorage Trait
 
-`Jurager\Eav\Fields\Concerns\InteractsWithStorage`
+`Jurager\Eav\Fields\Concerns\HasFileStorage`
 
 Used by `FileField` and `ImageField`.
 
 - `url(string $disk = 'public', ?int $localeId = null): string|array|null` — public URL(s)
 - `firstUrl(string $disk = 'public', ?int $localeId = null): ?string` — first URL from a multiple-file field
 - `exists(string $disk = 'public', ?int $localeId = null): bool` — check file existence in storage
+

@@ -5,7 +5,7 @@ namespace Jurager\Eav\Fields;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeLocaleRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
  * Base attribute field abstraction for validation, localization and storage mapping.
@@ -34,15 +34,15 @@ abstract class Field
      */
     protected array $validationErrors = [];
 
-    protected AttributeLocaleRegistry $localeRegistry;
+    protected LocaleRegistry $localeRegistry;
 
     /**
      * @param  Attribute  $attribute  Attribute definition model.
-     * @param  AttributeLocaleRegistry|null  $localeRegistry  Locale registry dependency.
+     * @param  LocaleRegistry|null  $localeRegistry  Locale registry dependency.
      */
-    public function __construct(protected Attribute $attribute, ?AttributeLocaleRegistry $localeRegistry = null)
+    public function __construct(protected Attribute $attribute, ?LocaleRegistry $localeRegistry = null)
     {
-        $this->localeRegistry = $localeRegistry ?? app(AttributeLocaleRegistry::class);
+        $this->localeRegistry = $localeRegistry ?? app(LocaleRegistry::class);
     }
 
     /**

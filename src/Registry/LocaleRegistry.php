@@ -5,23 +5,15 @@ namespace Jurager\Eav\Registry;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Registry for locale management in attribute system.
+ * Caches locale IDs and codes to avoid repeated database queries.
  *
- * Provides cached access to locale IDs and codes to avoid
- * repeated database queries during attribute operations.
+ * Registered as a singleton in EavServiceProvider.
  */
-class AttributeLocaleRegistry
+class LocaleRegistry
 {
-    /**
-     * Cached default locale ID.
-     */
     protected ?int $defaultLocaleId = null;
 
-    /**
-     * Cached mapping of locale ID to locale code.
-     *
-     * @var array<int, string>|null
-     */
+    /** @var array<int, string>|null */
     protected ?array $localeCodes = null;
 
     /**
@@ -29,13 +21,9 @@ class AttributeLocaleRegistry
      */
     public function defaultLocaleId(): int
     {
-        if ($this->defaultLocaleId === null) {
-            $this->defaultLocaleId = EavModels::query('locale')
-                ->where('code', config('app.locale', 'en'))
-                ->value('id') ?? 1;
-        }
-
-        return $this->defaultLocaleId;
+        return $this->defaultLocaleId ??= EavModels::query('locale')
+            ->where('code', config('app.locale', 'en'))
+            ->value('id') ?? 1;
     }
 
     /**
@@ -48,12 +36,9 @@ class AttributeLocaleRegistry
         return array_keys($this->localeCodes());
     }
 
-    /**
-     * Determine if the given locale ID is registered.
-     */
     public function isValidLocaleId(int $localeId): bool
     {
-        return in_array($localeId, $this->validLocaleIds(), true);
+        return isset($this->localeCodes()[$localeId]);
     }
 
     /**
@@ -63,24 +48,14 @@ class AttributeLocaleRegistry
      */
     public function localeCodes(): array
     {
-        if ($this->localeCodes === null) {
-            $this->localeCodes = EavModels::query('locale')->pluck('code', 'id')->all();
-        }
-
-        return $this->localeCodes;
+        return $this->localeCodes ??= EavModels::query('locale')->pluck('code', 'id')->all();
     }
 
-    /**
-     * Return the locale code for a given locale ID, or null if not found.
-     */
     public function localeCode(int $localeId): ?string
     {
         return $this->localeCodes()[$localeId] ?? null;
     }
 
-    /**
-     * Return the locale ID for a given locale code, or null if not found.
-     */
     public function localeId(string $code): ?int
     {
         $result = array_search($code, $this->localeCodes(), true);
@@ -105,7 +80,7 @@ class AttributeLocaleRegistry
     }
 
     /**
-     * Reset all cached data.
+     * Reset all cached data. Useful in tests or long-running processes.
      */
     public function reset(): void
     {

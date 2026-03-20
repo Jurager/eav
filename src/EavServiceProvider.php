@@ -4,8 +4,8 @@ namespace Jurager\Eav;
 
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Observers\AttributeObserver;
-use Jurager\Eav\Registry\AttributeFieldRegistry;
-use Jurager\Eav\Registry\AttributeLocaleRegistry;
+use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
 class EavServiceProvider extends ServiceProvider
@@ -14,8 +14,8 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/eav.php', 'eav');
 
-        $this->app->singleton(AttributeLocaleRegistry::class);
-        $this->app->singleton(AttributeFieldRegistry::class);
+        $this->app->singleton(LocaleRegistry::class);
+        $this->app->singleton(FieldTypeRegistry::class);
         $this->app->singleton(AttributeInheritanceResolver::class);
     }
 
@@ -34,6 +34,7 @@ class EavServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
         $attributeModel = config('eav.models.attribute');
+
         if ($attributeModel) {
             $attributeModel::observe(AttributeObserver::class);
         }

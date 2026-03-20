@@ -9,7 +9,7 @@ The package integrates with [Laravel Scout](https://laravel.com/docs/scout) out 
 
 ## Search Array
 
-The `HasAttributes` trait provides `toSearchableArray()` and `shouldBeSearchable()` that delegate to `AttributeManager::indexData()`. Only attributes with `searchable: true` are included.
+The `HasSearchableAttributes` trait provides `toSearchableArray()` and `shouldBeSearchable()` that delegate to `AttributeManager::indexData()`. Only attributes with `searchable: true` are included.
 
 If you need custom fields alongside attribute data, override `toSearchableArray()` in your model:
 
@@ -46,7 +46,6 @@ Implements `ShouldQueue` and `ShouldBeUnique`. Duplicate dispatches for the same
 1. Resolves the entity model class from the morph map.
 2. Finds all entity instances that have a stored value for the changed attribute.
 3. Calls `->searchable()` on that collection to re-index them with Scout.
-4. If the attribute was soft-deleted, dispatches `PruneAttribute`.
 
 ```php
 // Dispatched internally by AttributeObserver:
@@ -57,12 +56,12 @@ SyncSearchable::dispatch($attribute->entity_type, $attribute->id);
 
 `Jurager\Eav\Jobs\PruneAttribute`
 
-Dispatched by `SyncSearchable` after a soft-deleted attribute has been re-indexed. It force-deletes the attribute record (and via cascade, all its `entity_attribute` rows).
+Dispatched by `AttributeObserver::forceDeleted()` after the attribute is force-deleted. It permanently removes all `entity_attribute` rows for the deleted attribute, and flushes the SelectField enum cache to prevent stale validation data in long-running processes.
 
-This two-step approach gives a window for restoring a soft-deleted attribute before its data is permanently removed.
+This two-step approach (soft-delete → re-index → force-delete → prune) gives a window for restoring a soft-deleted attribute before its data is permanently removed.
 
 ```php
-// Dispatched internally by SyncSearchable after re-indexing a trashed attribute:
+// Dispatched internally by AttributeObserver::forceDeleted():
 PruneAttribute::dispatch($attributeId);
 ```
 

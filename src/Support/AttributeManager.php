@@ -13,7 +13,7 @@ use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeFieldRegistry;
+use Jurager\Eav\Registry\FieldTypeRegistry;
 use LogicException;
 
 /**
@@ -36,7 +36,7 @@ class AttributeManager
     /** @var array<string, Collection<int, mixed>> */
     protected array $cachedAttributes = [];
 
-    protected AttributeFieldRegistry $fieldRegistry;
+    protected FieldTypeRegistry $fieldRegistry;
 
     private readonly ?AttributePersister $persister;
 
@@ -61,7 +61,7 @@ class AttributeManager
         protected ?Attributable $entity = null,
         ?Collection $preloadedAttributes = null,
     ) {
-        $this->fieldRegistry = app(AttributeFieldRegistry::class);
+        $this->fieldRegistry = app(FieldTypeRegistry::class);
         $this->persister = $entity !== null ? new AttributePersister($entity) : null;
 
         if ($preloadedAttributes !== null) {
@@ -106,9 +106,10 @@ class AttributeManager
      *
      * The collection must have the 'type' relation loaded.
      *
-     * @param  Collection<int, Attribute>  $attributes
+     * @param Collection<int, Attribute> $attributes
+     * @throws BindingResolutionException
      */
-    public static function fromAttributes(Collection $attributes): static
+    public static function schema(Collection $attributes): static
     {
         if (method_exists($attributes, 'loadMissing')) {
             $attributes->loadMissing('type');
