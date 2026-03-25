@@ -125,19 +125,27 @@ class AttributeManager
     /**
      * Persist attribute values for multiple entities in chunked batches.
      *
+     * Each chunk is flushed inside a database transaction. If a chunk fails and
+     * $onError is provided, the error is passed to the callback and processing
+     * continues with the next chunk. Without $onError the exception is re-thrown.
+     *
      * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
      * @param  static|null  $prebuiltSchema  Shared schema for all entities; skips per-entity DB queries when provided.
+     * @param  callable(\Throwable, int): void|null  $onError  Receives the exception and 1-based chunk index on failure.
      *
      * @throws BindingResolutionException
      * @throws JsonException
      */
-    public static function sync(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500): void
+    public static function sync(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null): void
     {
         if ($batch->isEmpty()) {
             return;
         }
 
+        $chunkIndex = 0;
+
         foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
+            $chunkIndex++;
             $persister = new AttributePersister();
 
             foreach ($chunk as $item) {
@@ -150,7 +158,16 @@ class AttributeManager
                 }
             }
 
-            $persister->flush();
+            try {
+                $persister->flush();
+            } catch (\Throwable $e) {
+                if ($onError !== null) {
+                    $onError($e, $chunkIndex);
+                    continue;
+                }
+
+                throw $e;
+            }
         }
     }
 

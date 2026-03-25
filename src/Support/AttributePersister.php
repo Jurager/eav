@@ -5,6 +5,7 @@ namespace Jurager\Eav\Support;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use LogicException;
@@ -24,15 +25,6 @@ class AttributePersister
     private const array VALUE_COLUMNS = [
         'value_text', 'value_integer', 'value_float',
         'value_boolean', 'value_date', 'value_datetime',
-    ];
-
-    private const array NULL_COLUMNS = [
-        'value_text' => null,
-        'value_integer' => null,
-        'value_float' => null,
-        'value_boolean' => null,
-        'value_date' => null,
-        'value_datetime' => null,
     ];
 
     /** @var array<string, array<int|string, Collection<int, Field>>> */
@@ -146,7 +138,7 @@ class AttributePersister
     }
 
     /**
-     * Persist a group of fields for a single entity type.
+     * Persist a group of fields for a single entity type, wrapped in a transaction.
      *
      * @param  array<int|string, Collection<int, Field>>  $entitiesByType
      */
@@ -156,67 +148,70 @@ class AttributePersister
             return;
         }
 
-        $now = now();
-        $attrIds = collect($entitiesByType)
-            ->flatten()
-            ->map(fn (Field $f) => $f->attribute()->id)
-            ->unique()
-            ->values()
-            ->all();
+        DB::transaction(function () use ($entityType, $entitiesByType): void {
+            $now = now();
 
-        if (empty($attrIds)) {
-            return;
-        }
+            $attrIds = collect($entitiesByType)
+                ->flatten()
+                ->map(fn (Field $f) => $f->attribute()->id)
+                ->unique()
+                ->values()
+                ->all();
 
-        // Load all existing rows for this group in a single query.
-        $existingByKey = EavModels::query('entity_attribute')
-            ->where('entity_type', $entityType)
-            ->whereIn('entity_id', array_keys($entitiesByType))
-            ->whereIn('attribute_id', $attrIds)
-            ->orderBy('id')
-            ->get(['id', 'entity_id', 'attribute_id'])
-            ->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id);
-
-        $existingIds = $existingByKey->flatten()->pluck('id')->all();
-
-        [
-            'toUpdate' => $toUpdate,
-            'toInsert' => $toInsert,
-            'toDelete' => $toDelete,
-            'insertTranslations' => $insertTranslations,
-            'updateTranslations' => $updateTranslations,
-        ] = $this->partitionGroup($entityType, $entitiesByType, $existingByKey, $now);
-
-        if (! empty($toDelete)) {
-            $this->delete($toDelete);
-        }
-
-        $this->eachChunk($toUpdate, fn ($c) => EavModels::query('entity_attribute')
-            ->upsert($c, ['id'], [...self::VALUE_COLUMNS, 'updated_at']));
-
-        if (! empty($toInsert)) {
-            $this->eachChunk($toInsert, fn ($c) => EavModels::query('entity_attribute')->insert($c));
-
-            $localizableRows = array_filter($insertTranslations);
-            if (! empty($localizableRows)) {
-                $newRecords = $this->fetchInsertedRecords($entityType, $toInsert, $existingIds);
-                $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords, $insertTranslations), $now);
-                $this->eachChunk($rows, fn ($c) => EavModels::query('entity_translation')->insert($c));
+            if (empty($attrIds)) {
+                return;
             }
-        }
 
-        // Sync translations for updated rows: delete old, insert new.
-        if (! empty($updateTranslations)) {
-            EavModels::query('entity_translation')
-                ->where('entity_type', 'entity_attribute')
-                ->whereIn('entity_id', array_keys($updateTranslations))
-                ->delete();
+            // Load all existing rows for this group in a single query.
+            $existingByKey = EavModels::query('entity_attribute')
+                ->where('entity_type', $entityType)
+                ->whereIn('entity_id', array_keys($entitiesByType))
+                ->whereIn('attribute_id', $attrIds)
+                ->orderBy('id')
+                ->get(['id', 'entity_id', 'attribute_id'])
+                ->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id);
 
-            $this->eachChunk(
-                $this->buildTranslationRows($updateTranslations, $now),
-                fn ($c) => EavModels::query('entity_translation')->insert($c),
-            );
-        }
+            $existingIds = $existingByKey->flatten()->pluck('id')->all();
+
+            [
+                'toUpdate' => $toUpdate,
+                'toInsert' => $toInsert,
+                'toDelete' => $toDelete,
+                'insertTranslations' => $insertTranslations,
+                'updateTranslations' => $updateTranslations,
+            ] = $this->partitionGroup($entityType, $entitiesByType, $existingByKey, $now);
+
+            if (! empty($toDelete)) {
+                $this->delete($toDelete);
+            }
+
+            $this->eachChunk($toUpdate, fn ($c) => EavModels::query('entity_attribute')
+                ->upsert($c, ['id'], [...self::VALUE_COLUMNS, 'updated_at']));
+
+            if (! empty($toInsert)) {
+                $this->eachChunk($toInsert, fn ($c) => EavModels::query('entity_attribute')->insert($c));
+
+                $localizableRows = array_filter($insertTranslations);
+                if (! empty($localizableRows)) {
+                    $newRecords = $this->fetchInsertedRecords($entityType, $toInsert, $existingIds);
+                    $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords, $insertTranslations), $now);
+                    $this->eachChunk($rows, fn ($c) => EavModels::query('entity_translation')->insert($c));
+                }
+            }
+
+            // Sync translations for updated rows: delete old, insert new.
+            if (! empty($updateTranslations)) {
+                EavModels::query('entity_translation')
+                    ->where('entity_type', 'entity_attribute')
+                    ->whereIn('entity_id', array_keys($updateTranslations))
+                    ->delete();
+
+                $this->eachChunk(
+                    $this->buildTranslationRows($updateTranslations, $now),
+                    fn ($c) => EavModels::query('entity_translation')->insert($c),
+                );
+            }
+        });
     }
 
     /**
@@ -380,7 +375,7 @@ class AttributePersister
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'attribute_id' => $attrId,
-            ...self::NULL_COLUMNS,
+            ...array_fill_keys(self::VALUE_COLUMNS, null),
             'created_at' => $now,
             'updated_at' => $now,
         ];
