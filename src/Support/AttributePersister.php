@@ -47,10 +47,10 @@ class AttributePersister
             return;
         }
 
-        $this->persistGroup(
+        DB::transaction(fn () => $this->persistGroup(
             $this->entity->getAttributeEntityType(),
             [$this->entity->id => $filled],
-        );
+        ));
     }
 
     /** Save a single field. */
@@ -66,8 +66,17 @@ class AttributePersister
      */
     public function replace(Collection $filled): void
     {
-        $this->deleteExcluding($filled->map(fn (Field $f) => $f->attribute()->id)->values()->all());
-        $this->persist($filled);
+        if ($this->entity === null || $filled->isEmpty()) {
+            return;
+        }
+
+        DB::transaction(function () use ($filled): void {
+            $this->deleteExcluding($filled->map(fn (Field $f) => $f->attribute()->id)->values()->all());
+            $this->persistGroup(
+                $this->entity->getAttributeEntityType(),
+                [$this->entity->id => $filled],
+            );
+        });
     }
 
     /**
@@ -127,18 +136,20 @@ class AttributePersister
         $this->items[$entity->getAttributeEntityType()][$entity->id] = $fields;
     }
 
-    /** Persist all staged items and clear the queue. */
+    /** Persist all staged items in a single transaction and clear the queue. */
     public function flush(): void
     {
-        foreach ($this->items as $entityType => $entitiesByType) {
-            $this->persistGroup($entityType, $entitiesByType);
-        }
+        DB::transaction(function (): void {
+            foreach ($this->items as $entityType => $entitiesByType) {
+                $this->persistGroup($entityType, $entitiesByType);
+            }
+        });
 
         $this->items = [];
     }
 
     /**
-     * Persist a group of fields for a single entity type, wrapped in a transaction.
+     * Persist a group of fields for a single entity type.
      *
      * @param  array<int|string, Collection<int, Field>>  $entitiesByType
      */
@@ -148,57 +159,47 @@ class AttributePersister
             return;
         }
 
-        DB::transaction(function () use ($entityType, $entitiesByType): void {
-            $now = now();
+        $now = now();
 
-            $attrIds = collect($entitiesByType)
-                ->flatten()
-                ->map(fn (Field $f) => $f->attribute()->id)
-                ->unique()
-                ->values()
-                ->all();
+        $attrIds = collect($entitiesByType)
+            ->flatMap(fn (Collection $fields) => $fields->map(fn (Field $f) => $f->attribute()->id))
+            ->unique()
+            ->all();
 
-            if (empty($attrIds)) {
-                return;
-            }
+        if (empty($attrIds)) {
+            return;
+        }
 
-            // Load all existing rows for this group in a single query.
-            $existingByKey = EavModels::query('entity_attribute')
-                ->where('entity_type', $entityType)
-                ->whereIn('entity_id', array_keys($entitiesByType))
-                ->whereIn('attribute_id', $attrIds)
-                ->orderBy('id')
-                ->get(['id', 'entity_id', 'attribute_id'])
-                ->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id);
+        // Load all existing rows for this group in a single query.
+        $existingByKey = EavModels::query('entity_attribute')
+            ->where('entity_type', $entityType)
+            ->whereIn('entity_id', array_keys($entitiesByType))
+            ->whereIn('attribute_id', $attrIds)
+            ->orderBy('id')
+            ->get(['id', 'entity_id', 'attribute_id'])
+            ->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id);
 
-            [
-                'toUpdate' => $toUpdate,
-                'toInsert' => $toInsert,
-                'toDelete' => $toDelete,
-                'updateTranslations' => $updateTranslations,
-            ] = $this->partitionGroup($entityType, $entitiesByType, $existingByKey, $now);
+        [
+            'toUpdate' => $toUpdate,
+            'toInsert' => $toInsert,
+            'toDelete' => $toDelete,
+        ] = $this->partitionGroup($entityType, $entitiesByType, $existingByKey, $now);
 
-            if (! empty($toDelete)) {
-                $this->delete($toDelete);
-            }
+        $this->delete($toDelete);
 
-            $this->eachChunk($toUpdate, fn ($c) => EavModels::query('entity_attribute')
+        if (! empty($toUpdate)) {
+            $updateRows = array_column($toUpdate, 'row');
+
+            $this->eachChunk($updateRows, fn ($c) => EavModels::query('entity_attribute')
                 ->upsert($c, ['id'], [...self::VALUE_COLUMNS, 'updated_at']));
 
-            if (! empty($toInsert)) {
-                $insertRows = array_column($toInsert, 'row');
-
-                $this->eachChunk($insertRows, fn ($c) => EavModels::query('entity_attribute')->insert($c));
-
-                if (array_filter(array_column($toInsert, 'translations'))) {
-                    $existingIds = $existingByKey->flatten()->pluck('id')->all();
-                    $newRecords = $this->fetchInsertedRecords($entityType, $insertRows, $existingIds);
-                    $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords), $now);
-                    $this->eachChunk($rows, fn ($c) => EavModels::query('entity_translation')->insert($c));
-                }
-            }
-
             // Sync translations for updated rows: delete old, insert new.
+            // null means non-localizable (skip); [] means localizable but empty (delete all).
+            $updateTranslations = array_filter(
+                array_combine(array_column($updateRows, 'id'), array_column($toUpdate, 'translations')),
+                fn ($t) => $t !== null,
+            );
+
             if (! empty($updateTranslations)) {
                 EavModels::query('entity_translation')
                     ->where('entity_type', 'entity_attribute')
@@ -210,24 +211,36 @@ class AttributePersister
                     fn ($c) => EavModels::query('entity_translation')->insert($c),
                 );
             }
-        });
+        }
+
+        if (! empty($toInsert)) {
+            $insertRows = array_column($toInsert, 'row');
+
+            $this->eachChunk($insertRows, fn ($c) => EavModels::query('entity_attribute')->insert($c));
+
+            if (array_filter(array_column($toInsert, 'translations'))) {
+                $existingIds = $existingByKey->flatten()->pluck('id')->all();
+                $newRecords = $this->fetchInsertedRecords($entityType, $insertRows, $existingIds);
+                $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords), $now);
+                $this->eachChunk($rows, fn ($c) => EavModels::query('entity_translation')->insert($c));
+            }
+        }
     }
 
     /**
-     * Partition fields into update / insert / delete / translation buckets.
+     * Partition fields into update / insert / delete buckets.
+     *
+     * Each entry in $toUpdate and $toInsert carries both the DB row and its translation
+     * payload (null = non-localizable; [] = localizable but empty; array = translations).
      *
      * Localizable fields keep the value column null; values go to entity_translations.
      * Non-localizable fields write directly to the typed value column.
      *
-     * Each entry in $toInsert carries both the DB row and its translation payload so
-     * they stay co-located instead of living in separate parallel arrays.
-     *
      * @param  array<int|string, Collection<int, Field>>  $entitiesByType
      * @return array{
-     *     toUpdate: array,
-     *     toInsert: array<int, array{row: array, translations: array}>,
-     *     toDelete: array,
-     *     updateTranslations: array
+     *     toUpdate: array<int, array{row: array, translations: array|null}>,
+     *     toInsert: array<int, array{row: array, translations: array|null}>,
+     *     toDelete: array<int>
      * }
      */
     private function partitionGroup(
@@ -236,7 +249,7 @@ class AttributePersister
         Collection $existingByKey,
         Carbon $now,
     ): array {
-        $toUpdate = $toInsert = $toDelete = $updateTranslations = [];
+        $toUpdate = $toInsert = $toDelete = [];
 
         foreach ($entitiesByType as $entityId => $fields) {
             foreach ($fields as $field) {
@@ -252,12 +265,11 @@ class AttributePersister
                     $row = $this->blankRow($entityType, $entityId, $attrId, $now);
                     $row['id'] = $record->id;
                     $row[$column] = $localizable ? null : ($item['value'] ?? null);
-                    $toUpdate[] = $row;
-
-                    if ($localizable) {
+                    $toUpdate[] = [
+                        'row' => $row,
                         // An empty array causes the sync step to delete all existing translations for this record.
-                        $updateTranslations[$record->id] = $item['translations'] ?? [];
-                    }
+                        'translations' => $localizable ? ($item['translations'] ?? []) : null,
+                    ];
                 }
 
                 foreach (array_slice($items, $existing->count()) as $item) {
@@ -265,7 +277,7 @@ class AttributePersister
                     $row[$column] = $localizable ? null : ($item['value'] ?? null);
                     $toInsert[] = [
                         'row' => $row,
-                        'translations' => $localizable ? ($item['translations'] ?? []) : [],
+                        'translations' => $localizable ? ($item['translations'] ?? []) : null,
                     ];
                 }
 
@@ -275,7 +287,7 @@ class AttributePersister
             }
         }
 
-        return compact('toUpdate', 'toInsert', 'toDelete', 'updateTranslations');
+        return compact('toUpdate', 'toInsert', 'toDelete');
     }
 
     /**
@@ -300,7 +312,7 @@ class AttributePersister
     /**
      * Map newly inserted record IDs to their translation payloads.
      *
-     * @param  array<int, array{row: array, translations: array}>  $toInsert
+     * @param  array<int, array{row: array, translations: array|null}>  $toInsert
      * @return array<int, array>
      */
     private function alignTranslations(array $toInsert, Collection $newRecords): array
