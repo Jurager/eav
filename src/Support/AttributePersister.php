@@ -171,13 +171,10 @@ class AttributePersister
                 ->get(['id', 'entity_id', 'attribute_id'])
                 ->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id);
 
-            $existingIds = $existingByKey->flatten()->pluck('id')->all();
-
             [
                 'toUpdate' => $toUpdate,
                 'toInsert' => $toInsert,
                 'toDelete' => $toDelete,
-                'insertTranslations' => $insertTranslations,
                 'updateTranslations' => $updateTranslations,
             ] = $this->partitionGroup($entityType, $entitiesByType, $existingByKey, $now);
 
@@ -189,12 +186,14 @@ class AttributePersister
                 ->upsert($c, ['id'], [...self::VALUE_COLUMNS, 'updated_at']));
 
             if (! empty($toInsert)) {
-                $this->eachChunk($toInsert, fn ($c) => EavModels::query('entity_attribute')->insert($c));
+                $insertRows = array_column($toInsert, 'row');
 
-                $localizableRows = array_filter($insertTranslations);
-                if (! empty($localizableRows)) {
-                    $newRecords = $this->fetchInsertedRecords($entityType, $toInsert, $existingIds);
-                    $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords, $insertTranslations), $now);
+                $this->eachChunk($insertRows, fn ($c) => EavModels::query('entity_attribute')->insert($c));
+
+                if (array_filter(array_column($toInsert, 'translations'))) {
+                    $existingIds = $existingByKey->flatten()->pluck('id')->all();
+                    $newRecords = $this->fetchInsertedRecords($entityType, $insertRows, $existingIds);
+                    $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords), $now);
                     $this->eachChunk($rows, fn ($c) => EavModels::query('entity_translation')->insert($c));
                 }
             }
@@ -220,8 +219,16 @@ class AttributePersister
      * Localizable fields keep the value column null; values go to entity_translations.
      * Non-localizable fields write directly to the typed value column.
      *
+     * Each entry in $toInsert carries both the DB row and its translation payload so
+     * they stay co-located instead of living in separate parallel arrays.
+     *
      * @param  array<int|string, Collection<int, Field>>  $entitiesByType
-     * @return array{toUpdate: array, toInsert: array, toDelete: array, insertTranslations: array, updateTranslations: array}
+     * @return array{
+     *     toUpdate: array,
+     *     toInsert: array<int, array{row: array, translations: array}>,
+     *     toDelete: array,
+     *     updateTranslations: array
+     * }
      */
     private function partitionGroup(
         string $entityType,
@@ -229,7 +236,7 @@ class AttributePersister
         Collection $existingByKey,
         Carbon $now,
     ): array {
-        $toUpdate = $toInsert = $toDelete = $insertTranslations = $updateTranslations = [];
+        $toUpdate = $toInsert = $toDelete = $updateTranslations = [];
 
         foreach ($entitiesByType as $entityId => $fields) {
             foreach ($fields as $field) {
@@ -256,9 +263,10 @@ class AttributePersister
                 foreach (array_slice($items, $existing->count()) as $item) {
                     $row = $this->blankRow($entityType, $entityId, $attrId, $now);
                     $row[$column] = $localizable ? null : ($item['value'] ?? null);
-                    $toInsert[] = $row;
-                    // Parallel index to $toInsert — used in alignTranslations().
-                    $insertTranslations[] = $localizable ? ($item['translations'] ?? []) : [];
+                    $toInsert[] = [
+                        'row' => $row,
+                        'translations' => $localizable ? ($item['translations'] ?? []) : [],
+                    ];
                 }
 
                 foreach ($existing->slice($itemCount) as $record) {
@@ -267,7 +275,7 @@ class AttributePersister
             }
         }
 
-        return compact('toUpdate', 'toInsert', 'toDelete', 'insertTranslations', 'updateTranslations');
+        return compact('toUpdate', 'toInsert', 'toDelete', 'updateTranslations');
     }
 
     /**
@@ -292,23 +300,22 @@ class AttributePersister
     /**
      * Map newly inserted record IDs to their translation payloads.
      *
-     * @param  array<int, array>  $insertedRows
-     * @param  array<int, array<int, array>>  $insertTranslations  Parallel to $insertedRows.
-     * @return array<int, array<int, array>>
+     * @param  array<int, array{row: array, translations: array}>  $toInsert
+     * @return array<int, array>
      */
-    private function alignTranslations(array $insertedRows, Collection $newRecords, array $insertTranslations): array
+    private function alignTranslations(array $toInsert, Collection $newRecords): array
     {
-        $idxByKey = [];
-        foreach ($insertedRows as $idx => $row) {
-            $idxByKey[$row['entity_id'].':'.$row['attribute_id']][] = $idx;
+        $translationsByKey = [];
+        foreach ($toInsert as $item) {
+            $key = $item['row']['entity_id'].':'.$item['row']['attribute_id'];
+            $translationsByKey[$key][] = $item['translations'];
         }
 
         $result = [];
         foreach ($newRecords->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id) as $key => $records) {
             foreach ($records->values() as $pos => $record) {
-                $idx = $idxByKey[$key][$pos] ?? null;
-                if ($idx !== null && ! empty($insertTranslations[$idx])) {
-                    $result[$record->id] = $insertTranslations[$idx];
+                if (! empty($translationsByKey[$key][$pos])) {
+                    $result[$record->id] = $translationsByKey[$key][$pos];
                 }
             }
         }
