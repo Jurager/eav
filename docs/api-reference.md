@@ -15,7 +15,7 @@ Accessed via `$model->attributes()`. One instance per model instance (cached).
 
 - `for(string|Attributable $entity): static` — create a manager for an entity instance, class, or morph-map key
 - `schema(Attributable|Collection $entityOrAttributes): static` — schema-only manager; when given an entity, result is cached by (entity_type, params); when given a Collection of Attribute models, built immediately from those attributes
-- `sync(Collection $batch, ?static $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null): void` — persist attribute values for multiple entities in chunked batches; each chunk is flushed inside a database transaction; if `$onError` is provided it receives `(\Throwable $e, int $chunkIndex)` on failure and processing continues with the next chunk — without it the exception is re-thrown
+- `sync(Collection $batch, ?static $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null): void` — persist attribute values for multiple entities in chunked batches; each entity is persisted in its own transaction; if `$onError` is provided it receives `(\Throwable $e, Attributable $entity)` on failure and processing continues with the next entity — without it the exception is re-thrown
 
 ### Schema
 

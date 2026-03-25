@@ -112,17 +112,20 @@ Each chunk is flushed inside a database transaction in ~7 DB queries, regardless
 
 ### Error handling
 
-By default a failing chunk re-throws the exception and stops processing. Pass `$onError` to log the error and continue with the remaining chunks instead:
+By default a failing entity re-throws the exception and stops processing. Pass `$onError` to handle the error per-entity and continue with the remaining ones instead:
 
 ```php
-AttributeManager::sync($batch, chunkSize: 200, onError: function (\Throwable $e, int $chunkIndex): void {
-    Log::error("Attribute sync failed on chunk {$chunkIndex}", [
+AttributeManager::sync($batch, chunkSize: 200, onError: function (\Throwable $e, Attributable $entity): void {
+    // Compensate: undo any side-effects for this entity (e.g. delete it).
+    $entity->delete();
+
+    Log::error("Attribute sync failed for entity #{$entity->id}", [
         'error' => $e->getMessage(),
     ]);
 });
 ```
 
-The callback receives the exception and the 1-based chunk index. The failed chunk is rolled back; subsequent chunks are unaffected.
+The callback receives the exception and the failing entity. That entity's transaction is rolled back; all other entities are unaffected.
 
 ## Detaching Attributes
 

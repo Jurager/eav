@@ -24,10 +24,8 @@ class AttributePersister
 
     /** EAV model aliases used throughout the persister. */
     private const string MODEL_ATTRIBUTE = 'entity_attribute';
-    private const string MODEL_TRANSLATION = 'entity_translation';
 
-    /** The polymorphic type stored in entity_translations for attribute values. */
-    private const string TRANSLATION_TYPE = 'entity_attribute';
+    private const string MODEL_TRANSLATION = 'entity_translation';
 
     private const array VALUE_COLUMNS = [
         'value_text', 'value_integer', 'value_float',
@@ -40,6 +38,9 @@ class AttributePersister
     /** @var array<string, array<int|string, Collection<int, Field>>> */
     private array $pending = [];
 
+    /** @var array<int|string, Attributable>  Entity ID → entity instance, kept for error callbacks. */
+    private array $entities = [];
+
     /**
      * Transaction-scoped timestamp.
      *
@@ -51,8 +52,7 @@ class AttributePersister
     /** @param  Attributable|null  $entity  Omit for batch mode. */
     public function __construct(
         private readonly ?Attributable $entity = null,
-    ) {
-    }
+    ) {}
 
     /**
      * Persist filled fields for the current entity.
@@ -65,10 +65,10 @@ class AttributePersister
             return;
         }
 
-        $this->withinTimestamp(fn () => DB::transaction(fn () => $this->persistGroup(
+        $this->withinTimestamp(fn () => $this->persistGroup(
             $this->entity->getAttributeEntityType(),
             [$this->entity->id => $fields],
-        )));
+        ));
     }
 
     /** Save a single field. */
@@ -135,7 +135,7 @@ class AttributePersister
         }
 
         EavModels::query(self::MODEL_TRANSLATION)
-            ->where('entity_type', self::TRANSLATION_TYPE)
+            ->where('entity_type', self::MODEL_ATTRIBUTE)
             ->whereIn('entity_id', $ids)
             ->delete();
 
@@ -152,20 +152,42 @@ class AttributePersister
     public function add(Attributable $entity, Collection $fields): void
     {
         if ($fields->isNotEmpty()) {
-            $this->pending[$entity->getAttributeEntityType()][$entity->id] = $fields;
+            $type = $entity->getAttributeEntityType();
+            $this->pending[$type][$entity->id] = $fields;
+            $this->entities[$entity->id] = $entity;
         }
     }
 
-    /** Persist all staged items in a single transaction and clear the queue. */
-    public function flush(): void
+    /**
+     * Persist all staged items and clear the queue.
+     *
+     * Each entity type group is flushed in a single batch. If $onEntityError is provided,
+     * a failing group's exception is passed to the callback for every entity in that group
+     * so callers can compensate (e.g. delete the created model); otherwise the exception
+     * is re-thrown.
+     *
+     * @param  callable(\Throwable, Attributable): void|null  $onEntityError
+     */
+    public function flush(?callable $onEntityError = null): void
     {
-        $this->withinTimestamp(fn () => DB::transaction(function (): void {
-            collect($this->pending)->each(
-                fn (array $grouped, string $type) => $this->persistGroup($type, $grouped),
-            );
-        }));
+        $this->withinTimestamp(function () use ($onEntityError): void {
+            foreach ($this->pending as $type => $grouped) {
+                try {
+                    $this->persistGroup($type, $grouped);
+                } catch (\Throwable $e) {
+                    if ($onEntityError !== null) {
+                        foreach (array_keys($grouped) as $entityId) {
+                            $onEntityError($e, $this->entities[$entityId]);
+                        }
+                    } else {
+                        throw $e;
+                    }
+                }
+            }
+        });
 
         $this->pending = [];
+        $this->entities = [];
     }
 
     /**
@@ -221,10 +243,7 @@ class AttributePersister
             return;
         }
 
-        $this->inChunks(
-            $updates->pluck('row'),
-            fn (Collection $chunk) =>
-        EavModels::query(self::MODEL_ATTRIBUTE)
+        $this->inChunks($updates->pluck('row'), fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)
             ->upsert($chunk->all(), ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
         );
 
@@ -250,8 +269,7 @@ class AttributePersister
 
         $this->inChunks(
             $rows,
-            fn (Collection $chunk) =>
-        EavModels::query(self::MODEL_ATTRIBUTE)->insert($chunk->all()),
+            fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)->insert($chunk->all()),
         );
 
         // Skip the re-fetch + translation step if no field carries translations.
@@ -301,7 +319,7 @@ class AttributePersister
 
         if ($emptyIds->isNotEmpty()) {
             EavModels::query(self::MODEL_TRANSLATION)
-                ->where('entity_type', self::TRANSLATION_TYPE)
+                ->where('entity_type', self::MODEL_ATTRIBUTE)
                 ->whereIn('entity_id', $emptyIds)
                 ->delete();
         }
@@ -338,10 +356,10 @@ class AttributePersister
         // Build a map of record ID → locale IDs that should be kept.
         $localesByRecord = $withData->map(
             fn (array $translations) => collect($translations)
-            ->pluck('locale_id')
-            ->filter()
-            ->values()
-            ->all(),
+                ->pluck('locale_id')
+                ->filter()
+                ->values()
+                ->all(),
         );
 
         // Delete translations where locale_id is NOT in the keep list.
@@ -353,7 +371,7 @@ class AttributePersister
                 $keepLocales = $group->first();
 
                 EavModels::query(self::MODEL_TRANSLATION)
-                    ->where('entity_type', self::TRANSLATION_TYPE)
+                    ->where('entity_type', self::MODEL_ATTRIBUTE)
                     ->whereIn('entity_id', $recordIds)
                     ->whereNotIn('locale_id', $keepLocales)
                     ->delete();
@@ -457,8 +475,8 @@ class AttributePersister
      * Ordering by (entity_id, attribute_id, id) guarantees positional alignment
      * with the original insert array for correct translation mapping.
      *
-     * @param  Collection<int, array>  $rows       Inserted row payloads.
-     * @param  array<int>              $knownIds   IDs that existed before this batch.
+     * @param  Collection<int, array>  $rows  Inserted row payloads.
+     * @param  array<int>  $knownIds  IDs that existed before this batch.
      */
     private function fetchCreatedRecords(string $type, Collection $rows, array $knownIds): Collection
     {
@@ -481,7 +499,7 @@ class AttributePersister
      * fetchCreatedRecords() preserves insertion order via ORDER BY id.
      *
      * @param  Collection<int, array{row: array, translations: array|null}>  $inserts
-     * @return array<int, array>  Record ID → translation entries.
+     * @return array<int, array> Record ID → translation entries.
      */
     private function mapTranslationsToRecords(Collection $inserts, Collection $created): array
     {
@@ -517,17 +535,17 @@ class AttributePersister
         return $map
             ->flatMap(
                 fn (array $translations, int $recordId) => collect($translations)
-                ->filter(fn (array $t) => isset($t['locale_id']))
-                ->mapWithKeys(fn (array $t) => [
-                    "{$recordId}:{$t['locale_id']}" => [
-                        'entity_type' => self::TRANSLATION_TYPE,
-                        'entity_id' => $recordId,
-                        'locale_id' => (int) $t['locale_id'],
-                        'label' => $t['value'] ?? null,
-                        'created_at' => $this->timestamp,
-                        'updated_at' => $this->timestamp,
-                    ],
-                ]),
+                    ->filter(fn (array $t) => isset($t['locale_id']))
+                    ->mapWithKeys(fn (array $t) => [
+                        "{$recordId}:{$t['locale_id']}" => [
+                            'entity_type' => self::MODEL_ATTRIBUTE,
+                            'entity_id' => $recordId,
+                            'locale_id' => (int) $t['locale_id'],
+                            'label' => $t['value'] ?? null,
+                            'created_at' => $this->timestamp,
+                            'updated_at' => $this->timestamp,
+                        ],
+                    ]),
             )
             ->values();
     }
@@ -573,12 +591,12 @@ class AttributePersister
      * Ensures every row in the batch shares the same created_at / updated_at,
      * eliminating the need to pass $now through every method call.
      */
-    private function withinTimestamp(callable $callback): mixed
+    private function withinTimestamp(callable $callback): void
     {
         $this->timestamp = now();
 
         try {
-            return $callback();
+            $callback();
         } finally {
             unset($this->timestamp);
         }

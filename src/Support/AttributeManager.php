@@ -50,7 +50,6 @@ class AttributeManager
     private static array $schemaRegistry = [];
 
     /**
-     * @param  Attributable|null  $entity
      * @param  Collection<int, mixed>|null  $preloadedAttributes
      */
     public function __construct(
@@ -81,7 +80,7 @@ class AttributeManager
                 throw new InvalidArgumentException("$entity must implement Attributable");
             }
 
-            return new static(new $entity());
+            return new static(new $entity);
         }
 
         // String entity type (e.g. 'product') — schema-only, no entity instance.
@@ -125,13 +124,13 @@ class AttributeManager
     /**
      * Persist attribute values for multiple entities in chunked batches.
      *
-     * Each chunk is flushed inside a database transaction. If a chunk fails and
-     * $onError is provided, the error is passed to the callback and processing
-     * continues with the next chunk. Without $onError the exception is re-thrown.
+     * Each entity is persisted in its own transaction. If $onError is provided,
+     * a failing entity's exception is passed to the callback and processing continues;
+     * without $onError the exception is re-thrown.
      *
      * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
      * @param  static|null  $prebuiltSchema  Shared schema for all entities; skips per-entity DB queries when provided.
-     * @param  callable(\Throwable, int): void|null  $onError  Receives the exception and 1-based chunk index on failure.
+     * @param  callable(\Throwable, Attributable): void|null  $onError  Receives the exception and the failing entity.
      *
      * @throws BindingResolutionException
      * @throws JsonException
@@ -142,11 +141,8 @@ class AttributeManager
             return;
         }
 
-        $chunkIndex = 0;
-
         foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
-            $chunkIndex++;
-            $persister = new AttributePersister();
+            $persister = new AttributePersister;
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
@@ -158,16 +154,7 @@ class AttributeManager
                 }
             }
 
-            try {
-                $persister->flush();
-            } catch (\Throwable $e) {
-                if ($onError !== null) {
-                    $onError($e, $chunkIndex);
-                    continue;
-                }
-
-                throw $e;
-            }
+            $persister->flush($onError);
         }
     }
 
@@ -372,9 +359,10 @@ class AttributeManager
     /**
      * Return entity_attribute records with a resolved typed `value` property.
      *
-     * @param array<string>|null $codes
-     * @param int|null $paginated When set, returns a paginator instead of a collection.
+     * @param  array<string>|null  $codes
+     * @param  int|null  $paginated  When set, returns a paginator instead of a collection.
      * @return Collection<int, Model>|LengthAwarePaginator
+     *
      * @throws BindingResolutionException
      */
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
