@@ -22,13 +22,31 @@ class AttributePersister
     /** PDO bind parameter limit — applies to both MySQL and PostgreSQL. */
     private const int BIND_LIMIT = 65535;
 
+    /** EAV model aliases used throughout the persister. */
+    private const string MODEL_ATTRIBUTE = 'entity_attribute';
+    private const string MODEL_TRANSLATION = 'entity_translation';
+
+    /** The polymorphic type stored in entity_translations for attribute values. */
+    private const string TRANSLATION_TYPE = 'entity_attribute';
+
     private const array VALUE_COLUMNS = [
         'value_text', 'value_integer', 'value_float',
         'value_boolean', 'value_date', 'value_datetime',
     ];
 
+    /** Translation table columns eligible for upsert conflict resolution. */
+    private const array TRANSLATION_VALUE_COLUMNS = ['label', 'updated_at'];
+
     /** @var array<string, array<int|string, Collection<int, Field>>> */
-    private array $items = [];
+    private array $pending = [];
+
+    /**
+     * Transaction-scoped timestamp.
+     *
+     * Set once at the beginning of each persist/flush cycle so every row
+     * in the batch shares the same created_at / updated_at value.
+     */
+    private Carbon $timestamp;
 
     /** @param  Attributable|null  $entity  Omit for batch mode. */
     public function __construct(
@@ -39,18 +57,18 @@ class AttributePersister
     /**
      * Persist filled fields for the current entity.
      *
-     * @param  Collection<int, Field>  $filled
+     * @param  Collection<int, Field>  $fields
      */
-    public function persist(Collection $filled): void
+    public function persist(Collection $fields): void
     {
-        if ($this->entity === null || $filled->isEmpty()) {
+        if (! $this->entity || $fields->isEmpty()) {
             return;
         }
 
-        DB::transaction(fn () => $this->persistGroup(
+        $this->withinTimestamp(fn () => DB::transaction(fn () => $this->persistGroup(
             $this->entity->getAttributeEntityType(),
-            [$this->entity->id => $filled],
-        ));
+            [$this->entity->id => $fields],
+        )));
     }
 
     /** Save a single field. */
@@ -62,21 +80,23 @@ class AttributePersister
     /**
      * Persist fields and delete all existing rows not in this set.
      *
-     * @param  Collection<int, Field>  $filled
+     * @param  Collection<int, Field>  $fields
      */
-    public function replace(Collection $filled): void
+    public function replace(Collection $fields): void
     {
-        if ($this->entity === null || $filled->isEmpty()) {
+        if (! $this->entity || $fields->isEmpty()) {
             return;
         }
 
-        DB::transaction(function () use ($filled): void {
-            $this->deleteExcluding($filled->map(fn (Field $f) => $f->attribute()->id)->values()->all());
+        $this->withinTimestamp(fn () => DB::transaction(function () use ($fields): void {
+            $keepIds = $fields->map(fn (Field $f) => $f->attribute()->id)->values()->all();
+
+            $this->deleteExcluding($keepIds);
             $this->persistGroup(
                 $this->entity->getAttributeEntityType(),
-                [$this->entity->id => $filled],
+                [$this->entity->id => $fields],
             );
-        });
+        }));
     }
 
     /**
@@ -106,20 +126,22 @@ class AttributePersister
     /**
      * Delete entity_attribute records and their translations by record IDs.
      *
-     * @param  array<int>  $recordIds
+     * @param  array<int>  $ids
      */
-    public function delete(array $recordIds): void
+    public function delete(array $ids): void
     {
-        if (empty($recordIds)) {
+        if (empty($ids)) {
             return;
         }
 
-        EavModels::query('entity_translation')
-            ->where('entity_type', 'entity_attribute')
-            ->whereIn('entity_id', $recordIds)
+        EavModels::query(self::MODEL_TRANSLATION)
+            ->where('entity_type', self::TRANSLATION_TYPE)
+            ->whereIn('entity_id', $ids)
             ->delete();
 
-        EavModels::query('entity_attribute')->whereIn('id', $recordIds)->delete();
+        EavModels::query(self::MODEL_ATTRIBUTE)
+            ->whereIn('id', $ids)
+            ->delete();
     }
 
     /**
@@ -129,180 +151,322 @@ class AttributePersister
      */
     public function add(Attributable $entity, Collection $fields): void
     {
-        if ($fields->isEmpty()) {
-            return;
+        if ($fields->isNotEmpty()) {
+            $this->pending[$entity->getAttributeEntityType()][$entity->id] = $fields;
         }
-
-        $this->items[$entity->getAttributeEntityType()][$entity->id] = $fields;
     }
 
     /** Persist all staged items in a single transaction and clear the queue. */
     public function flush(): void
     {
-        DB::transaction(function (): void {
-            foreach ($this->items as $entityType => $entitiesByType) {
-                $this->persistGroup($entityType, $entitiesByType);
-            }
-        });
+        $this->withinTimestamp(fn () => DB::transaction(function (): void {
+            collect($this->pending)->each(
+                fn (array $grouped, string $type) => $this->persistGroup($type, $grouped),
+            );
+        }));
 
-        $this->items = [];
+        $this->pending = [];
     }
 
     /**
-     * Persist a group of fields for a single entity type.
+     * Persist a group of fields sharing the same entity type.
      *
-     * @param  array<int|string, Collection<int, Field>>  $entitiesByType
+     * Loads all existing attribute rows in one query, then splits work
+     * into update / insert / delete buckets for efficient batch operations.
+     *
+     * @param  array<int|string, Collection<int, Field>>  $grouped  Entity ID → fields.
      */
-    private function persistGroup(string $entityType, array $entitiesByType): void
+    private function persistGroup(string $type, array $grouped): void
     {
-        if (empty($entitiesByType)) {
+        if (empty($grouped)) {
             return;
         }
 
-        $now = now();
-
-        $attrIds = collect($entitiesByType)
+        // Collect every attribute ID referenced across all entities in this group.
+        $attributeIds = collect($grouped)
             ->flatMap(fn (Collection $fields) => $fields->map(fn (Field $f) => $f->attribute()->id))
             ->unique()
             ->all();
 
-        if (empty($attrIds)) {
+        if (empty($attributeIds)) {
             return;
         }
 
-        // Load all existing rows for this group in a single query.
-        $existingByKey = EavModels::query('entity_attribute')
-            ->where('entity_type', $entityType)
-            ->whereIn('entity_id', array_keys($entitiesByType))
-            ->whereIn('attribute_id', $attrIds)
+        // Fetch all existing rows we might touch in a single query,
+        // keyed by "entity_id:attribute_id" for O(1) lookup during partitioning.
+        $existing = EavModels::query(self::MODEL_ATTRIBUTE)
+            ->where('entity_type', $type)
+            ->whereIn('entity_id', array_keys($grouped))
+            ->whereIn('attribute_id', $attributeIds)
             ->orderBy('id')
             ->get(['id', 'entity_id', 'attribute_id'])
-            ->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id);
+            ->groupBy(fn ($row) => "{$row->entity_id}:{$row->attribute_id}");
 
-        [
-            'toUpdate' => $toUpdate,
-            'toInsert' => $toInsert,
-            'toDelete' => $toDelete,
-        ] = $this->partitionGroup($entityType, $entitiesByType, $existingByKey, $now);
+        ['updates' => $updates, 'inserts' => $inserts, 'deletes' => $deletes] =
+            $this->partition($type, $grouped, $existing);
 
-        $this->delete($toDelete);
-
-        if (! empty($toUpdate)) {
-            $updateRows = array_column($toUpdate, 'row');
-
-            $this->eachChunk($updateRows, fn ($c) => EavModels::query('entity_attribute')
-                ->upsert($c, ['id'], [...self::VALUE_COLUMNS, 'updated_at']));
-
-            // Sync translations for updated rows: delete old, insert new.
-            // null means non-localizable (skip); [] means localizable but empty (delete all).
-            $updateTranslations = array_filter(
-                array_combine(array_column($updateRows, 'id'), array_column($toUpdate, 'translations')),
-                fn ($t) => $t !== null,
-            );
-
-            if (! empty($updateTranslations)) {
-                EavModels::query('entity_translation')
-                    ->where('entity_type', 'entity_attribute')
-                    ->whereIn('entity_id', array_keys($updateTranslations))
-                    ->delete();
-
-                $this->eachChunk(
-                    $this->buildTranslationRows($updateTranslations, $now),
-                    fn ($c) => EavModels::query('entity_translation')->insert($c),
-                );
-            }
-        }
-
-        if (! empty($toInsert)) {
-            $insertRows = array_column($toInsert, 'row');
-
-            $this->eachChunk($insertRows, fn ($c) => EavModels::query('entity_attribute')->insert($c));
-
-            if (array_filter(array_column($toInsert, 'translations'))) {
-                $existingIds = $existingByKey->flatten()->pluck('id')->all();
-                $newRecords = $this->fetchInsertedRecords($entityType, $insertRows, $existingIds);
-                $rows = $this->buildTranslationRows($this->alignTranslations($toInsert, $newRecords), $now);
-                $this->eachChunk($rows, fn ($c) => EavModels::query('entity_translation')->insert($c));
-            }
-        }
+        $this->delete($deletes);
+        $this->applyUpdates(collect($updates));
+        $this->applyInserts(collect($inserts), $type, $existing);
     }
 
     /**
-     * Partition fields into update / insert / delete buckets.
+     * Upsert changed rows and sync their translations.
      *
-     * Each entry in $toUpdate and $toInsert carries both the DB row and its translation
-     * payload (null = non-localizable; [] = localizable but empty; array = translations).
+     * @param  Collection<int, array{row: array, translations: array|null}>  $updates
+     */
+    private function applyUpdates(Collection $updates): void
+    {
+        if ($updates->isEmpty()) {
+            return;
+        }
+
+        $this->inChunks(
+            $updates->pluck('row'),
+            fn (Collection $chunk) =>
+        EavModels::query(self::MODEL_ATTRIBUTE)
+            ->upsert($chunk->all(), ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
+        );
+
+        $this->syncTranslations($updates);
+    }
+
+    /**
+     * Insert new rows and create their translations.
      *
-     * Localizable fields keep the value column null; values go to entity_translations.
-     * Non-localizable fields write directly to the typed value column.
+     * Bulk insert() doesn't return IDs, so we re-fetch newly created records
+     * and align them with translation payloads by (entity_id, attribute_id) + position.
      *
-     * @param  array<int|string, Collection<int, Field>>  $entitiesByType
+     * @param  Collection<int, array{row: array, translations: array|null}>  $inserts
+     * @param  Collection  $existing  Rows that existed before this batch (used to isolate new records).
+     */
+    private function applyInserts(Collection $inserts, string $type, Collection $existing): void
+    {
+        if ($inserts->isEmpty()) {
+            return;
+        }
+
+        $rows = $inserts->pluck('row');
+
+        $this->inChunks(
+            $rows,
+            fn (Collection $chunk) =>
+        EavModels::query(self::MODEL_ATTRIBUTE)->insert($chunk->all()),
+        );
+
+        // Skip the re-fetch + translation step if no field carries translations.
+        $hasTranslations = $inserts->pluck('translations')->contains(fn ($t) => ! empty($t));
+
+        if (! $hasTranslations) {
+            return;
+        }
+
+        $knownIds = $existing->flatten()->pluck('id')->all();
+        $created = $this->fetchCreatedRecords($type, $rows, $knownIds);
+        $mapped = $this->mapTranslationsToRecords($inserts, $created);
+
+        $this->inChunks(
+            $this->buildTranslationRows(collect($mapped)),
+            fn (Collection $chunk) => EavModels::query(self::MODEL_TRANSLATION)->insert($chunk->all()),
+        );
+    }
+
+    /**
+     * Sync translations for a set of updated or inserted entries.
+     *
+     * Uses upsert on (entity_type, entity_id, locale_id) to atomically
+     * create or update translation rows in a single statement, avoiding
+     * the DELETE + INSERT pattern which is less efficient and non-atomic.
+     *
+     * Translation semantics in $entries:
+     *   null  → non-localizable field, skip entirely
+     *   []    → localizable but empty, deletes all existing translations for this record
+     *   array → localizable with data, upserts translations
+     *
+     * @param  Collection<int, array{row: array, translations: array|null}>  $entries
+     */
+    private function syncTranslations(Collection $entries): void
+    {
+        // Separate localizable entries (non-null translations) from non-localizable ones.
+        $translatable = $entries
+            ->mapWithKeys(fn ($item) => [$item['row']['id'] => $item['translations']])
+            ->filter(fn ($value) => $value !== null);
+
+        if ($translatable->isEmpty()) {
+            return;
+        }
+
+        // Records with empty translations: wipe all existing translations.
+        $emptyIds = $translatable->filter(fn ($t) => empty($t))->keys();
+
+        if ($emptyIds->isNotEmpty()) {
+            EavModels::query(self::MODEL_TRANSLATION)
+                ->where('entity_type', self::TRANSLATION_TYPE)
+                ->whereIn('entity_id', $emptyIds)
+                ->delete();
+        }
+
+        // Records with actual translations: upsert to create or update in one pass.
+        $withData = $translatable->filter(fn ($t) => ! empty($t));
+
+        if ($withData->isEmpty()) {
+            return;
+        }
+
+        // Delete translations for locales that are no longer present,
+        // then upsert the current set.
+        $this->pruneStaleTranslations($withData);
+
+        $this->inChunks(
+            $this->buildTranslationRows($withData),
+            fn (Collection $chunk) => EavModels::query(self::MODEL_TRANSLATION)
+                ->upsert($chunk->all(), ['entity_type', 'entity_id', 'locale_id'], self::TRANSLATION_VALUE_COLUMNS),
+        );
+    }
+
+    /**
+     * Delete translation rows for locales no longer present in the payload.
+     *
+     * When a record previously had translations for locales [en, fr, de] and
+     * the new payload only contains [en, fr], we need to remove the stale [de] row.
+     * Upsert alone can't handle removals, so we delete first.
+     *
+     * @param  Collection<int, array>  $withData  Record ID → translation entries with data.
+     */
+    private function pruneStaleTranslations(Collection $withData): void
+    {
+        // Build a map of record ID → locale IDs that should be kept.
+        $localesByRecord = $withData->map(
+            fn (array $translations) => collect($translations)
+            ->pluck('locale_id')
+            ->filter()
+            ->values()
+            ->all(),
+        );
+
+        // Delete translations where locale_id is NOT in the keep list.
+        // Grouped by locale set to minimize the number of queries.
+        $localesByRecord
+            ->groupBy(fn ($locales) => implode(',', $locales))
+            ->each(function (Collection $group) {
+                $recordIds = $group->keys()->all();
+                $keepLocales = $group->first();
+
+                EavModels::query(self::MODEL_TRANSLATION)
+                    ->where('entity_type', self::TRANSLATION_TYPE)
+                    ->whereIn('entity_id', $recordIds)
+                    ->whereNotIn('locale_id', $keepLocales)
+                    ->delete();
+            });
+    }
+
+    /**
+     * Split fields into three buckets by comparing desired state against existing DB rows.
+     *
+     * For each field, storage items are matched positionally against existing records:
+     *   - Overlapping positions      → update
+     *   - Extra items beyond existing → insert
+     *   - Extra records beyond items  → delete
+     *
+     * Localizable fields store null in the typed value column;
+     * actual values are persisted to entity_translations instead.
+     *
+     * Plain for-loops are intentional here — Collection::each() with 8+ captured
+     * references would be harder to read and debug with no functional benefit.
+     *
+     * @param  array<int|string, Collection<int, Field>>  $grouped
      * @return array{
-     *     toUpdate: array<int, array{row: array, translations: array|null}>,
-     *     toInsert: array<int, array{row: array, translations: array|null}>,
-     *     toDelete: array<int>
+     *     updates: array<int, array{row: array, translations: array|null}>,
+     *     inserts: array<int, array{row: array, translations: array|null}>,
+     *     deletes: array<int>
      * }
      */
-    private function partitionGroup(
-        string $entityType,
-        array $entitiesByType,
-        Collection $existingByKey,
-        Carbon $now,
-    ): array {
-        $toUpdate = $toInsert = $toDelete = [];
+    private function partition(string $type, array $grouped, Collection $existing): array
+    {
+        $updates = $inserts = $deletes = [];
 
-        foreach ($entitiesByType as $entityId => $fields) {
+        foreach ($grouped as $entityId => $fields) {
             foreach ($fields as $field) {
                 $attrId = $field->attribute()->id;
                 $column = $field->column();
                 $localizable = $field->isLocalizable();
-                $items = $field->toStorage();
-                $itemCount = count($items);
-                $existing = $existingByKey->get($entityId.':'.$attrId, collect())->values();
+                $values = $field->toStorage();
+                $records = $existing->get("{$entityId}:{$attrId}", collect())->values();
 
-                foreach ($existing->take($itemCount) as $i => $record) {
-                    $item = $items[$i];
-                    $row = $this->blankRow($entityType, $entityId, $attrId, $now);
-                    $row['id'] = $record->id;
-                    $row[$column] = $localizable ? null : ($item['value'] ?? null);
-                    $toUpdate[] = [
-                        'row' => $row,
-                        // An empty array causes the sync step to delete all existing translations for this record.
-                        'translations' => $localizable ? ($item['translations'] ?? []) : null,
-                    ];
+                $valueCount = count($values);
+                $recordCount = $records->count();
+                $overlap = min($valueCount, $recordCount);
+
+                // Overlapping records: update in place, keeping the existing ID.
+                for ($i = 0; $i < $overlap; $i++) {
+                    $entry = $this->buildEntry($type, $entityId, $attrId, $column, $localizable, $values[$i]);
+                    $entry['row']['id'] = $records[$i]->id;
+                    $updates[] = $entry;
                 }
 
-                foreach (array_slice($items, $existing->count()) as $item) {
-                    $row = $this->blankRow($entityType, $entityId, $attrId, $now);
-                    $row[$column] = $localizable ? null : ($item['value'] ?? null);
-                    $toInsert[] = [
-                        'row' => $row,
-                        'translations' => $localizable ? ($item['translations'] ?? []) : null,
-                    ];
+                // New values without matching records: queue for insertion.
+                for ($i = $overlap; $i < $valueCount; $i++) {
+                    $inserts[] = $this->buildEntry($type, $entityId, $attrId, $column, $localizable, $values[$i]);
                 }
 
-                foreach ($existing->slice($itemCount) as $record) {
-                    $toDelete[] = $record->id;
+                // Surplus records with no corresponding value: mark for deletion.
+                for ($i = $overlap; $i < $recordCount; $i++) {
+                    $deletes[] = $records[$i]->id;
                 }
             }
         }
 
-        return compact('toUpdate', 'toInsert', 'toDelete');
+        return compact('updates', 'inserts', 'deletes');
     }
 
     /**
-     * Fetch newly inserted entity_attribute rows ordered to align with $insertedRows.
+     * Build a single partition entry (row + translations payload).
      *
-     * @param  array<int, array>  $insertedRows
-     * @param  array<int>  $existingIds  IDs that existed before this batch.
+     * Shared by both update and insert branches in partition() to avoid
+     * duplicating the localizable/non-localizable value assignment logic.
+     *
+     * @return array{row: array, translations: array|null}
      */
-    private function fetchInsertedRecords(string $entityType, array $insertedRows, array $existingIds): Collection
+    private function buildEntry(
+        string $type,
+        int|string $entityId,
+        int $attrId,
+        string $column,
+        bool $localizable,
+        array $storage,
+    ): array {
+        $row = $this->blankRow($type, $entityId, $attrId);
+        $row[$column] = $localizable ? null : ($storage['value'] ?? null);
+
+        return [
+            'row' => $row,
+            'translations' => $localizable ? ($storage['translations'] ?? []) : null,
+        ];
+    }
+
+    /**
+     * Re-fetch records that were just bulk-inserted (since insert() doesn't return IDs).
+     *
+     * This relies on auto-increment IDs being assigned in insertion order.
+     * Under concurrent writes, other processes may interleave IDs, causing
+     * misalignment between fetched records and translation payloads.
+     * For safety, callers should ensure this runs inside a transaction
+     * with appropriate isolation level, or use table-level locking if needed.
+     *
+     * Excludes $knownIds to isolate only the newly created rows.
+     * Ordering by (entity_id, attribute_id, id) guarantees positional alignment
+     * with the original insert array for correct translation mapping.
+     *
+     * @param  Collection<int, array>  $rows       Inserted row payloads.
+     * @param  array<int>              $knownIds   IDs that existed before this batch.
+     */
+    private function fetchCreatedRecords(string $type, Collection $rows, array $knownIds): Collection
     {
-        return EavModels::query('entity_attribute')
-            ->where('entity_type', $entityType)
-            ->whereIn('entity_id', array_unique(array_column($insertedRows, 'entity_id')))
-            ->whereIn('attribute_id', array_unique(array_column($insertedRows, 'attribute_id')))
-            ->when(! empty($existingIds), fn ($q) => $q->whereNotIn('id', $existingIds))
+        return EavModels::query(self::MODEL_ATTRIBUTE)
+            ->where('entity_type', $type)
+            ->whereIn('entity_id', $rows->pluck('entity_id')->unique())
+            ->whereIn('attribute_id', $rows->pluck('attribute_id')->unique())
+            ->when($knownIds, fn (Builder $q) => $q->whereNotIn('id', $knownIds))
             ->orderBy('entity_id')
             ->orderBy('attribute_id')
             ->orderBy('id')
@@ -310,105 +474,123 @@ class AttributePersister
     }
 
     /**
-     * Map newly inserted record IDs to their translation payloads.
+     * Align newly created record IDs with their translation payloads.
      *
-     * @param  array<int, array{row: array, translations: array|null}>  $toInsert
-     * @return array<int, array>
+     * Both collections are grouped by the same composite key (entity_id:attribute_id),
+     * then matched by position within each group — this works because
+     * fetchCreatedRecords() preserves insertion order via ORDER BY id.
+     *
+     * @param  Collection<int, array{row: array, translations: array|null}>  $inserts
+     * @return array<int, array>  Record ID → translation entries.
      */
-    private function alignTranslations(array $toInsert, Collection $newRecords): array
+    private function mapTranslationsToRecords(Collection $inserts, Collection $created): array
     {
-        $translationsByKey = [];
-        foreach ($toInsert as $item) {
-            $key = $item['row']['entity_id'].':'.$item['row']['attribute_id'];
-            $translationsByKey[$key][] = $item['translations'];
-        }
+        // Group translation payloads by composite key, preserving insertion order.
+        $payloads = $inserts
+            ->groupBy(fn ($item) => "{$item['row']['entity_id']}:{$item['row']['attribute_id']}")
+            ->map(fn (Collection $group) => $group->pluck('translations')->all());
 
-        $result = [];
-        foreach ($newRecords->groupBy(fn ($r) => $r->entity_id.':'.$r->attribute_id) as $key => $records) {
-            foreach ($records->values() as $pos => $record) {
-                if (! empty($translationsByKey[$key][$pos])) {
-                    $result[$record->id] = $translationsByKey[$key][$pos];
-                }
-            }
-        }
-
-        return $result;
+        // Match each created record to its payload by position within the same key group.
+        // filter() strips entries where the payload was null or empty.
+        return $created
+            ->groupBy(fn ($record) => "{$record->entity_id}:{$record->attribute_id}")
+            ->flatMap(function (Collection $records, string $key) use ($payloads) {
+                return $records->values()->mapWithKeys(fn ($record, int $pos) => [
+                    $record->id => $payloads[$key][$pos] ?? [],
+                ]);
+            })
+            ->filter()
+            ->all();
     }
 
     /**
-     * Build flat entity_translations rows from a record → translations map.
+     * Build flat entity_translation rows ready for bulk insert/upsert.
      *
-     * @param  array<int, array<int, array{locale_id: int, value: mixed}>>  $translationsByRecordId
-     * @return array<int, array>
+     * Uses mapWithKeys to deduplicate by (record_id:locale_id) — last entry wins
+     * if the same locale appears twice for a single record.
+     *
+     * @param  Collection<int, array<int, array{locale_id: int, value: mixed}>>  $map  Record ID → translations.
+     * @return Collection<int, array>
      */
-    private function buildTranslationRows(array $translationsByRecordId, Carbon $now): array
+    private function buildTranslationRows(Collection $map): Collection
     {
-        $rows = [];
-
-        foreach ($translationsByRecordId as $recordId => $translations) {
-            foreach ($translations as $t) {
-                if (! isset($t['locale_id'])) {
-                    continue;
-                }
-                $localeId = (int) $t['locale_id'];
-                $rows[$recordId.':'.$localeId] = [
-                    'entity_type' => 'entity_attribute',
-                    'entity_id' => (int) $recordId,
-                    'locale_id' => $localeId,
-                    'label' => $t['value'] ?? null,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-        }
-
-        return array_values($rows);
+        return $map
+            ->flatMap(
+                fn (array $translations, int $recordId) => collect($translations)
+                ->filter(fn (array $t) => isset($t['locale_id']))
+                ->mapWithKeys(fn (array $t) => [
+                    "{$recordId}:{$t['locale_id']}" => [
+                        'entity_type' => self::TRANSLATION_TYPE,
+                        'entity_id' => $recordId,
+                        'locale_id' => (int) $t['locale_id'],
+                        'label' => $t['value'] ?? null,
+                        'created_at' => $this->timestamp,
+                        'updated_at' => $this->timestamp,
+                    ],
+                ]),
+            )
+            ->values();
     }
 
     /**
-     * Invoke $callback for each bind-safe chunk of rows.
+     * Split a collection into bind-safe chunks and pass each to the callback.
      *
-     * Chunk size = BIND_LIMIT / column count — safe for both MySQL and PostgreSQL.
+     * Chunk size = BIND_LIMIT / column count, ensuring neither MySQL
+     * nor PostgreSQL exceeds its prepared statement parameter limit.
      */
-    private function eachChunk(array $rows, callable $callback): void
+    private function inChunks(Collection $rows, callable $callback): void
     {
-        if (empty($rows)) {
+        if ($rows->isEmpty()) {
             return;
         }
 
-        $chunkSize = max(1, intdiv(self::BIND_LIMIT, max(1, count($rows[0]))));
+        $columns = count($rows->first());
+        $size = max(1, intdiv(self::BIND_LIMIT, max(1, $columns)));
 
-        foreach (array_chunk($rows, $chunkSize) as $chunk) {
-            $callback($chunk);
-        }
+        $rows->chunk($size)->each($callback);
     }
 
     /**
-     * Build a blank entity_attribute row with all value columns null.
+     * Build a blank entity_attribute row with all typed value columns set to null.
      *
      * @return array<string, mixed>
      */
-    private function blankRow(string $entityType, int|string $entityId, int $attrId, Carbon $now): array
+    private function blankRow(string $type, int|string $entityId, int $attrId): array
     {
         return [
-            'entity_type' => $entityType,
+            'entity_type' => $type,
             'entity_id' => $entityId,
             'attribute_id' => $attrId,
             ...array_fill_keys(self::VALUE_COLUMNS, null),
-            'created_at' => $now,
-            'updated_at' => $now,
+            'created_at' => $this->timestamp,
+            'updated_at' => $this->timestamp,
         ];
     }
 
-    /** Return a Builder scoped to current entity's attribute rows. */
+    /**
+     * Set the transaction-scoped timestamp and execute the callback.
+     *
+     * Ensures every row in the batch shares the same created_at / updated_at,
+     * eliminating the need to pass $now through every method call.
+     */
+    private function withinTimestamp(callable $callback): mixed
+    {
+        $this->timestamp = now();
+
+        try {
+            return $callback();
+        } finally {
+            unset($this->timestamp);
+        }
+    }
+
+    /** Return a Builder scoped to the current entity's attribute rows. */
     private function entityQuery(): Builder
     {
-        if ($this->entity === null) {
-            throw new LogicException('entityQuery() requires an entity. Use new AttributePersister($entity).');
-        }
-
-        return EavModels::query('entity_attribute')
-            ->where('entity_type', $this->entity->getAttributeEntityType())
-            ->where('entity_id', $this->entity->id);
+        return $this->entity
+            ? EavModels::query(self::MODEL_ATTRIBUTE)
+                ->where('entity_type', $this->entity->getAttributeEntityType())
+                ->where('entity_id', $this->entity->id)
+            : throw new LogicException('entityQuery() requires an entity. Use new AttributePersister($entity).');
     }
 }

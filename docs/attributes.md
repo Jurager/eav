@@ -108,7 +108,21 @@ $schema = AttributeManager::schema(Product::first());
 AttributeManager::sync($batch, prebuiltSchema: $schema, chunkSize: 200);
 ```
 
-Each chunk is flushed in ~7 DB queries, regardless of entity or attribute count.
+Each chunk is flushed inside a database transaction in ~7 DB queries, regardless of entity or attribute count.
+
+### Error handling
+
+By default a failing chunk re-throws the exception and stops processing. Pass `$onError` to log the error and continue with the remaining chunks instead:
+
+```php
+AttributeManager::sync($batch, chunkSize: 200, onError: function (\Throwable $e, int $chunkIndex): void {
+    Log::error("Attribute sync failed on chunk {$chunkIndex}", [
+        'error' => $e->getMessage(),
+    ]);
+});
+```
+
+The callback receives the exception and the 1-based chunk index. The failed chunk is rolled back; subsequent chunks are unaffected.
 
 ## Detaching Attributes
 
