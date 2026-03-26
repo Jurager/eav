@@ -548,6 +548,51 @@ class AttributeManager
     }
 
     /**
+     * Find all entities whose attribute value is in the given list.
+     * Returns a Collection keyed by the raw attribute value for O(1) lookup.
+     *
+     * @param  array<int|string>  $values
+     * @return Collection<string, Model>
+     *
+     * @throws JsonException
+     * @throws BindingResolutionException
+     */
+    public function findWhereIn(string $code, array $values): Collection
+    {
+        $field = $this->field($code);
+        $entityType = $this->resolveEntityType($code);
+        $modelClass = $entityType ? Relation::getMorphedModel($entityType) : null;
+
+        if (! $field || ! $entityType || ! $modelClass) {
+            return collect();
+        }
+
+        $column = $field->column();
+
+        $rows = EavModels::query('entity_attribute')
+            ->select(['entity_id', $column])
+            ->where('entity_type', $entityType)
+            ->where('attribute_id', $field->attribute()->id)
+            ->whereIn($column, $values)
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return collect();
+        }
+
+        $models = $modelClass::query()
+            ->whereIn('id', $rows->pluck('entity_id'))
+            ->get()
+            ->keyBy('id');
+
+        return $rows->mapWithKeys(function ($row) use ($models, $column): array {
+            $model = $models[$row->entity_id] ?? null;
+
+            return $model ? [(string) $row->{$column} => $model] : [];
+        });
+    }
+
+    /**
      * Return available attributes Builder for the current entity.
      *
      * @param  array<string, mixed>  $params
