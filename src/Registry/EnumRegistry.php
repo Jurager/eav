@@ -2,6 +2,8 @@
 
 namespace Jurager\Eav\Registry;
 
+use Jurager\Eav\Support\EavModels;
+
 /**
  * Process-level cache of valid enum IDs keyed by attribute_id.
  *
@@ -12,25 +14,24 @@ class EnumRegistry
     /** @var array<int, array<int, true>> */
     private array $cache = [];
 
-    public function has(int $attributeId): bool
-    {
-        return isset($this->cache[$attributeId]);
-    }
-
     /**
+     * Return valid enum IDs as a flip-array (id => true) for O(1) lookup,
+     * loading from the database on first access per attribute.
+     *
      * @return array<int, true>
      */
-    public function get(int $attributeId): array
+    public function resolve(int $attributeId): array
     {
-        return $this->cache[$attributeId] ?? [];
-    }
+        if (! isset($this->cache[$attributeId])) {
+            $ids = EavModels::query('attribute_enum')
+                ->where('attribute_id', $attributeId)
+                ->pluck('id')
+                ->all();
 
-    /**
-     * @param  array<int, true>  $ids
-     */
-    public function put(int $attributeId, array $ids): void
-    {
-        $this->cache[$attributeId] = $ids;
+            $this->cache[$attributeId] = array_fill_keys($ids, true);
+        }
+
+        return $this->cache[$attributeId];
     }
 
     /**
