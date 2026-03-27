@@ -32,7 +32,8 @@ class AttributeGroup extends Model
     {
         return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
             ->using(EavModels::class('entity_translation'))
-            ->withPivot(['id', 'label', 'params', 'updated_at']);
+            ->withPivot(['id', 'label', 'params'])
+            ->withTimestamps();
     }
 
     public function attributes(): HasMany

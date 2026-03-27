@@ -230,7 +230,7 @@ class AttributePersister
 
         $this->delete($deletes);
         $this->applyUpdates(collect($updates));
-        $this->applyInserts(collect($inserts), $type, $existing);
+        $this->applyInserts(collect($inserts), $type);
     }
 
     /**
@@ -260,15 +260,19 @@ class AttributePersister
      * and align them with translation payloads by (entity_id, attribute_id) + position.
      *
      * @param  Collection<int, array{row: array, translations: array|null}>  $inserts
-     * @param  Collection  $existing  Rows that existed before this batch (used to isolate new records).
      */
-    private function applyInserts(Collection $inserts, string $type, Collection $existing): void
+    private function applyInserts(Collection $inserts, string $type): void
     {
         if ($inserts->isEmpty()) {
             return;
         }
 
         $rows = $inserts->pluck('row');
+
+        // Snapshot the highest existing ID before bulk insert to reliably identify
+        // newly created rows afterward. Using max(id) avoids DATETIME precision
+        // issues that arise when filtering by created_at with microsecond timestamps.
+        $maxIdBefore = (int) (EavModels::query(self::MODEL_ATTRIBUTE)->max('id') ?? 0);
 
         $this->inChunks(
             $rows,
@@ -282,8 +286,7 @@ class AttributePersister
             return;
         }
 
-        $knownIds = $existing->flatten()->pluck('id')->all();
-        $created = $this->fetchCreatedRecords($type, $rows, $knownIds);
+        $created = $this->fetchCreatedRecords($type, $rows, $maxIdBefore);
         $mapped = $this->mapTranslationsToRecords($inserts, $created);
 
         $this->inChunks(
@@ -469,37 +472,24 @@ class AttributePersister
     /**
      * Re-fetch records that were just bulk-inserted (since insert() doesn't return IDs).
      *
-     * This relies on auto-increment IDs being assigned in insertion order.
-     * Under concurrent writes, other processes may interleave IDs, causing
-     * misalignment between fetched records and translation payloads.
-     * For safety, callers should ensure this runs inside a transaction
-     * with appropriate isolation level, or use table-level locking if needed.
+     * Uses `id > $maxIdBefore` to isolate only rows created in this batch.
+     * This is more reliable than filtering by created_at, which suffers from
+     * DATETIME precision loss (microseconds are truncated to seconds in MySQL,
+     * causing `created_at >= Carbon::now()` to miss rows inserted in the same second).
      *
-     * Excludes $knownIds to isolate only the newly created rows.
      * Ordering by (entity_id, attribute_id, id) guarantees positional alignment
      * with the original insert array for correct translation mapping.
      *
-     * @param  Collection<int, array>  $rows  Inserted row payloads.
-     * @param  array<int>  $knownIds  IDs that existed before this batch.
+     * @param  Collection<int, array>  $rows          Inserted row payloads.
+     * @param  int                     $maxIdBefore   Highest entity_attribute.id captured before the bulk insert.
      */
-    private function fetchCreatedRecords(string $type, Collection $rows, array $knownIds): Collection
+    private function fetchCreatedRecords(string $type, Collection $rows, int $maxIdBefore): Collection
     {
-        $query = EavModels::query(self::MODEL_ATTRIBUTE)
+        return EavModels::query(self::MODEL_ATTRIBUTE)
             ->where('entity_type', $type)
             ->whereIn('entity_id', $rows->pluck('entity_id')->unique())
-            ->whereIn('attribute_id', $rows->pluck('attribute_id')->unique());
-
-        if (! empty($knownIds)) {
-            // Subsequent imports: exclude rows that existed before this batch.
-            $query->whereNotIn('id', $knownIds);
-        } else {
-            // First import: $knownIds is empty, so whereNotIn would be a no-op.
-            // Filter by the batch timestamp instead to exclude rows from previous
-            // (potentially failed) imports that share the same entity_id + attribute_id.
-            $query->where('created_at', '>=', $this->timestamp);
-        }
-
-        return $query
+            ->whereIn('attribute_id', $rows->pluck('attribute_id')->unique())
+            ->where('id', '>', $maxIdBefore)
             ->orderBy('entity_id')
             ->orderBy('attribute_id')
             ->orderBy('id')
