@@ -52,7 +52,8 @@ class AttributePersister
     /** @param  Attributable|null  $entity  Omit for batch mode. */
     public function __construct(
         private readonly ?Attributable $entity = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Persist filled fields for the current entity.
@@ -243,7 +244,9 @@ class AttributePersister
             return;
         }
 
-        $this->inChunks($updates->pluck('row'), fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)
+        $this->inChunks(
+            $updates->pluck('row'),
+            fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)
             ->upsert($chunk->all(), ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
         );
 
@@ -481,11 +484,22 @@ class AttributePersister
      */
     private function fetchCreatedRecords(string $type, Collection $rows, array $knownIds): Collection
     {
-        return EavModels::query(self::MODEL_ATTRIBUTE)
+        $query = EavModels::query(self::MODEL_ATTRIBUTE)
             ->where('entity_type', $type)
             ->whereIn('entity_id', $rows->pluck('entity_id')->unique())
-            ->whereIn('attribute_id', $rows->pluck('attribute_id')->unique())
-            ->when($knownIds, fn (Builder $q) => $q->whereNotIn('id', $knownIds))
+            ->whereIn('attribute_id', $rows->pluck('attribute_id')->unique());
+
+        if (! empty($knownIds)) {
+            // Subsequent imports: exclude rows that existed before this batch.
+            $query->whereNotIn('id', $knownIds);
+        } else {
+            // First import: $knownIds is empty, so whereNotIn would be a no-op.
+            // Filter by the batch timestamp instead to exclude rows from previous
+            // (potentially failed) imports that share the same entity_id + attribute_id.
+            $query->where('created_at', '>=', $this->timestamp);
+        }
+
+        return $query
             ->orderBy('entity_id')
             ->orderBy('attribute_id')
             ->orderBy('id')
