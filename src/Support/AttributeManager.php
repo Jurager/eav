@@ -139,15 +139,13 @@ class AttributeManager
 
         $registryKey = $entityType . ':' . $parametersKey;
 
-        if (! $registry->has($registryKey)) {
+        // Resolve from cache or query the DB and cache for the process lifetime.
+        $attributes = $registry->resolve(
+            $registryKey,
+            fn () => static::for($entity)->attributesQuery($parameters)?->get() ?? collect()
+        );
 
-            // Query attribute definitions for this entity type and cache them for the process lifetime.
-            $attributeCollection = static::for($entity)->attributesQuery($parameters)?->get() ?? collect();
-
-            $registry->put($registryKey, $attributeCollection);
-        }
-
-        return static::buildFromCollection($registry->get($registryKey));
+        return static::buildFromCollection($attributes);
     }
 
     /**

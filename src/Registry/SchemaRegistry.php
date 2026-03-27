@@ -15,21 +15,14 @@ class SchemaRegistry
     /** @var array<string, Collection> */
     private array $schemas = [];
 
-    public function has(string $key): bool
+    /**
+     * Return the cached schema for $key, loading it via $loader on first access.
+     *
+     * @return Collection<int, mixed>
+     */
+    public function resolve(string $key, callable $loader): Collection
     {
-        return isset($this->schemas[$key]);
-    }
-
-    /** @return Collection|null */
-    public function get(string $key): ?Collection
-    {
-        return $this->schemas[$key] ?? null;
-    }
-
-    /** @param Collection<int, mixed> $attributes */
-    public function put(string $key, Collection $attributes): void
-    {
-        $this->schemas[$key] = $attributes;
+        return $this->schemas[$key] ??= $loader();
     }
 
     /**

@@ -70,7 +70,7 @@ Validation:
 Relations:
 
 - `attribute_relation(): MorphToMany` — raw relation to `attributes` through `entity_attribute` pivot (with value columns)
-- `attribute_values(): HasMany` — raw relation to `entity_attribute` rows for this entity
+- `attribute_values(): MorphMany` — raw relation to `entity_attribute` rows for this entity
 
 Default implementations of the `Attributable` contract (override as needed):
 
@@ -153,7 +153,7 @@ Registered as singleton. Caches locale data to avoid repeated DB queries.
 - `localeCodes(): array` — all locale codes keyed by locale ID
 - `localeCode(int $localeId): ?string` — code by ID
 - `localeId(string $code): ?int` — ID by code
-- `resolveLocaleId(?string $code = null): int` — ID by code, or default if not found
+- `resolve(?string $code = null): int` — ID by code, or default if not found
 - `flush(): void` — clear cache (useful in tests)
 
 ---

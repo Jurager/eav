@@ -22,21 +22,10 @@ class LocaleRegistry
      */
     public function defaultLocaleId(): int
     {
-        if ($this->defaultLocaleId !== null) {
-            return $this->defaultLocaleId;
-        }
-
         $code = config('app.locale', 'en');
 
-        $id = EavModels::query('locale')->where('code', $code)->value('id');
-
-        if ($id === null) {
-            throw new RuntimeException(
-                "Default locale \"{$code}\" not found in the locales table. Add it or update app.locale."
-            );
-        }
-
-        return $this->defaultLocaleId = $id;
+        return $this->defaultLocaleId ??= EavModels::query('locale')->where('code', $code)->value('id')
+            ?? throw new RuntimeException("Default locale \"$code\" not found in the locales table. Add it or update app.locale.");
     }
 
     /**
@@ -79,17 +68,9 @@ class LocaleRegistry
     /**
      * Resolve a locale ID from a code string, falling back to the default locale.
      */
-    public function resolveLocaleId(?string $code = null): int
+    public function resolve(?string $code = null): int
     {
-        if ($code !== null) {
-            $localeId = $this->localeId($code);
-
-            if ($localeId !== null) {
-                return $localeId;
-            }
-        }
-
-        return $this->defaultLocaleId();
+        return ($code !== null ? $this->localeId($code) : null) ?? $this->defaultLocaleId();
     }
 
     /**

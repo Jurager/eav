@@ -55,7 +55,7 @@ class AttributeValidator
      */
     private function fillFields(array $input): void
     {
-        $codes = array_filter(array_column($input, 'code'), static fn ($code) => $code !== null);
+        $codes = array_values(array_filter(array_column($input, 'code')));
 
         if (empty($codes)) {
             return;
@@ -64,19 +64,7 @@ class AttributeValidator
         $this->manager->ensureFields($codes);
 
         foreach ($input as $item) {
-            $code = $item['code'] ?? null;
-
-            if ($code === null) {
-                continue;
-            }
-
-            $field = $this->manager->field($code);
-
-            if ($field === null) {
-                continue;
-            }
-
-            $field->fill($item['values'] ?? null);
+            $this->manager->field($item['code'] ?? '')?->fill($item['values'] ?? null);
         }
     }
 
@@ -124,11 +112,7 @@ class AttributeValidator
         $attributeId = $field->attribute()->id;
         $column = $field->column();
 
-        $values = collect($field->toStorage())
-            ->pluck('value')
-            ->filter(fn ($v) => $v !== null)
-            ->values()
-            ->all();
+        $values = array_values(array_filter(array_column($field->toStorage(), 'value')));
 
         if (empty($values)) {
             return [];
