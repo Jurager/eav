@@ -285,7 +285,8 @@ class AttributePersister
 
         $this->inChunks(
             $this->buildTranslationRows(collect($mapped)),
-            fn (Collection $chunk) => EavModels::query(self::MODEL_TRANSLATION)->insert($chunk->all()),
+            fn (Collection $chunk) => EavModels::query(self::MODEL_TRANSLATION)
+                ->upsert($chunk->all(), ['entity_type', 'entity_id', 'locale_id'], self::TRANSLATION_VALUE_COLUMNS),
         );
     }
 
