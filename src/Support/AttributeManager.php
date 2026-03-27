@@ -131,18 +131,23 @@ class AttributeManager
      */
     private static function buildFromAttributable(Attributable $entity, SchemaRegistry $registry): static
     {
-        $cacheKey = $entity->getAttributeEntityType().':'.md5(serialize($entity->getDefaultParameters()));
+        $parameters = $entity->getDefaultParameters();
 
-        if (! $registry->has($cacheKey)) {
+        $entityType = $entity->getAttributeEntityType();
 
-            $params = $entity->getDefaultParameters();
+        $parametersKey = empty($parameters) ? 'default' : md5(json_encode($parameters, JSON_THROW_ON_ERROR));
 
-            $attributes = static::for($entity)->attributesQuery($params)?->get() ?? collect();
+        $registryKey = $entityType . ':' . $parametersKey;
 
-            $registry->put($cacheKey, $attributes);
+        if (! $registry->has($registryKey)) {
+
+            // Query attribute definitions for this entity type and cache them for the process lifetime.
+            $attributeCollection = static::for($entity)->attributesQuery($parameters)?->get() ?? collect();
+
+            $registry->put($registryKey, $attributeCollection);
         }
 
-        return static::buildFromCollection($registry->get($cacheKey));
+        return static::buildFromCollection($registry->get($registryKey));
     }
 
     /**

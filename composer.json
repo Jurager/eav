@@ -1,7 +1,7 @@
 {
     "name": "jurager/eav",
-    "description": "Generic EAV (Entity-Attribute-Value) system for Laravel",
-    "keywords": [""],
+    "description": "Flexible Entity-Attribute-Value (EAV) system for Laravel with typed storage, localization, and attribute inheritance",
+    "keywords": ["laravel", "eav", "entity-attribute-value", "dynamic-attributes", "localization"],
     "license": "MIT",
     "authors": [
         {

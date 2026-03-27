@@ -4,7 +4,7 @@
 [![PHP Version Require](https://poser.pugx.org/jurager/eav/require/php)](https://packagist.org/packages/jurager/eav)
 [![License](https://poser.pugx.org/jurager/eav/license)](https://packagist.org/packages/jurager/eav)
 
-A flexible Entity-Attribute-Value (EAV) system for Laravel with typed storage, localization, attribute inheritance, and a registry-driven field type system.
+A flexible Entity-Attribute-Value (EAV) system for Laravel. Attach dynamic typed attributes to any Eloquent model without schema migrations, with support for localization, attribute inheritance, and enum-backed select fields.
 
 - [Requirements](#requirements)
 - [Installation](#installation)
@@ -12,7 +12,7 @@ A flexible Entity-Attribute-Value (EAV) system for Laravel with typed storage, l
 
 ## Requirements
 
-`PHP >= 8.2` and `Laravel 11.x or higher`
+`PHP >= 8.4` and `Laravel 11.x or higher`
 
 ## Installation
 

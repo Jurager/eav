@@ -20,6 +20,14 @@ class AttributeObserver
     }
 
     /**
+     * Flush the schema cache when a new attribute is created.
+     */
+    public function created(Attribute $attribute): void
+    {
+        $this->schema->flush($attribute->entity_type);
+    }
+
+    /**
      * Re-index entities when an attribute's searchable flag changes.
      * Flush the schema cache so long-running processes pick up the new definition.
      */
@@ -56,6 +64,18 @@ class AttributeObserver
         $this->enums->flush($attribute->id);
 
         PruneAttribute::dispatch($attribute->id);
+    }
+
+    /**
+     * Flush the schema cache when a soft-deleted attribute is restored.
+     */
+    public function restored(Attribute $attribute): void
+    {
+        $this->schema->flush($attribute->entity_type);
+
+        if ($attribute->searchable) {
+            $this->syncSearchable($attribute);
+        }
     }
 
     /**

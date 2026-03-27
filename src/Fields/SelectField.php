@@ -2,8 +2,11 @@
 
 namespace Jurager\Eav\Fields;
 
+use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Support\EavModels;
+use Psr\Container\ContainerExceptionInterface;
+use Psr\Container\NotFoundExceptionInterface;
 
 /**
  * Enum-backed select field storing selected enum IDs in integer column.
@@ -188,6 +191,10 @@ class SelectField extends Field
         return [['locale_id' => null, 'value' => $normalized]];
     }
 
+    /**
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
+     */
     protected function validate(mixed $value): bool
     {
         if ($value === null) {
@@ -207,10 +214,13 @@ class SelectField extends Field
 
     /**
      * Return valid enum IDs for this attribute as a flip-array (id => true) for O(1) lookup.
+     *
      * Delegated to the EnumRegistry singleton so the cache survives across multiple requests
      * within the same Octane worker and is properly invalidated by AttributeEnumObserver.
      *
      * @return array<int, true>
+     * @throws ContainerExceptionInterface
+     * @throws NotFoundExceptionInterface
      */
     private function cachedEnumIds(): array
     {

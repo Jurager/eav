@@ -5,8 +5,6 @@ namespace Jurager\Eav\Registry;
 /**
  * Process-level cache of valid enum IDs keyed by attribute_id.
  *
- * Registered as a singleton so Octane workers share one instance per process
- * instead of using a static class property that cannot be reset by the container.
  * Flushed by AttributeEnumObserver on every enum mutation.
  */
 class EnumRegistry
