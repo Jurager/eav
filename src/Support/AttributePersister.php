@@ -514,16 +514,21 @@ class AttributePersister
             ->map(fn (Collection $group) => $group->pluck('translations')->all());
 
         // Match each created record to its payload by position within the same key group.
-        // filter() strips entries where the payload was null or empty.
-        return $created
+        $mapped = [];
+
+        $created
             ->groupBy(fn ($record) => "{$record->entity_id}:{$record->attribute_id}")
-            ->flatMap(function (Collection $records, string $key) use ($payloads) {
-                return $records->values()->mapWithKeys(fn ($record, int $pos) => [
-                    $record->id => $payloads[$key][$pos] ?? [],
-                ]);
-            })
-            ->filter()
-            ->all();
+            ->each(function (Collection $records, string $key) use ($payloads, &$mapped): void {
+                foreach ($records->values() as $position => $record) {
+                    $translations = $payloads[$key][$position] ?? [];
+
+                    if (! empty($translations)) {
+                        $mapped[(int) $record->id] = $translations;
+                    }
+                }
+            });
+
+        return $mapped;
     }
 
     /**
