@@ -19,8 +19,8 @@ Accessed via `$model->attributes()`. One instance per model instance (cached).
 
 ### Schema
 
-- `loadSchema(): void` — load all attribute schemas into memory (safe to call multiple times)
-- `loadFields(array $codes): void` — batch-load specific fields by code on demand
+- `ensureSchema(): static` — guarantee all field definitions are built from the full schema
+- `ensureFields(array $codes): void` — guarantee specific field definitions are built on demand
 
 ### Reading
 
@@ -154,7 +154,7 @@ Registered as singleton. Caches locale data to avoid repeated DB queries.
 - `localeCode(int $localeId): ?string` — code by ID
 - `localeId(string $code): ?int` — ID by code
 - `resolveLocaleId(?string $code = null): int` — ID by code, or default if not found
-- `reset(): void` — clear cache (useful in tests)
+- `flush(): void` — clear cache (useful in tests)
 
 ---
 

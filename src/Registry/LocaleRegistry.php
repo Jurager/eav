@@ -2,6 +2,7 @@
 
 namespace Jurager\Eav\Registry;
 
+use RuntimeException;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -21,9 +22,21 @@ class LocaleRegistry
      */
     public function defaultLocaleId(): int
     {
-        return $this->defaultLocaleId ??= EavModels::query('locale')
-            ->where('code', config('app.locale', 'en'))
-            ->value('id') ?? 1;
+        if ($this->defaultLocaleId !== null) {
+            return $this->defaultLocaleId;
+        }
+
+        $code = config('app.locale', 'en');
+
+        $id = EavModels::query('locale')->where('code', $code)->value('id');
+
+        if ($id === null) {
+            throw new RuntimeException(
+                "Default locale \"{$code}\" not found in the locales table. Add it or update app.locale."
+            );
+        }
+
+        return $this->defaultLocaleId = $id;
     }
 
     /**
@@ -80,9 +93,9 @@ class LocaleRegistry
     }
 
     /**
-     * Reset all cached data. Useful in tests or long-running processes.
+     * Flush all cached data. Useful in tests or long-running processes.
      */
-    public function reset(): void
+    public function flush(): void
     {
         $this->defaultLocaleId = null;
         $this->localeCodes = null;

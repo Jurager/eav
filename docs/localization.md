@@ -22,7 +22,7 @@ $registry->localeCode(1);            // locale code by ID
 $registry->validLocaleIds();         // all valid locale IDs
 $registry->isValidLocaleId(2);       // check if locale ID exists
 $registry->resolveLocaleId('ru');    // ID by code, or default if not found
-$registry->reset();                  // clear cache (e.g. in tests)
+$registry->flush();                  // clear cache (e.g. in tests)
 ```
 
 ## Translating Custom Models

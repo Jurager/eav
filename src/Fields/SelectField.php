@@ -2,7 +2,7 @@
 
 namespace Jurager\Eav\Fields;
 
-use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -10,14 +10,6 @@ use Jurager\Eav\Support\EavModels;
  */
 class SelectField extends Field
 {
-    /**
-     * In-memory cache of valid enum IDs keyed by attribute_id.
-     * Shared across all instances for the lifetime of the process (one request / job run).
-     * Values are dummy true-s so membership can be tested with isset() in O(1).
-     *
-     * @var array<int, array<int, true>>
-     */
-    private static array $enumCache = [];
 
     public function column(): string
     {
@@ -215,42 +207,30 @@ class SelectField extends Field
 
     /**
      * Return valid enum IDs for this attribute as a flip-array (id => true) for O(1) lookup.
-     * The result is cached statically per attribute_id for the lifetime of the process.
+     * Delegated to the EnumRegistry singleton so the cache survives across multiple requests
+     * within the same Octane worker and is properly invalidated by AttributeEnumObserver.
      *
      * @return array<int, true>
      */
     private function cachedEnumIds(): array
     {
         $attrId = $this->attribute->id;
+        $registry = app(EnumRegistry::class);
 
-        if (! isset(self::$enumCache[$attrId])) {
+        if (! $registry->has($attrId)) {
             $ids = EavModels::query('attribute_enum')
                 ->where('attribute_id', $attrId)
                 ->pluck('id')
                 ->all();
 
-            self::$enumCache[$attrId] = array_fill_keys($ids, true);
+            $registry->put($attrId, array_fill_keys($ids, true));
         }
 
-        return self::$enumCache[$attrId];
+        return $registry->get($attrId);
     }
 
     protected function normalize(mixed $value): int
     {
         return (int) $value;
-    }
-
-    /**
-     * Flush the cached enum IDs for a specific attribute, or all attributes.
-     * Call this when enums are created, updated, or deleted to prevent stale validation
-     * in long-running processes (queues, Octane).
-     */
-    public static function flushEnumCache(?int $attributeId = null): void
-    {
-        if ($attributeId === null) {
-            self::$enumCache = [];
-        } else {
-            unset(self::$enumCache[$attributeId]);
-        }
     }
 }

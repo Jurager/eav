@@ -6,7 +6,7 @@ use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\CircularDependencyException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -70,14 +70,21 @@ trait HasAttributes
     /**
      * Return a query builder for available attributes (global or by relation).
      *
-     * @param  array<string, mixed>  $params
+     * @param array<string, mixed> $params
+     * @return Builder|null
+     * @throws BindingResolutionException
+     * @throws CircularDependencyException
      */
     public function getAvailableAttributesQuery(array $params = []): ?Builder
     {
-        return match ($this->getAttributeScope()) {
-            'byRelation' => $this->getAttributesByRelationQuery($params),
-            default => $this->getGlobalAttributesQuery(),
-        };
+        if ($this->getAttributeScope() === 'byRelation') {
+            $model = static::getAttributeRelationModel()
+                ?? throw new LogicException(static::class.' must implement getAttributeRelationModel() when getAttributeScope() returns "byRelation".');
+
+            return $this->getAttributesByRelationQuery($params, $model);
+        }
+
+        return $this->getGlobalAttributesQuery();
     }
 
     /**
@@ -194,10 +201,9 @@ trait HasAttributes
     /**
      * Raw Eloquent relation to entity_attribute rows for this entity.
      */
-    public function attribute_values(): HasMany
+    public function attribute_values(): MorphMany
     {
-        return $this->hasMany(EavModels::class('entity_attribute'), 'entity_id')
-            ->where('entity_type', $this->getAttributeEntityType());
+        return $this->morphMany(EavModels::class('entity_attribute'), 'entity');
     }
 
     /**
@@ -211,15 +217,13 @@ trait HasAttributes
 
     /**
      * Return the FQCN of the model used to resolve relation-scoped attributes.
-     * Must be overridden when getAttributeScope() returns 'byRelation'.
+     * Override when getAttributeScope() returns 'byRelation'.
      *
-     * @return class-string
+     * @return class-string<Attributable>|null
      */
-    protected static function getAttributeRelationModel(): string
+    protected static function getAttributeRelationModel(): ?string
     {
-        throw new LogicException(
-            static::class.' must implement getAttributeRelationModel() when getAttributeScope() returns "byRelation".'
-        );
+        return null;
     }
 
     /**
@@ -234,28 +238,32 @@ trait HasAttributes
 
     /**
      * Return a query for attributes scoped through related entities (e.g. categories for products).
-     * Returns null when params are empty or the relation model cannot be resolved.
      *
-     * @param array<string, mixed> $params IDs of the related entities.
+     * @param array<string, mixed> $params
+     * @param class-string<Attributable> $model
      * @return Builder|null
      * @throws BindingResolutionException
      * @throws CircularDependencyException
      */
-    protected function getAttributesByRelationQuery(array $params = []): ?Builder
+    protected function getAttributesByRelationQuery(array $params, string $model): ?Builder
     {
         if (empty($params)) {
             return null;
         }
 
-        $model = static::getAttributeRelationModel();
+        $instance = new $model();
 
-        if (! is_subclass_of($model, Attributable::class)) {
-            return null;
+        // Defining the necessary columns
+        $columns = ['id', 'parent_id', 'is_inherits_properties'];
+
+        if (method_exists($instance, 'ancestors')) {
+            $columns[] = '_lft';
+            $columns[] = '_rgt';
         }
 
         $entities = $model::query()
             ->whereIn('id', $params)
-            ->select(['id', '_lft', '_rgt', 'parent_id', 'is_inherits_properties'])
+            ->select($columns)
             ->get()
             ->keyBy('id');
 
@@ -263,9 +271,23 @@ trait HasAttributes
             return null;
         }
 
-        $allEntities = app(AttributeInheritanceResolver::class)->resolve($entities, $model);
+        // Resolve inheritance
+        $allEntities = app(AttributeInheritanceResolver::class)
+            ->resolve($entities, $model);
 
-        $relation = (new $model())->available_attributes();
+        if (empty($allEntities)) {
+            return null;
+        }
+
+        $entityIds = $allEntities instanceof \Illuminate\Support\Collection
+            ? $allEntities->pluck('id')
+            : collect($allEntities)->pluck('id');
+
+        if ($entityIds->isEmpty()) {
+            return null;
+        }
+
+        $relation = $instance->available_attributes();
 
         if ($relation === null) {
             return null;
@@ -276,7 +298,10 @@ trait HasAttributes
         $relatedKey = $relation->getRelatedPivotKeyName();
 
         return EavModels::query('attribute')
-            ->whereIn('id', fn ($q) => $q->select($relatedKey)->from($pivotTable)->whereIn($foreignKey, $allEntities->pluck('id')))
+            ->join($pivotTable, "{$pivotTable}.{$relatedKey}", '=', 'attribute.id')
+            ->whereIn("{$pivotTable}.{$foreignKey}", $entityIds)
+            ->select('attribute.*')
+            ->distinct()
             ->withRelations();
     }
 }

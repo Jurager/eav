@@ -42,6 +42,15 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Attribute Inheritance
+    |--------------------------------------------------------------------------
+    | Maximum number of ancestor levels to traverse when resolving attribute
+    | inheritance chains (parent_id strategy). Increase for deep hierarchies.
+    */
+    'max_inheritance_depth' => 10,
+
+    /*
+    |--------------------------------------------------------------------------
     | Field Types
     |--------------------------------------------------------------------------
     | Maps attribute type codes (attribute_types.code) to Field implementations.

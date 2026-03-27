@@ -90,7 +90,7 @@ class AttributeInheritanceResolver
     {
         $currentIds = $toInherit->pluck('parent_id')->filter()->unique();
         $allParents = collect();
-        $maxDepth = 10;
+        $maxDepth = (int) config('eav.max_inheritance_depth', 10);
 
         while ($currentIds->isNotEmpty() && $maxDepth-- > 0) {
             $parents = $model::query()

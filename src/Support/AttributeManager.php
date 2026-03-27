@@ -14,6 +14,7 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Registry\SchemaRegistry;
 use LogicException;
 
 /**
@@ -42,12 +43,6 @@ class AttributeManager
 
     /** @var array<string, mixed>|null */
     private ?array $indexData = null;
-
-    /** @var array<string, true> */
-    private array $loadedSchemaKeys = [];
-
-    /** @var array<string, static> Process-level schema cache shared across sync() calls. */
-    private static array $schemaRegistry = [];
 
     /**
      * @param  Collection<int, mixed>|null  $preloadedAttributes
@@ -101,24 +96,53 @@ class AttributeManager
     public static function schema(Attributable|Collection $entityOrAttributes): static
     {
         if ($entityOrAttributes instanceof Collection) {
-            // Build immediately from the given attributes; 'type' relation loaded if missing.
-            $entityOrAttributes->loadMissing('type');
-
-            $instance = new static(null, $entityOrAttributes);
-
-            foreach ($entityOrAttributes as $attribute) {
-                $instance->fields[$attribute->code] = $instance->fieldRegistry->make($attribute);
-            }
-
-            $instance->loadedSchemaKeys['default'] = true;
-
-            return $instance;
+            return static::buildFromCollection($entityOrAttributes);
         }
 
-        // Cache by (entity_type, params) — subsequent calls skip all database queries.
-        $cacheKey = $entityOrAttributes->getAttributeEntityType().':'.md5(serialize($entityOrAttributes->getDefaultParameters()));
+        return static::buildFromAttributable($entityOrAttributes, app(SchemaRegistry::class));
+    }
 
-        return static::$schemaRegistry[$cacheKey] ??= static::for($entityOrAttributes)->loadSchema();
+    /**
+     * Build a schema-only manager from a pre-loaded attribute collection.
+     *
+     * @param  Collection<int, Attribute>  $attributes
+     *
+     * @throws BindingResolutionException
+     */
+    private static function buildFromCollection(Collection $attributes): static
+    {
+        $attributes->loadMissing('type');
+
+        $instance = new static(null, $attributes);
+
+        foreach ($attributes as $attribute) {
+            $instance->fields[$attribute->code] = $instance->fieldRegistry->make($attribute);
+        }
+
+        return $instance;
+    }
+
+    /**
+     * Build a schema-only manager for an entity, using the SchemaRegistry to avoid
+     * repeated DB queries across multiple calls within the same process.
+     *
+     * @throws BindingResolutionException
+     * @throws JsonException
+     */
+    private static function buildFromAttributable(Attributable $entity, SchemaRegistry $registry): static
+    {
+        $cacheKey = $entity->getAttributeEntityType().':'.md5(serialize($entity->getDefaultParameters()));
+
+        if (! $registry->has($cacheKey)) {
+
+            $params = $entity->getDefaultParameters();
+
+            $attributes = static::for($entity)->attributesQuery($params)?->get() ?? collect();
+
+            $registry->put($cacheKey, $attributes);
+        }
+
+        return static::buildFromCollection($registry->get($cacheKey));
     }
 
     /**
@@ -164,20 +188,13 @@ class AttributeManager
      * @throws BindingResolutionException
      * @throws JsonException
      */
-    public function loadSchema(): static
+    public function ensureSchema(): static
     {
         $params = $this->entity?->getDefaultParameters() ?? [];
-        $schemaKey = $this->schemaParamsKey($params);
-
-        if (isset($this->loadedSchemaKeys[$schemaKey])) {
-            return $this;
-        }
 
         $this->resolveAttributes($params)
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
             ->each(fn ($attr) => $this->fields[$attr->code] = $this->fieldRegistry->make($attr));
-
-        $this->loadedSchemaKeys[$schemaKey] = true;
 
         return $this;
     }
@@ -190,7 +207,7 @@ class AttributeManager
      * @throws JsonException
      * @throws BindingResolutionException
      */
-    public function loadFields(array $codes): void
+    public function ensureFields(array $codes): void
     {
         $codes = array_diff($codes, array_keys($this->fields));
 
@@ -336,7 +353,7 @@ class AttributeManager
      */
     public function fill(array $data): Collection
     {
-        $this->loadSchema();
+        $this->ensureSchema();
 
         $filled = collect();
 
@@ -691,7 +708,7 @@ class AttributeManager
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
         match ($operator) {
-            'like' => $query->where($column, 'LIKE', "%$value%"),
+            'like' => $query->where($column, 'LIKE', '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value).'%'),
             'in' => $query->whereIn($column, (array) $value),
             'not_in' => $query->whereNotIn($column, (array) $value),
             'null' => $query->whereNull($column),
@@ -727,4 +744,5 @@ class AttributeManager
         return $this->entity?->getAttributeEntityType()
             ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
     }
+
 }

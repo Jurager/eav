@@ -29,7 +29,7 @@ class AttributeValidator
     {
         $this->entity = $entity;
         $this->manager = $manager ?? AttributeManager::for($entity);
-        $this->manager->loadSchema();
+        $this->manager->ensureSchema();
     }
 
     /**
@@ -61,7 +61,7 @@ class AttributeValidator
             return;
         }
 
-        $this->manager->loadFields($codes);
+        $this->manager->ensureFields($codes);
 
         foreach ($input as $item) {
             $code = $item['code'] ?? null;
@@ -119,43 +119,43 @@ class AttributeValidator
      */
     private function validateUniqueness(Field $field): array
     {
-        $errors = [];
         $entityType = $this->entity->getAttributeEntityType();
         $entityId = $this->entity->id ?? null;
         $attributeId = $field->attribute()->id;
         $column = $field->column();
 
+        $values = collect($field->toStorage())
+            ->pluck('value')
+            ->filter(fn ($v) => $v !== null)
+            ->values()
+            ->all();
+
+        if (empty($values)) {
+            return [];
+        }
+
         $modelClass = Relation::getMorphedModel($entityType);
         $usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
 
-        foreach ($field->toStorage() as $item) {
-            $value = $item['value'];
+        $query = EavModels::query('entity_attribute')
+            ->where('entity_type', $entityType)
+            ->where('attribute_id', $attributeId)
+            ->whereNotNull($column)
+            ->whereIn($column, $values);
 
-            if ($value === null) {
-                continue;
-            }
-
-            $query = EavModels::query('entity_attribute')
-                ->where('entity_type', $entityType)
-                ->where('attribute_id', $attributeId)
-                ->whereNotNull($column)
-                ->where($column, $value);
-
-            if ($entityId) {
-                $query->where('entity_id', '!=', $entityId);
-            }
-
-            if ($usesSoftDeletes) {
-                $keyName = new $modelClass()->getKeyName();
-                $query->whereIn('entity_id', $modelClass::query()->select($keyName));
-            }
-
-            if ($query->exists()) {
-                $errors[] = __('eav::attributes.validation.unique');
-                break;
-            }
+        if ($entityId) {
+            $query->where('entity_id', '!=', $entityId);
         }
 
-        return $errors;
+        if ($usesSoftDeletes) {
+            $keyName = (new $modelClass)->getKeyName();
+            $query->whereIn('entity_id', $modelClass::query()->select($keyName));
+        }
+
+        if ($query->exists()) {
+            return [__('eav::attributes.validation.unique')];
+        }
+
+        return [];
     }
 }

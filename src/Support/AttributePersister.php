@@ -81,7 +81,8 @@ class AttributePersister
     /**
      * Persist fields and delete all existing rows not in this set.
      *
-     * @param  Collection<int, Field>  $fields
+     * @param Collection<int, Field> $fields
+     * @throws \Throwable
      */
     public function replace(Collection $fields): void
     {
@@ -152,11 +153,19 @@ class AttributePersister
      */
     public function add(Attributable $entity, Collection $fields): void
     {
-        if ($fields->isNotEmpty()) {
-            $type = $entity->getAttributeEntityType();
-            $this->pending[$type][$entity->id] = $fields;
-            $this->entities[$entity->id] = $entity;
+        if ($fields->isEmpty()) {
+            return;
         }
+
+        $type = $entity->getAttributeEntityType();
+        $entityId = $entity->getKey();
+
+        $this->pending[$type][$entityId] = ($this->pending[$type][$entityId] ?? collect())
+            ->merge($fields)
+            ->unique()
+            ->values();
+
+        $this->entities[$entityId] = $entity;
     }
 
     /**

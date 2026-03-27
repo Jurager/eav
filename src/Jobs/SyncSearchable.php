@@ -6,7 +6,6 @@ use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
-use Jurager\Eav\Support\EavModels;
 
 /**
  * Re-indexes all entities that have a stored value for the given attribute.
@@ -19,6 +18,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
+
     public function __construct(
         protected string $entityType,
         protected int $attributeId,
@@ -27,24 +27,36 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return $this->entityType.':'.$this->attributeId;
+        return "{$this->entityType}:{$this->attributeId}";
     }
 
     public function handle(): void
     {
         $modelClass = Relation::getMorphedModel($this->entityType);
 
-        if (! $modelClass || ! method_exists($modelClass, 'searchable')) {
+        if (! $modelClass || ! is_subclass_of($modelClass, \Illuminate\Database\Eloquent\Model::class)) {
             return;
         }
 
-        $subquery = EavModels::query('entity_attribute')
-            ->select('entity_id')
-            ->where('attribute_id', $this->attributeId)
-            ->where('entity_type', $this->entityType);
+        if (! method_exists($modelClass, 'searchable')) {
+            return;
+        }
 
-        $keyName = (new $modelClass())->getKeyName();
+        $model = new $modelClass();
+        $key = $model->getKeyName();
+        $table = $model->getTable();
 
-        $modelClass::whereIn($keyName, $subquery)->searchable();
+        $query = $modelClass::query()
+            ->whereExists(function ($q) use ($table, $key) {
+                $q->selectRaw(1)
+                    ->from('entity_attribute')
+                    ->whereColumn("entity_attribute.entity_id", "{$table}.{$key}")
+                    ->where('entity_attribute.attribute_id', $this->attributeId)
+                    ->where('entity_attribute.entity_type', $this->entityType);
+            });
+
+        $query->chunkById(1000, function ($models) {
+            $models->each->searchable();
+        }, $key);
     }
 }

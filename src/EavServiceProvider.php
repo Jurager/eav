@@ -3,9 +3,12 @@
 namespace Jurager\Eav;
 
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeObserver;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
 class EavServiceProvider extends ServiceProvider
@@ -16,6 +19,8 @@ class EavServiceProvider extends ServiceProvider
 
         $this->app->singleton(LocaleRegistry::class);
         $this->app->singleton(FieldTypeRegistry::class);
+        $this->app->singleton(SchemaRegistry::class);
+        $this->app->singleton(EnumRegistry::class);
         $this->app->singleton(AttributeInheritanceResolver::class);
     }
 
@@ -37,6 +42,12 @@ class EavServiceProvider extends ServiceProvider
 
         if ($attributeModel) {
             $attributeModel::observe(AttributeObserver::class);
+        }
+
+        $enumModel = config('eav.models.attribute_enum');
+
+        if ($enumModel) {
+            $enumModel::observe(AttributeEnumObserver::class);
         }
     }
 }
