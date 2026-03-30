@@ -88,7 +88,7 @@ For bulk imports use `AttributeManager::sync()`. The schema is loaded once per u
 `(entity_type, params)` combination and reused across all chunks:
 
 ```php
-use Jurager\Eav\Support\AttributeManager;
+use Jurager\Eav\Managers\AttributeManager;
 
 AttributeManager::sync(collect([
     ['entity' => $product1, 'data' => ['color' => 'red',  'weight' => 1.5]],

@@ -73,9 +73,4 @@ Both jobs are queued. Make sure a queue worker is running:
 php artisan queue:work
 ```
 
-To use a dedicated queue, publish the config and set:
-
-```php
-// config/eav.php
-'queue' => 'search',
-```
+To route the jobs to a dedicated queue, set `$queue` on the job classes via your application's `Queue::before()` callback or configure it via `config/queue.php`.

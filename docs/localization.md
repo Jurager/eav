@@ -21,25 +21,13 @@ $registry->localeId('en');           // locale ID by code
 $registry->localeCode(1);            // locale code by ID
 $registry->validLocaleIds();         // all valid locale IDs
 $registry->isValidLocaleId(2);       // check if locale ID exists
-$registry->resolveLocaleId('ru');    // ID by code, or default if not found
+$registry->resolve('ru');    // ID by code, or default if not found
 $registry->flush();                  // clear cache (e.g. in tests)
 ```
 
-## Translating Custom Models
+## Translating Models
 
-Add a `translations()` relation to any model using the `entity_translations` table:
-
-```php
-use Jurager\Eav\EavModels;
-use Illuminate\Database\Eloquent\Relations\MorphToMany;
-
-public function translations(): MorphToMany
-{
-    return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
-        ->using(EavModels::class('entity_translation'))
-        ->withPivot(['id', 'label', 'params', 'updated_at']);
-}
-```
+For persisting translated labels on EAV models (attributes, groups, enums) and any custom application model, use `TranslationManager::save()`. See [Translations](translations.md) for details.
 
 ## Localizable Attribute Values
 

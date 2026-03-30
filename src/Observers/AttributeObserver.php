@@ -47,7 +47,7 @@ class AttributeObserver
     {
         $this->schema->flush($attribute->entity_type);
 
-        // It only makes sense to link if he participated in the search at all
+        // It only makes sense to link if participated in the search at all
         if ($attribute->searchable) {
             $this->syncSearchable($attribute);
         }

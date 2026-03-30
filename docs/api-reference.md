@@ -5,9 +5,80 @@ weight: 120
 
 # API Reference
 
+## AttributeSchemaManager
+
+`Jurager\Eav\Managers\AttributeSchemaManager`
+
+Singleton. Primary entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values.
+
+### Attributes
+
+- `createAttribute(array $data): Attribute` — create attribute; strips `translations` and persists them; dispatches `AttributeCreated`
+- `updateAttribute(Attribute $attribute, array $data): Attribute` — update attribute; re-evaluates type constraints; dispatches `AttributeUpdated`
+- `deleteAttribute(Attribute $attribute): void` — delete attribute; dispatches `AttributeDeleted` with pre-deletion snapshot
+- `sortAttribute(Attribute $attribute, int $position): void` — move to zero-based position within its group; siblings renumbered
+
+### Attribute Groups
+
+- `createGroup(array $data): AttributeGroup` — dispatches `AttributeGroupCreated`
+- `updateGroup(AttributeGroup $group, array $data): AttributeGroup` — dispatches `AttributeGroupUpdated`
+- `deleteGroup(AttributeGroup $group): void` — dispatches `AttributeGroupDeleted`
+- `sortGroup(AttributeGroup $group, int $position): void`
+- `attachAttributesToGroup(AttributeGroup $group, array $attributeIds): void` — attach attributes by ID; existing rows unaffected
+
+### Enum Values
+
+- `createEnum(Attribute $attribute, array $data): AttributeEnum` — dispatches `AttributeEnumCreated`
+- `updateEnum(AttributeEnum $enum, array $data): AttributeEnum` — dispatches `AttributeEnumUpdated`
+- `deleteEnum(AttributeEnum $enum): void` — dispatches `AttributeEnumDeleted`
+
+### Querying
+
+All query methods accept an optional `callable $modifier`. Without a modifier they return a `Collection`. Pass a modifier to apply scopes, pagination, or sorting — the modifier receives a Builder and its return value is passed through.
+
+- `getAttributes(?callable $modifier = null): mixed`
+- `getGroups(?callable $modifier = null): mixed`
+- `getEnums(Attribute $attribute, ?callable $modifier = null): mixed`
+- `getTypes(?callable $modifier = null): mixed`
+
+### Find by ID
+
+Each method calls `findOrFail()` and throws `ModelNotFoundException` if the record does not exist.
+
+- `getAttribute(int $id): Attribute`
+- `getGroup(int $id): AttributeGroup`
+- `getEnum(int $id): AttributeEnum`
+- `getType(int $id): AttributeType`
+
+### Search
+
+- `searchAttributes(string $query, ?callable $modifier = null): mixed` — full-text search via Laravel Scout; throws `SearchNotAvailableException` if the attribute model does not use Scout
+
+---
+
+## TranslationManager
+
+`Jurager\Eav\Managers\TranslationManager`
+
+Singleton. Handles locale CRUD and persists translated labels for any model with a `translations()` MorphToMany relation.
+
+### Locales
+
+- `getLocales(?callable $modifier = null): mixed` — without modifier returns Collection; with modifier passes Builder through
+- `getLocale(int $id): Locale`
+- `createLocale(array $data): Locale` — flushes `LocaleRegistry` cache
+- `updateLocale(Locale $locale, array $data): Locale` — flushes `LocaleRegistry` cache
+- `deleteLocale(Locale $locale): void` — flushes `LocaleRegistry` cache
+
+### Translations
+
+- `save(Model $model, array $translations): void` — sync translated labels for any model; entries without a `label` are discarded; locales not in the array are removed; additional display fields (`hint`, `placeholder`, `short_name`) are packed into the `params` JSON column
+
+---
+
 ## AttributeManager
 
-`Jurager\Eav\Support\AttributeManager`
+`Jurager\Eav\Managers\AttributeManager`
 
 Accessed via `$model->attributes()`. One instance per model instance (cached).
 
@@ -160,7 +231,7 @@ Registered as singleton. Caches locale data to avoid repeated DB queries.
 
 ## AttributeInheritanceResolver
 
-`Jurager\Eav\AttributeInheritanceResolver`
+`Jurager\Eav\Support\AttributeInheritanceResolver`
 
 Registered as singleton.
 
