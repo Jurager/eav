@@ -97,9 +97,9 @@ class SelectField extends Field
             );
         }
 
-        return $this->enum($localeId) !== null
-            ? $this->enumLabel($this->enum($localeId), $localeId)
-            : null;
+        $enum = $this->enum($localeId);
+
+        return $enum !== null ? $this->enumLabel($enum, $localeId) : null;
     }
 
     /**
