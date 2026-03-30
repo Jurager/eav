@@ -14,7 +14,7 @@ use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
-use Jurager\Eav\Support\AttributeManager;
+use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;

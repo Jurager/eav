@@ -1,6 +1,6 @@
 <?php
 
-namespace Jurager\Eav\Support;
+namespace Jurager\Eav\Managers;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;

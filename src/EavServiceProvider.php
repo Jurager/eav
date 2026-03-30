@@ -10,6 +10,8 @@ use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
+use Jurager\Eav\Managers\AttributeSchemaManager;
+use Jurager\Eav\Managers\TranslationManager;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -22,6 +24,8 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(SchemaRegistry::class);
         $this->app->singleton(EnumRegistry::class);
         $this->app->singleton(AttributeInheritanceResolver::class);
+        $this->app->singleton(TranslationManager::class);
+        $this->app->singleton(AttributeSchemaManager::class);
     }
 
     public function boot(): void
@@ -38,16 +42,23 @@ class EavServiceProvider extends ServiceProvider
 
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
-        $attributeModel = config('eav.models.attribute');
+        $this->registerObservers();
+    }
 
-        if ($attributeModel) {
-            $attributeModel::observe(AttributeObserver::class);
-        }
+    private function registerObservers(): void
+    {
+        $models = [
+            'attribute'      => AttributeObserver::class,
+            'attribute_enum' => AttributeEnumObserver::class,
+        ];
 
-        $enumModel = config('eav.models.attribute_enum');
+        foreach ($models as $key => $observer) {
 
-        if ($enumModel) {
-            $enumModel::observe(AttributeEnumObserver::class);
+            $model = config("eav.models.$key");
+
+            if ($model) {
+                $model::observe($observer);
+            }
         }
     }
 }
