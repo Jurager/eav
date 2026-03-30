@@ -16,6 +16,8 @@ use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Support\AttributePersister;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * Coordinates attribute schema loading, in-memory value changes, and persistence.

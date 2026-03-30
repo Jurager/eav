@@ -9,6 +9,8 @@ use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Managers\AttributeManager;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * Validates incoming attribute payloads against field rules and uniqueness.
