@@ -173,8 +173,7 @@ class AttributeManager
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
-                $schema = $prebuiltSchema ?? static::schema($entity);
-                $fields = $schema->fill($item['data']);
+                $fields = ($prebuiltSchema ?? static::schema($entity))->fill($item['data']);
 
                 if ($fields->isNotEmpty()) {
                     $persister->add($entity, $fields);
@@ -322,7 +321,8 @@ class AttributeManager
     /**
      * Replace all entity_attribute rows with the given fields.
      *
-     * @param  array<string, Field>  $fields
+     * @param array<string, Field> $fields
+     * @throws \Throwable
      */
     public function replace(array $fields): bool
     {
@@ -383,7 +383,6 @@ class AttributeManager
      * @param  int|null  $paginated  When set, returns a paginator instead of a collection.
      * @return Collection<int, Model>|LengthAwarePaginator
      *
-     * @throws BindingResolutionException
      */
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
@@ -650,6 +649,7 @@ class AttributeManager
      */
     protected function hydrate(Collection $attributes): void
     {
+        /** @var Collection<int|string, Collection<int, object>> $records */
         $records = $this->entity
             ? $this->entityQuery()
                 ->whereIn('attribute_id', $attributes->pluck('id')->all())

@@ -232,7 +232,7 @@ class AttributePersister
             ->whereIn('attribute_id', $attributeIds)
             ->orderBy('id')
             ->get(['id', 'entity_id', 'attribute_id'])
-            ->groupBy(fn ($row) => "{$row->entity_id}:{$row->attribute_id}");
+            ->groupBy(fn ($row) => "$row->entity_id:$row->attribute_id");
 
         ['updates' => $updates, 'inserts' => $inserts, 'deletes' => $deletes] =
             $this->partition($type, $grouped, $existing);
@@ -425,7 +425,7 @@ class AttributePersister
                 $column = $field->column();
                 $localizable = $field->isLocalizable();
                 $values = $field->toStorage();
-                $records = $existing->get("{$entityId}:{$attrId}", collect())->values();
+                $records = $existing->get("$entityId:$attrId", collect())->values();
 
                 $valueCount = count($values);
                 $recordCount = $records->count();
@@ -526,7 +526,7 @@ class AttributePersister
         $mapped = [];
 
         $created
-            ->groupBy(fn ($record) => "{$record->entity_id}:{$record->attribute_id}")
+            ->groupBy(fn ($record) => "$record->entity_id:$record->attribute_id")
             ->each(function (Collection $records, string $key) use ($payloads, &$mapped): void {
                 foreach ($records->values() as $position => $record) {
                     $translations = $payloads[$key][$position] ?? [];
@@ -556,7 +556,7 @@ class AttributePersister
                 fn (array $translations, int $recordId) => collect($translations)
                     ->filter(fn (array $t) => isset($t['locale_id']))
                     ->mapWithKeys(fn (array $t) => [
-                        "{$recordId}:{$t['locale_id']}" => [
+                        "$recordId:{$t['locale_id']}" => [
                             'entity_type' => self::MODEL_ATTRIBUTE,
                             'entity_id' => $recordId,
                             'locale_id' => (int) $t['locale_id'],
@@ -581,7 +581,7 @@ class AttributePersister
             return;
         }
 
-        $columns = count($rows->first());
+        $columns = count($rows->first() ?? []);
         $size = max(1, intdiv(self::BIND_LIMIT, max(1, $columns)));
 
         $rows->chunk($size)->each($callback);
@@ -612,7 +612,7 @@ class AttributePersister
      */
     private function withinTimestamp(callable $callback): void
     {
-        $this->timestamp = now();
+        $this->timestamp = Carbon::now();
 
         try {
             $callback();

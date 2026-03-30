@@ -12,17 +12,17 @@ use Jurager\Eav\Registry\LocaleRegistry;
  */
 abstract class Field
 {
-    public const STORAGE_TEXT = 'value_text';
+    public const string STORAGE_TEXT = 'value_text';
 
-    public const STORAGE_INTEGER = 'value_integer';
+    public const string STORAGE_INTEGER = 'value_integer';
 
-    public const STORAGE_FLOAT = 'value_float';
+    public const string STORAGE_FLOAT = 'value_float';
 
-    public const STORAGE_BOOLEAN = 'value_boolean';
+    public const string STORAGE_BOOLEAN = 'value_boolean';
 
-    public const STORAGE_DATE = 'value_date';
+    public const string STORAGE_DATE = 'value_date';
 
-    public const STORAGE_DATETIME = 'value_datetime';
+    public const string STORAGE_DATETIME = 'value_datetime';
 
     /**
      * @var array<int, array{locale_id: int|null, value: mixed}>

@@ -2,6 +2,8 @@
 
 namespace Jurager\Eav\Fields;
 
+use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Contracts\Container\CircularDependencyException;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -151,6 +153,10 @@ class SelectField extends Field
         return $this->validateMultipleValues($values);
     }
 
+    /**
+     * @throws CircularDependencyException
+     * @throws BindingResolutionException
+     */
     private function validateMultipleValues(array $values): bool
     {
         foreach ($values as $value) {
@@ -186,6 +192,10 @@ class SelectField extends Field
         return [['locale_id' => null, 'value' => $normalized]];
     }
 
+    /**
+     * @throws CircularDependencyException
+     * @throws BindingResolutionException
+     */
     protected function validate(mixed $value): bool
     {
         if ($value === null) {

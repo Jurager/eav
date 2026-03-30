@@ -27,7 +27,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return "{$this->entityType}:{$this->attributeId}";
+        return "$this->entityType:$this->attributeId";
     }
 
     public function handle(): void
@@ -50,7 +50,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
             ->whereExists(function ($q) use ($table, $key) {
                 $q->selectRaw(1)
                     ->from('entity_attribute')
-                    ->whereColumn("entity_attribute.entity_id", "{$table}.{$key}")
+                    ->whereColumn("entity_attribute.entity_id", "$table.$key")
                     ->where('entity_attribute.attribute_id', $this->attributeId)
                     ->where('entity_attribute.entity_type', $this->entityType);
             });

@@ -25,6 +25,8 @@ use LogicException;
  * Requires the model to implement Attributable.
  *
  * @property Collection $attribute_relation
+ *
+ * @phpstan-require-implements Attributable
  */
 trait HasAttributes
 {
@@ -51,14 +53,16 @@ trait HasAttributes
      */
     public function validate(array $input): array
     {
-        return (new AttributeValidator($this, $this->attributeManager))->validate($input);
+        return new AttributeValidator($this, $this->attributeManager)->validate($input);
     }
 
     /**
      * Return available attribute definitions for this entity.
      *
-     * @param  array<string, mixed>  $params
+     * @param array<string, mixed> $params
      * @return Collection<int, mixed>
+     * @throws BindingResolutionException
+     * @throws CircularDependencyException
      */
     public function getAvailableAttributes(array $params = []): Collection
     {
@@ -279,7 +283,7 @@ trait HasAttributes
             return null;
         }
 
-        $entityIds = $allEntities instanceof \Illuminate\Support\Collection
+        $entityIds = $allEntities instanceof Collection
             ? $allEntities->pluck('id')
             : collect($allEntities)->pluck('id');
 
@@ -298,8 +302,8 @@ trait HasAttributes
         $relatedKey = $relation->getRelatedPivotKeyName();
 
         return EavModels::query('attribute')
-            ->join($pivotTable, "{$pivotTable}.{$relatedKey}", '=', 'attribute.id')
-            ->whereIn("{$pivotTable}.{$foreignKey}", $entityIds)
+            ->join($pivotTable, "$pivotTable.$relatedKey", '=', 'attribute.id')
+            ->whereIn("$pivotTable.$foreignKey", $entityIds)
             ->select('attribute.*')
             ->distinct()
             ->withRelations();
