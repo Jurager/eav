@@ -2,7 +2,7 @@
 
 namespace Jurager\Eav\Registry;
 
-use InvalidArgumentException;
+use Jurager\Eav\Exceptions\InvalidFieldTypeException;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 
@@ -32,7 +32,7 @@ class FieldTypeRegistry
     public function register(string $type, string $class): void
     {
         if (! is_subclass_of($class, Field::class)) {
-            throw new InvalidArgumentException("Class '$class' must extend Field.");
+            throw InvalidFieldTypeException::notAField($class);
         }
 
         $this->types[$type] = $class;
@@ -51,7 +51,7 @@ class FieldTypeRegistry
     public function resolve(string $type): string
     {
         if (! $this->has($type)) {
-            throw new InvalidArgumentException("Field type '$type' is not registered.");
+            throw InvalidFieldTypeException::notRegistered($type);
         }
 
         return $this->types[$type];
@@ -64,6 +64,10 @@ class FieldTypeRegistry
      */
     public function make(Attribute $attribute): Field
     {
+        if ($attribute->type === null) {
+            throw InvalidFieldTypeException::typeNotLoaded($attribute->code);
+        }
+
         $class = $this->resolve($attribute->type->code);
 
         return new $class($attribute, $this->localeRegistry);

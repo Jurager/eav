@@ -4,7 +4,7 @@ namespace Jurager\Eav\Support;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use InvalidArgumentException;
+use Jurager\Eav\Exceptions\InvalidConfigurationException;
 
 /**
  * Resolves EAV model classes from config, allowing apps to swap in their own subclasses.
@@ -29,7 +29,7 @@ class EavModels
     public static function class(string $key): string
     {
         return config("eav.models.$key")
-            ?? throw new InvalidArgumentException("EAV model '$key' is not configured in eav.models.");
+            ?? throw InvalidConfigurationException::modelNotConfigured($key);
     }
 
     public static function query(string $key): Builder

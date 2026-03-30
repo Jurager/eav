@@ -19,6 +19,12 @@ class AttributeValidator
 
     private Attributable $entity;
 
+    private string $entityType;
+
+    private mixed $entityId;
+
+    private bool $usesSoftDeletes;
+
     /**
      * Pass an existing AttributeManager to reuse its schema cache.
      *
@@ -30,6 +36,13 @@ class AttributeValidator
         $this->entity = $entity;
         $this->manager = $manager ?? AttributeManager::for($entity);
         $this->manager->ensureSchema();
+
+        $this->entityType      = $entity->getAttributeEntityType();
+        $this->entityId        = $entity->id ?? null;
+
+        $modelClass            = Relation::getMorphedModel($this->entityType);
+
+        $this->usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
     }
 
     /**
@@ -107,39 +120,43 @@ class AttributeValidator
      */
     private function validateUniqueness(Field $field): array
     {
-        $entityType = $this->entity->getAttributeEntityType();
-        $entityId = $this->entity->id ?? null;
-        $attributeId = $field->attribute()->id;
-        $column = $field->column();
+        $base = EavModels::query('entity_attribute')
+            ->where('entity_type', $this->entityType)
+            ->where('attribute_id', $field->attribute()->id)
+            ->when($this->entityId, fn ($q) => $q->where('entity_id', '!=', $this->entityId))
+            ->when($this->usesSoftDeletes, function ($q) {
+                $modelClass = Relation::getMorphedModel($this->entityType);
+                $q->whereIn('entity_id', $modelClass::query()->select((new $modelClass())->getKeyName()));
+            });
 
-        $values = array_values(array_filter(array_column($field->toStorage(), 'value')));
+        if ($field->isLocalizable()) {
+            $labels = collect($field->toStorage())
+                ->flatMap(fn ($item) => $item['translations'] ?? [])
+                ->filter(fn ($t) => isset($t['value']) && $t['value'] !== null && $t['value'] !== '');
 
-        if (empty($values)) {
-            return [];
+            if ($labels->isEmpty()) {
+                return [];
+            }
+
+            $conflict = EavModels::query('entity_translation')
+                ->where('entity_type', 'entity_attribute')
+                ->whereIn('entity_id', $base->select('id'))
+                ->where(function ($q) use ($labels) {
+                    foreach ($labels as $t) {
+                        $q->orWhere(fn ($q) => $q->where('locale_id', $t['locale_id'])->where('label', $t['value']));
+                    }
+                })
+                ->exists();
+        } else {
+            $values = array_values(array_filter(array_column($field->toStorage(), 'value'), fn ($v) => $v !== null));
+
+            if (empty($values)) {
+                return [];
+            }
+
+            $conflict = $base->whereNotNull($field->column())->whereIn($field->column(), $values)->exists();
         }
 
-        $modelClass = Relation::getMorphedModel($entityType);
-        $usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
-
-        $query = EavModels::query('entity_attribute')
-            ->where('entity_type', $entityType)
-            ->where('attribute_id', $attributeId)
-            ->whereNotNull($column)
-            ->whereIn($column, $values);
-
-        if ($entityId) {
-            $query->where('entity_id', '!=', $entityId);
-        }
-
-        if ($usesSoftDeletes) {
-            $keyName = (new $modelClass)->getKeyName();
-            $query->whereIn('entity_id', $modelClass::query()->select($keyName));
-        }
-
-        if ($query->exists()) {
-            return [__('eav::attributes.validation.unique')];
-        }
-
-        return [];
+        return $conflict ? [__('eav::attributes.validation.unique')] : [];
     }
 }

@@ -8,14 +8,14 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
-use InvalidArgumentException;
+use Jurager\Eav\Exceptions\InvalidConfigurationException;
+use Jurager\Eav\Exceptions\MissingEntityException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
-use LogicException;
 
 /**
  * Coordinates attribute schema loading, in-memory value changes, and persistence.
@@ -72,10 +72,10 @@ class AttributeManager
 
         if (class_exists($entity)) {
             if (! is_subclass_of($entity, Attributable::class)) {
-                throw new InvalidArgumentException("$entity must implement Attributable");
+                throw InvalidConfigurationException::missingAttributableContract($entity);
             }
 
-            return new static(new $entity);
+            return new static(new $entity());
         }
 
         // String entity type (e.g. 'product') — schema-only, no entity instance.
@@ -169,7 +169,7 @@ class AttributeManager
         }
 
         foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
-            $persister = new AttributePersister;
+            $persister = new AttributePersister();
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
@@ -458,7 +458,7 @@ class AttributeManager
     public function aggregate(string $code, string $aggregate): ?float
     {
         if (! in_array($aggregate, ['sum', 'avg', 'min', 'max'], true)) {
-            throw new InvalidArgumentException("Invalid aggregate '$aggregate'. Allowed: sum, avg, min, max.");
+            throw new \InvalidArgumentException("Invalid aggregate '$aggregate'. Allowed: sum, avg, min, max.");
         }
 
         $field = $this->field($code);
@@ -624,7 +624,7 @@ class AttributeManager
     /** @throws LogicException */
     protected function entityOrFail(): Attributable
     {
-        return $this->entity ?? throw new LogicException('Entity is required. Use AttributeManager::for($entity).');
+        return $this->entity ?? throw MissingEntityException::forManager();
     }
 
     /**
@@ -685,7 +685,7 @@ class AttributeManager
 
     private function persister(): AttributePersister
     {
-        return $this->persister ?? throw new LogicException('Entity is required. Use AttributeManager::for($entity).');
+        return $this->persister ?? throw MissingEntityException::forManager();
     }
 
     /** @return array<string, mixed> */

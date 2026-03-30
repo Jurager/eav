@@ -8,7 +8,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
-use LogicException;
+use Jurager\Eav\Exceptions\MissingEntityException;
 
 /**
  * Handles persistence of EAV attribute values and their translations.
@@ -628,6 +628,6 @@ class AttributePersister
             ? EavModels::query(self::MODEL_ATTRIBUTE)
                 ->where('entity_type', $this->entity->getAttributeEntityType())
                 ->where('entity_id', $this->entity->id)
-            : throw new LogicException('entityQuery() requires an entity. Use new AttributePersister($entity).');
+            : throw MissingEntityException::forPersister();
     }
 }

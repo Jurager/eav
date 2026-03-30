@@ -15,7 +15,7 @@ class AttributeInheritanceResolver
     /**
      * Expand a collection of entities by appending their attribute-inheriting ancestors.
      *
-     * @param  Collection<int, mixed>  $entities  Pre-loaded entities (must have shouldInheritAttributes()).
+     * @param  Collection<int, mixed>  $entities  Preloaded entities (must have shouldInheritAttributes()).
      * @param  string  $model  Fully-qualified model class to query ancestors from.
      * @return Collection<int, mixed>
      */
@@ -116,7 +116,7 @@ class AttributeInheritanceResolver
     }
 
     /**
-     * Walk the parent_id chain through a pre-loaded ancestor map,
+     * Walk the parent_id chain through a preloaded ancestor map,
      * stopping when an ancestor does not inherit attributes.
      *
      * @param  Collection<int, mixed>  $ancestors  Keyed by id.

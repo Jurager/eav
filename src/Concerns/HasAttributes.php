@@ -17,7 +17,7 @@ use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Support\AttributeManager;
 use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
-use LogicException;
+use Jurager\Eav\Exceptions\InvalidConfigurationException;
 
 /**
  * Adds EAV attribute support to Eloquent models.
@@ -83,7 +83,7 @@ trait HasAttributes
     {
         if ($this->getAttributeScope() === 'byRelation') {
             $model = static::getAttributeRelationModel()
-                ?? throw new LogicException(static::class.' must implement getAttributeRelationModel() when getAttributeScope() returns "byRelation".');
+                ?? throw InvalidConfigurationException::missingRelationModel(static::class);
 
             return $this->getAttributesByRelationQuery($params, $model);
         }

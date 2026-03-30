@@ -2,7 +2,7 @@
 
 namespace Jurager\Eav\Registry;
 
-use RuntimeException;
+use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -25,7 +25,7 @@ class LocaleRegistry
         $code = config('app.locale', 'en');
 
         return $this->defaultLocaleId ??= EavModels::query('locale')->where('code', $code)->value('id')
-            ?? throw new RuntimeException("Default locale \"$code\" not found in the locales table. Add it or update app.locale.");
+            ?? throw InvalidConfigurationException::localeNotFound($code);
     }
 
     /**
