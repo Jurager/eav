@@ -1,25 +1,25 @@
 ---
-title: Querying by Attributes
-weight: 50
+title: Querying
+weight: 60
 ---
 
-# Querying by Attributes
+# Querying
 
-The `HasAttributes` trait adds Eloquent query scopes for filtering entities by their EAV values.
+The `HasAttributes` trait adds Eloquent query scopes for filtering entities by EAV values.
 
-## Exact Match
+## Exact match
 
 ```php
 Product::whereAttribute('color', 'red')->get();
 ```
 
-## Custom Operator
+## Custom operator
 
 ```php
 Product::whereAttribute('weight', 10, '>=')->get();
 ```
 
-## LIKE Search
+## LIKE
 
 ```php
 Product::whereAttributeLike('name', '%shirt%')->get();
@@ -31,13 +31,13 @@ Product::whereAttributeLike('name', '%shirt%')->get();
 Product::whereAttributeBetween('price', 100, 500)->get();
 ```
 
-## IN Set
+## IN set
 
 ```php
 Product::whereAttributeIn('status', ['new', 'sale'])->get();
 ```
 
-## Multiple Conditions (AND)
+## Multiple conditions
 
 ```php
 Product::whereAttributes([
@@ -48,4 +48,4 @@ Product::whereAttributes([
 ```
 
 > [!NOTE]
-> All attribute scopes are AND-combined. Each scope adds a `whereIn('id', subquery)` clause targeting the typed storage column resolved by the attribute's field type.
+> All conditions are AND-combined. Each scope adds a `whereIn('id', subquery)` clause targeting the typed storage column resolved from the attribute's field type.

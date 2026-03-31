@@ -1,11 +1,11 @@
 ---
-title: Managing Attribute Schema
-weight: 45
+title: Managing Schema
+weight: 50
 ---
 
-# Managing Attribute Schema
+# Managing Schema
 
-`AttributeSchemaManager` is the primary entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values. It is registered as a singleton and resolved via the service container.
+`SchemaManager` is the entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values.
 
 ```php
 use Jurager\Eav\Managers\SchemaManager;
@@ -14,7 +14,7 @@ $schema = app(SchemaManager::class);
 ```
 
 > [!NOTE]
-> `AttributeSchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use `AttributeManager` via `$model->attributes()`.
+> `SchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use `$model->attributes()`.
 
 ## Attributes
 
@@ -35,45 +35,40 @@ $attribute = $schema->createAttribute([
 ]);
 ```
 
-**Automatic behaviours:**
-- Type capability flags (`localizable`, `multiple`, `unique`, `filterable`, `searchable`) are forced to `false` if the attribute type does not support them.
-- `sort` is auto-positioned at the end of the group if not provided.
-- Translations are persisted automatically when `translations` is present in the data.
-- `AttributeCreated` event is dispatched.
+- `sort` is auto-positioned at the end of the group when omitted.
+- Translations are persisted automatically when `translations` is present.
+- Flag constraints are enforced by the attribute type (unsupported flags are forced to `false`).
+- Dispatches `AttributeCreated`.
 
 ### Update
 
 ```php
 $schema->updateAttribute($attribute, [
-    'code'         => 'base_color',
-    'localizable'  => false,
+    'code'        => 'base_color',
+    'localizable' => false,
     'translations' => [
         ['locale_id' => 1, 'label' => 'Base Color'],
     ],
 ]);
 ```
 
-Type constraints are re-evaluated on every update. `AttributeUpdated` event is dispatched.
+Type constraints are re-evaluated on every update. Dispatches `AttributeUpdated`.
 
 ### Delete
 
 ```php
-$schema->deleteAttribute($attribute);
+$schema->deleteAttribute($attribute); // dispatches AttributeDeleted (pre-deletion snapshot)
 ```
-
-`AttributeDeleted` event is dispatched with a snapshot of the attribute before deletion.
 
 ### Sort
 
-Move an attribute to a new zero-based position within its group. All siblings are renumbered:
+Move to a zero-based position within the group. Siblings are renumbered automatically:
 
 ```php
 $schema->sortAttribute($attribute, position: 0); // move to top
 ```
 
-## Attribute Groups
-
-### Create
+## Groups
 
 ```php
 $group = $schema->createGroup([
@@ -83,31 +78,16 @@ $group = $schema->createGroup([
         ['locale_id' => 2, 'label' => 'Размеры'],
     ],
 ]);
-```
 
-`sort` is auto-positioned at the end. `AttributeGroupCreated` event is dispatched.
-
-### Update / Delete / Sort
-
-```php
 $schema->updateGroup($group, ['code' => 'measurements']);
-
-$schema->deleteGroup($group); // dispatches AttributeGroupDeleted
-
+$schema->deleteGroup($group);
 $schema->sortGroup($group, position: 1);
-```
 
-### Attach Attributes to a Group
-
-```php
+// Attach attributes by ID (existing rows unaffected)
 $schema->attachAttributesToGroup($group, attributeIds: [4, 7, 12]);
 ```
 
-Attributes not in the given IDs are unaffected. The package does not enforce entity type — apply any additional constraints (e.g. `entity_type = product`) at the request/validation layer.
-
 ## Enum Values
-
-### Create / Update / Delete
 
 ```php
 $enum = $schema->createEnum($attribute, [
@@ -119,27 +99,21 @@ $enum = $schema->createEnum($attribute, [
 ]);
 
 $schema->updateEnum($enum, ['code' => 'crimson']);
-
-$schema->deleteEnum($enum); // dispatches AttributeEnumDeleted
+$schema->deleteEnum($enum);
 ```
 
 ## Querying
 
-All query methods accept an optional `callable` modifier. Without a modifier they return a `Collection`. Pass a modifier to apply scopes, sorting, filtering, or pagination — whatever the caller needs:
+All query methods accept an optional `callable` modifier. Without a modifier they return a `Collection`. Pass a modifier to apply scopes, sorting, or pagination:
 
 ```php
-// Collection (default)
-$attributes = $schema->getAttributes();
+$attributes = $schema->getAttributes(); // Collection
 
-// Paginated with custom scopes
 $paginated = $schema->getAttributes(
     fn ($q) => $q->where('entity_type', 'product')->paginate(15)
 );
 
-// Enums for a specific attribute
-$enums = $schema->getEnums($attribute, fn ($q) => $q->orderBy('sort')->get());
-
-// Types and groups
+$enums  = $schema->getEnums($attribute, fn ($q) => $q->orderBy('sort')->get());
 $types  = $schema->getTypes();
 $groups = $schema->getGroups(fn ($q) => $q->paginate(15));
 ```
@@ -147,17 +121,15 @@ $groups = $schema->getGroups(fn ($q) => $q->paginate(15));
 ## Find by ID
 
 ```php
-$attribute = $schema->getAttribute(42);
-$group     = $schema->getGroup(3);
-$enum      = $schema->getEnum(18);
-$type      = $schema->getType(1);
+$schema->getAttribute(42); // throws ModelNotFoundException if not found
+$schema->getGroup(3);
+$schema->getEnum(18);
+$schema->getType(1);
 ```
 
-Each method calls `findOrFail()` and throws `ModelNotFoundException` if the record does not exist.
+## Full-text Search
 
-## Search
-
-Full-text search via [Laravel Scout](https://laravel.com/docs/scout). Throws `SearchNotAvailableException` if the configured attribute model does not use Scout:
+Requires [Laravel Scout](https://laravel.com/docs/scout) on the `Attribute` model:
 
 ```php
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
@@ -165,12 +137,6 @@ use Jurager\Eav\Exceptions\SearchNotAvailableException;
 try {
     $results = $schema->searchAttributes('color', fn ($b) => $b->paginate(15));
 } catch (SearchNotAvailableException $e) {
-    // Scout not installed or attribute model not Searchable
+    // Scout not configured on the attribute model
 }
 ```
-
-The modifier receives a Scout `Builder`. Apply any Scout constraints before pagination.
-
-## Events
-
-Every mutation dispatches an event from `Jurager\Eav\Events\`. See [Events](events.md) for the full list.

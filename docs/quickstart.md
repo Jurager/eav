@@ -1,13 +1,13 @@
 ---
-title: Getting Started
-weight: 30
+title: Quickstart
+weight: 20
 ---
 
-# Getting Started
+# Quickstart
 
 ## Make a Model Attributable
 
-Add the `HasAttributes` trait and implement the `Attributable` contract. Only `getAttributeEntityType()` is required — all other contract methods have defaults in `HasAttributes`:
+Implement `Attributable` and add the `HasAttributes` trait. Only `getAttributeEntityType()` is required:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
@@ -24,9 +24,19 @@ class Product extends Model implements Attributable
 }
 ```
 
-### With Scout Search
+Register the entity type in the morph map so the package can resolve models by their type string:
 
-If the model uses [Laravel Scout](https://laravel.com/docs/scout), also add `HasSearchableAttributes` and resolve the trait conflict:
+```php
+// AppServiceProvider::boot()
+Relation::morphMap([
+    'product'  => Product::class,
+    'category' => Category::class,
+]);
+```
+
+## With Scout Search
+
+If the model uses [Laravel Scout](https://laravel.com/docs/scout), add `HasSearchableAttributes` and resolve the trait conflict:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
@@ -48,20 +58,9 @@ class Product extends Model implements Attributable
 }
 ```
 
-Register the morph map so the entity type resolves to the correct model:
+## Scoping Attributes via a Related Model
 
-```php
-Relation::morphMap([
-    'product'  => Product::class,
-    'category' => Category::class,
-]);
-```
-
-## Attribute Scope
-
-By default all entities of the same type share the same attribute schema (`global` scope).
-
-If attribute definitions are scoped through a related model — for example, a product's attributes are defined on its categories — override `getAttributeScope()`, `getAttributeRelationModel()`, and `getDefaultParameters()`:
+By default all entities of the same type share one attribute schema (`global` scope). If attribute definitions are managed per related model — for example, each product category has its own set of attributes — override three methods:
 
 ```php
 protected function getAttributeScope(): string
@@ -82,7 +81,7 @@ public function getDefaultParameters(): array
 }
 ```
 
-The related model must also implement `Attributable` and override `available_attributes()` with a `BelongsToMany` relation pointing to the `attributes` table:
+The relation model must also implement `Attributable` and expose `available_attributes()` as a `BelongsToMany` pointing to the `attributes` table:
 
 ```php
 // Category.php
@@ -94,4 +93,4 @@ public function available_attributes(): BelongsToMany
 ```
 
 > [!NOTE]
-> `available_attributes()` is defined in the `Attributable` contract and has a default implementation in `HasAttributes` that returns `null`. Override it on any model that acts as an attribute scope provider. The package calls this method directly — no dynamic method name resolution.
+> `available_attributes()` is declared in the `Attributable` contract and defaults to `null` in `HasAttributes`. Override it only on models that act as scope providers (e.g. `Category`).
