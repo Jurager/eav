@@ -8,9 +8,9 @@ weight: 45
 `AttributeSchemaManager` is the primary entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values. It is registered as a singleton and resolved via the service container.
 
 ```php
-use Jurager\Eav\Managers\AttributeSchemaManager;
+use Jurager\Eav\Managers\SchemaManager;
 
-$schema = app(AttributeSchemaManager::class);
+$schema = app(SchemaManager::class);
 ```
 
 > [!NOTE]

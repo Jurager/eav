@@ -16,7 +16,7 @@ use Jurager\Eav\Support\EavModels;
  * Responsible for create/read/update/delete/sort operations on attribute definitions.
  * For reading and writing attribute *values* on entities, use AttributeManager.
  */
-class AttributeSchemaManager
+class SchemaManager
 {
     private ?AttributeSchema $attributeSchema = null;
 
@@ -28,7 +28,8 @@ class AttributeSchemaManager
 
     public function __construct(
         protected TranslationManager $translations,
-    ) {}
+    ) {
+    }
 
     public function attribute(): AttributeSchema
     {
@@ -47,7 +48,7 @@ class AttributeSchemaManager
 
     public function type(): TypeSchema
     {
-        return $this->typeSchema ??= new TypeSchema($this->translations);
+        return $this->typeSchema ??= new TypeSchema();
     }
 
     /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */

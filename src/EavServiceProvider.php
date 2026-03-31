@@ -11,7 +11,7 @@ use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
-use Jurager\Eav\Managers\AttributeSchemaManager;
+use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 
 class EavServiceProvider extends ServiceProvider
@@ -27,7 +27,7 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(EnumRegistry::class);
         $this->app->singleton(AttributeInheritanceResolver::class);
         $this->app->singleton(TranslationManager::class);
-        $this->app->singleton(AttributeSchemaManager::class);
+        $this->app->singleton(SchemaManager::class);
     }
 
     public function boot(): void

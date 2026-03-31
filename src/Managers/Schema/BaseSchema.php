@@ -10,7 +10,8 @@ abstract class BaseSchema
 {
     public function __construct(
         protected TranslationManager $translations,
-    ) {}
+    ) {
+    }
 
     /** @return array<int, array<string, mixed>> */
     protected function extractTranslations(array &$data): array
