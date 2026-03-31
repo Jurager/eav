@@ -2,6 +2,8 @@
 
 namespace Jurager\Eav\Managers\Schema;
 
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted;
@@ -110,6 +112,98 @@ class AttributeSchema extends BaseSchema
         });
 
         return $attribute->fresh();
+    }
+
+    /**
+     * Create many attributes in batch
+     *
+     * @param  array<int, array<string, mixed>>  $attributesData
+     * @return Collection<string, Attribute>  Keyed by attribute code.
+     */
+    public function batch(array $attributesData, bool $fireEvents = true): Collection
+    {
+        if (empty($attributesData)) {
+            return collect();
+        }
+
+        $typeIds = array_values(array_unique(array_column($attributesData, 'attribute_type_id')));
+
+        /** @var Collection<int, AttributeType> $types */
+        $types = EavModels::query('attribute_type')
+            ->whereIn('id', $typeIds)
+            ->get()
+            ->keyBy('id');
+
+        // Pre-compute MAX(sort) per unique group in one query each (usually just a few groups).
+        $groupIds = array_values(array_unique(
+            array_map(fn (array $d) => $d['attribute_group_id'] ?? null, $attributesData),
+        ));
+        $sortCounters = [];
+
+        foreach ($groupIds as $groupId) {
+            $max = (int) EavModels::query('attribute')
+                ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
+                ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
+                ->max('sort');
+
+            $sortCounters[(string) $groupId] = $max;
+        }
+
+        $translationsByCode = [];
+        $now = Carbon::now();
+        $rows = [];
+
+        foreach ($attributesData as $data) {
+            $code = $data['code'];
+            $translationsByCode[$code] = $data['translations'] ?? [];
+            unset($data['translations']);
+
+            $type = $types[$data['attribute_type_id']] ?? null;
+
+            if ($type !== null) {
+                $data = $this->applyTypeConstraints($data, $type);
+            }
+
+            if (! isset($data['sort'])) {
+                $key = (string) ($data['attribute_group_id'] ?? '');
+                $data['sort'] = ++$sortCounters[$key];
+            }
+
+            $data['created_at'] = $now;
+            $data['updated_at'] = $now;
+            $rows[] = $data;
+        }
+
+        foreach (array_chunk($rows, 500) as $chunk) {
+            EavModels::query('attribute')->insert($chunk);
+        }
+
+        /** @var Collection<string, Attribute> $created */
+        $created = EavModels::query('attribute')
+            ->where('entity_type', $rows[0]['entity_type'])
+            ->whereIn('code', array_column($rows, 'code'))
+            ->get()
+            ->keyBy('code');
+
+        $translationBatch = [];
+
+        foreach ($created as $code => $attribute) {
+            $translations = $translationsByCode[$code] ?? [];
+
+            if (! empty($translations)) {
+                $translationBatch[] = [$attribute, $translations];
+            }
+
+            if ($fireEvents) {
+                Event::dispatch(new AttributeCreated($attribute));
+            }
+        }
+
+        if (! empty($translationBatch)) {
+            $this->translations->batch($translationBatch, $now);
+        }
+
+        return $created;
     }
 
     private function applyTypeConstraints(array $data, AttributeType $type): array

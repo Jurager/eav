@@ -31,6 +31,11 @@ class SchemaManager
     ) {
     }
 
+    public function translations(): TranslationManager
+    {
+        return $this->translations;
+    }
+
     public function attribute(): AttributeSchema
     {
         return $this->attributeSchema ??= new AttributeSchema($this->translations);

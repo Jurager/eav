@@ -39,6 +39,9 @@ class AttributeManager
     /** @var array<string, Collection<int, mixed>> */
     protected array $cachedAttributes = [];
 
+    /** @var array<string, bool> Tracks which schema param keys are fully loaded into $fields. */
+    private array $schemaLoaded = [];
+
     protected FieldTypeRegistry $fieldRegistry;
 
     private readonly ?AttributePersister $persister;
@@ -195,10 +198,21 @@ class AttributeManager
     public function ensureSchema(): static
     {
         $params = $this->entity?->getDefaultParameters() ?? [];
+        $key = $this->schemaParamsKey($params);
 
-        $this->resolveAttributes($params)
+        if (isset($this->schemaLoaded[$key])) {
+            return $this;
+        }
+
+        $attributes = $this->resolveAttributes($params);
+
+        $attributes
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
             ->each(fn ($attr) => $this->fields[$attr->code] = $this->fieldRegistry->make($attr));
+
+        if (count($this->fields) >= $attributes->count()) {
+            $this->schemaLoaded[$key] = true;
+        }
 
         return $this;
     }
