@@ -54,20 +54,44 @@ $product->attributes()->attach($fields);
 
 Both methods accept `array<string, Field>` as returned by `validate()`.
 
-## Validated Fill
+## Validation in Controllers
 
-`validate()` on the model validates the input and returns `array<string, Field>` ready for persistence:
+The FormRequest validates the HTTP envelope; `$model->validate()` handles EAV-specific rules and returns `array<string, Field>` ready for persistence:
 
 ```php
-$fields = $product->validate([
-    ['code' => 'color',  'values' => 'red'],
-    ['code' => 'weight', 'values' => 1.5],
-]);
+// PATCH /products/{product}/attributes
+// {
+//   "attributes": [
+//     { "code": "color",  "values": "red" },
+//     { "code": "weight", "values": 1.5 },
+//     { "code": "tags",   "values": ["sale", "new"] }
+//   ]
+// }
 
-$product->attributes()->attach($fields);
+class AttachProductAttributeRequest extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            'attributes' => ['required', 'array', 'min:1'],
+        ];
+    }
+}
+
+class ProductController extends Controller
+{
+    public function attachAttributes(AttachProductAttributeRequest $request, Product $product): Response
+    {
+        $fields = $product->validate($request->validated()['attributes']);
+
+        $product->attributes()->attach($fields);
+
+        return response('', 204);
+    }
+}
 ```
 
-Throws `ValidationException` on failure. Errors are keyed by attribute code.
+`validate()` throws `ValidationException` on failure — Laravel renders it as `422` automatically. Errors are keyed by attribute code.
 
 ## Batch Import
 
