@@ -86,6 +86,30 @@ class AttributeSchemaManager
         return EavModels::query('attribute_type')->findOrFail($id);
     }
 
+    /**
+     * Find an existing attribute by entity type and code, or create it.
+     * For existing attributes, only translations are updated — other fields are not overwritten.
+     */
+    public function findOrCreate(string $entityType, string $code, array $data): Attribute
+    {
+        $attribute = EavModels::query('attribute')
+            ->where('entity_type', $entityType)
+            ->where('code', $code)
+            ->first();
+
+        if ($attribute) {
+            $translations = $data['translations'] ?? [];
+
+            if (! empty($translations)) {
+                $this->translations->save($attribute, $translations);
+            }
+
+            return $attribute;
+        }
+
+        return $this->createAttribute($data);
+    }
+
     /** Create a new attribute, applying type constraints and auto-positioning. */
     public function createAttribute(array $data): Attribute
     {

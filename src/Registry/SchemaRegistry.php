@@ -26,9 +26,9 @@ class SchemaRegistry
     }
 
     /**
-     * Flush cached schemas for a specific entity type, or all schemas when null.
+     * Forget cached schemas for a specific entity type, or all schemas when null.
      */
-    public function flush(?string $entityType = null): void
+    public function forget(?string $entityType = null): void
     {
         if ($entityType === null) {
             $this->schemas = [];

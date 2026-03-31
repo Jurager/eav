@@ -225,7 +225,7 @@ Registered as singleton. Caches locale data to avoid repeated DB queries.
 - `localeCode(int $localeId): ?string` — code by ID
 - `localeId(string $code): ?int` — ID by code
 - `resolve(?string $code = null): int` — ID by code, or default if not found
-- `flush(): void` — clear cache (useful in tests)
+- `forget(): void` — clear cache
 
 ---
 

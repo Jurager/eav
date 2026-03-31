@@ -6,8 +6,6 @@ use Jurager\Eav\Support\EavModels;
 
 /**
  * Process-level cache of valid enum IDs keyed by attribute_id.
- *
- * Flushed by AttributeEnumObserver on every enum mutation.
  */
 class EnumRegistry
 {
@@ -35,9 +33,9 @@ class EnumRegistry
     }
 
     /**
-     * Flush cached enum IDs for a specific attribute, or all attributes when null.
+     * Forget cached enum IDs for a specific attribute, or all attributes when null.
      */
-    public function flush(?int $attributeId = null): void
+    public function forget(?int $attributeId = null): void
     {
         if ($attributeId === null) {
             $this->cache = [];

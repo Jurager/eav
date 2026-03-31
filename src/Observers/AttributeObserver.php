@@ -20,20 +20,19 @@ class AttributeObserver
     }
 
     /**
-     * Flush the schema cache when a new attribute is created.
+     * Forget the schema cache when a new attribute is created.
      */
     public function created(Attribute $attribute): void
     {
-        $this->schema->flush($attribute->entity_type);
+        $this->schema->forget($attribute->entity_type);
     }
 
     /**
      * Re-index entities when an attribute's searchable flag changes.
-     * Flush the schema cache so long-running processes pick up the new definition.
      */
     public function updated(Attribute $attribute): void
     {
-        $this->schema->flush($attribute->entity_type);
+        $this->schema->forget($attribute->entity_type);
 
         if ($attribute->wasChanged('searchable')) {
             $this->syncSearchable($attribute);
@@ -45,7 +44,7 @@ class AttributeObserver
      */
     public function deleted(Attribute $attribute): void
     {
-        $this->schema->flush($attribute->entity_type);
+        $this->schema->forget($attribute->entity_type);
 
         // It only makes sense to link if participated in the search at all
         if ($attribute->searchable) {
@@ -55,23 +54,21 @@ class AttributeObserver
 
     /**
      * Permanently remove the attribute and its data after re-indexing completes.
-     * Dispatched when the attribute model is force-deleted, or by SyncSearchable
-     * after re-indexing a trashed attribute.
      */
     public function forceDeleted(Attribute $attribute): void
     {
-        $this->schema->flush($attribute->entity_type);
-        $this->enums->flush($attribute->id);
+        $this->schema->forget($attribute->entity_type);
+        $this->enums->forget($attribute->id);
 
         PruneAttribute::dispatch($attribute->id);
     }
 
     /**
-     * Flush the schema cache when a soft-deleted attribute is restored.
+     * Forget the schema cache when a soft-deleted attribute is restored.
      */
     public function restored(Attribute $attribute): void
     {
-        $this->schema->flush($attribute->entity_type);
+        $this->schema->forget($attribute->entity_type);
 
         if ($attribute->searchable) {
             $this->syncSearchable($attribute);

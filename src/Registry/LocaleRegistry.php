@@ -2,83 +2,96 @@
 
 namespace Jurager\Eav\Registry;
 
+use Illuminate\Support\Collection;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Caches locale IDs and codes to avoid repeated database queries.
+ * In-memory cache for locale data.
  *
  * Registered as a singleton in EavServiceProvider.
  */
 class LocaleRegistry
 {
-    protected ?int $defaultLocaleId = null;
+    /** @var Collection<int, string>|null  id → code */
+    private ?Collection $locales = null;
 
-    /** @var array<int, string>|null */
-    protected ?array $localeCodes = null;
+    private ?int $defaultId = null;
 
     /**
-     * Return the default locale ID from application configuration.
+     * All locales keyed by ID, values are codes.
+     *
+     * @return Collection<int, string>
      */
-    public function defaultLocaleId(): int
+    public function all(): Collection
     {
+        return $this->locales ??= EavModels::query('locale')->pluck('code', 'id');
+    }
+
+    /**
+     * All locale IDs.
+     *
+     * @return array<int>
+     */
+    public function ids(): array
+    {
+        return $this->all()->keys()->all();
+    }
+
+    public function has(int $id): bool
+    {
+        return $this->all()->has($id);
+    }
+
+    /**
+     * Get the locale code for a given ID, or null if not found.
+     */
+    public function code(int $id): ?string
+    {
+        return $this->all()->get($id);
+    }
+
+    /**
+     * Find the locale ID for a given code, or null if not found.
+     */
+    public function find(string $code): ?int
+    {
+        $id = $this->all()->search($code);
+
+        return $id !== false ? $id : null;
+    }
+
+    /**
+     * Resolve a locale ID from a code string, falling back to the application default.
+     */
+    public function resolve(?string $code = null): int
+    {
+        return ($code !== null ? $this->find($code) : null) ?? $this->default();
+    }
+
+    /**
+     * The default locale ID from application configuration.
+     *
+     * @throws InvalidConfigurationException
+     */
+    public function default(): int
+    {
+        if ($this->defaultId !== null) {
+            return $this->defaultId;
+        }
+
         $code = config('app.locale', 'en');
 
-        return $this->defaultLocaleId ??= EavModels::query('locale')->where('code', $code)->value('id')
+        return $this->defaultId = $this->find($code)
             ?? throw InvalidConfigurationException::localeNotFound($code);
     }
 
     /**
-     * Return all valid locale IDs.
-     *
-     * @return array<int>
+     * Clear all cached data.
      */
-    public function validLocaleIds(): array
+    public function forget(): void
     {
-        return array_keys($this->localeCodes());
-    }
-
-    public function isValidLocaleId(int $localeId): bool
-    {
-        return isset($this->localeCodes()[$localeId]);
-    }
-
-    /**
-     * Return all locale codes keyed by locale ID.
-     *
-     * @return array<int, string>
-     */
-    public function localeCodes(): array
-    {
-        return $this->localeCodes ??= EavModels::query('locale')->pluck('code', 'id')->all();
-    }
-
-    public function localeCode(int $localeId): ?string
-    {
-        return $this->localeCodes()[$localeId] ?? null;
-    }
-
-    public function localeId(string $code): ?int
-    {
-        $result = array_search($code, $this->localeCodes(), true);
-
-        return $result !== false ? $result : null;
-    }
-
-    /**
-     * Resolve a locale ID from a code string, falling back to the default locale.
-     */
-    public function resolve(?string $code = null): int
-    {
-        return ($code !== null ? $this->localeId($code) : null) ?? $this->defaultLocaleId();
-    }
-
-    /**
-     * Flush all cached data. Useful in tests or long-running processes.
-     */
-    public function flush(): void
-    {
-        $this->defaultLocaleId = null;
-        $this->localeCodes = null;
+        $this->locales = null;
+        $this->defaultId = null;
     }
 }

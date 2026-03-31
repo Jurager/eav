@@ -177,7 +177,7 @@ abstract class Field
             return $this->values[0]['value'] ?? null;
         }
 
-        $localeId ??= $this->localeRegistry->defaultLocaleId();
+        $localeId ??= $this->localeRegistry->default();
 
         $localeIds = array_column($this->values, 'locale_id');
         $key = array_search($localeId, $localeIds, true);
@@ -192,7 +192,7 @@ abstract class Field
     {
         $normalized = $this->normalize($value);
         $localeId = $this->isLocalizable()
-            ? ($localeId ?? $this->localeRegistry->defaultLocaleId())
+            ? ($localeId ?? $this->localeRegistry->default())
             : null;
 
         $localeIds = array_column($this->values, 'locale_id');
@@ -395,7 +395,7 @@ abstract class Field
                     return $this->addError(__('eav::attributes.validation.locale_required'));
                 }
 
-                if (! $this->localeRegistry->isValidLocaleId($translation['locale_id'])) {
+                if (! $this->localeRegistry->has($translation['locale_id'])) {
                     return $this->addError(__('eav::attributes.validation.invalid_locale'));
                 }
 

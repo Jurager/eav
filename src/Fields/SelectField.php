@@ -88,7 +88,7 @@ class SelectField extends Field
      */
     public function label(?int $localeId = null): string|array|null
     {
-        $localeId ??= $this->localeRegistry->defaultLocaleId();
+        $localeId ??= $this->localeRegistry->default();
 
         if ($this->isMultiple()) {
             return array_map(
@@ -124,7 +124,7 @@ class SelectField extends Field
         $labels = array_values(array_unique(array_filter(
             array_merge(...array_map(
                 fn (int $localeId) => (array) $this->label($localeId),
-                array_keys($this->localeRegistry->localeCodes())
+                $this->localeRegistry->ids()
             )),
             static fn ($label) => $label !== null && $label !== ''
         )));

@@ -38,7 +38,7 @@ class TranslationManager
     {
         $locale = EavModels::query('locale')->create($data);
 
-        $this->localeRegistry->flush();
+        $this->localeRegistry->forget();
 
         return $locale;
     }
@@ -47,7 +47,7 @@ class TranslationManager
     {
         $locale->update($data);
 
-        $this->localeRegistry->flush();
+        $this->localeRegistry->forget();
 
         return $locale;
     }
@@ -56,7 +56,7 @@ class TranslationManager
     {
         $locale->delete();
 
-        $this->localeRegistry->flush();
+        $this->localeRegistry->forget();
     }
 
     /**

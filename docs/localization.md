@@ -21,8 +21,8 @@ $registry->localeId('en');           // locale ID by code
 $registry->localeCode(1);            // locale code by ID
 $registry->validLocaleIds();         // all valid locale IDs
 $registry->isValidLocaleId(2);       // check if locale ID exists
-$registry->resolve('ru');    // ID by code, or default if not found
-$registry->flush();                  // clear cache (e.g. in tests)
+$registry->resolve('ru');            // ID by code, or default if not found
+$registry->forget();                 // clear cache (e.g. in tests)
 ```
 
 ## Translating Models

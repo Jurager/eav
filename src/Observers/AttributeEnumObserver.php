@@ -9,11 +9,11 @@ class AttributeEnumObserver
 {
     public function saved(AttributeEnum $enum): void
     {
-        app(EnumRegistry::class)->flush($enum->attribute_id);
+        app(EnumRegistry::class)->forget($enum->attribute_id);
     }
 
     public function deleted(AttributeEnum $enum): void
     {
-        app(EnumRegistry::class)->flush($enum->attribute_id);
+        app(EnumRegistry::class)->forget($enum->attribute_id);
     }
 }
