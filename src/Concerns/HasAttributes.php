@@ -302,10 +302,12 @@ trait HasAttributes
         $relatedKey = $relation->getRelatedPivotKeyName();
 
         return EavModels::query('attribute')
-            ->join($pivotTable, "$pivotTable.$relatedKey", '=', 'attributes.id')
-            ->whereIn("$pivotTable.$foreignKey", $entityIds)
-            ->select('attributes.*')
-            ->distinct()
+            ->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
+                $query->from($pivotTable)
+                    ->select($relatedKey)
+                    ->whereIn($foreignKey, $entityIds)
+                    ->distinct();
+            })
             ->withRelations();
     }
 }
