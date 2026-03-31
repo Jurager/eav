@@ -144,7 +144,7 @@ class AttributeManager
         // Resolve from cache or query the DB and cache for the process lifetime.
         $attributes = $registry->resolve(
             $registryKey,
-            fn () => static::for($entity)->attributesQuery($parameters)?->get() ?? collect()
+            fn () => static::for($entity)->query($parameters)?->get() ?? collect()
         );
 
         return static::buildFromCollection($attributes);
@@ -618,7 +618,7 @@ class AttributeManager
      *
      * @param  array<string, mixed>  $params
      */
-    public function attributesQuery(array $params = []): ?Builder
+    public function query(array $params = []): ?Builder
     {
         return $this->entityOrFail()->getAvailableAttributesQuery($params);
     }
@@ -639,7 +639,7 @@ class AttributeManager
     {
         $key = $this->schemaParamsKey($params);
 
-        return $this->cachedAttributes[$key] ??= $this->attributesQuery($params)?->get() ?? collect();
+        return $this->cachedAttributes[$key] ??= $this->query($params)?->get() ?? collect();
     }
 
     /**

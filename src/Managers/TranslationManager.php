@@ -9,10 +9,6 @@ use Jurager\Eav\Support\EavModels;
 
 /**
  * Manages locales and persists translation data for any translatable model.
- *
- * Works with any Eloquent model that exposes a translations() MorphToMany relation.
- * This includes EAV models (Attribute, AttributeGroup, AttributeEnum) as well as
- * any application-level models that share the same translations table.
  */
 class TranslationManager
 {
@@ -22,19 +18,19 @@ class TranslationManager
     }
 
     /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */
-    public function getLocales(?callable $modifier = null): mixed
+    public function locales(?callable $modifier = null): mixed
     {
         $query = EavModels::query('locale');
 
         return $modifier ? $modifier($query) : $query->get();
     }
 
-    public function getLocale(int $id): Locale
+    public function locale(int $id): Locale
     {
         return EavModels::query('locale')->findOrFail($id);
     }
 
-    public function createLocale(array $data): Locale
+    public function create(array $data): Locale
     {
         $locale = EavModels::query('locale')->create($data);
 
@@ -43,7 +39,7 @@ class TranslationManager
         return $locale;
     }
 
-    public function updateLocale(Locale $locale, array $data): Locale
+    public function update(Locale $locale, array $data): Locale
     {
         $locale->update($data);
 
@@ -52,7 +48,7 @@ class TranslationManager
         return $locale;
     }
 
-    public function deleteLocale(Locale $locale): void
+    public function delete(Locale $locale): void
     {
         $locale->delete();
 

@@ -8,8 +8,6 @@ use Jurager\Eav\Support\EavModels;
 
 /**
  * In-memory cache for locale data.
- *
- * Registered as a singleton in EavServiceProvider.
  */
 class LocaleRegistry
 {
@@ -87,7 +85,7 @@ class LocaleRegistry
     }
 
     /**
-     * Clear all cached data.
+     * Forget all cached data.
      */
     public function forget(): void
     {

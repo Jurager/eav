@@ -6,9 +6,6 @@ use Illuminate\Support\Collection;
 
 /**
  * Process-level cache of attribute schema collections, keyed by entity type and parameters.
- *
- * Registered as a singleton so that Octane and queue workers can reset it between
- * requests via the DI container — unlike static class properties which survive restarts.
  */
 class SchemaRegistry
 {

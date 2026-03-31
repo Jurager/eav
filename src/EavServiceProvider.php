@@ -5,6 +5,7 @@ namespace Jurager\Eav;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeObserver;
+use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -19,6 +20,7 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/eav.php', 'eav');
 
+        $this->app->singleton(AttributeTypeRegistry::class);
         $this->app->singleton(LocaleRegistry::class);
         $this->app->singleton(FieldTypeRegistry::class);
         $this->app->singleton(SchemaRegistry::class);
