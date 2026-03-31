@@ -60,6 +60,36 @@ Extra validation rules are stored as a JSON array in the `validations` column on
 | `after` | `after:date` |
 | `before` | `before:date` |
 
+## Working with Select Fields
+
+When a field has type `select`, cast it to `SelectField` to access the resolved enum model:
+
+```php
+use Jurager\Eav\Fields\SelectField;
+
+/** @var SelectField $field */
+$field = $product->attributes()->field('color');
+
+$field->enum();          // ?AttributeEnum — single-select resolved model
+$field->enums();         // array<AttributeEnum> — multi-select resolved models
+$field->label();         // string|array|null — translated label(s) for current locale
+$field->label(localeId: 2); // label for a specific locale
+```
+
+## Working with File / Image Fields
+
+`FileField` and `ImageField` expose `HasFileStorage` helpers for URL resolution and existence checks:
+
+```php
+$field = $product->attributes()->field('photo');
+
+$field->url();                          // string|array|null — public URL(s) on the 'public' disk
+$field->url(disk: 's3');                // URL(s) on a named disk
+$field->url(disk: 'public', localeId: 2); // localized file URL
+$field->firstUrl();                     // ?string — first URL from a multiple-file field
+$field->exists();                       // bool — check file existence in storage
+```
+
 ## Custom Field Types
 
 Extend `Field` and implement three abstract methods:

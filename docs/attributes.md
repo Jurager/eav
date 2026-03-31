@@ -105,6 +105,36 @@ AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $e
 
 The failed entity's transaction is rolled back; all others are unaffected.
 
+## Aggregates & Distinct Values
+
+Useful for building filter UIs (price range sliders, faceted options):
+
+```php
+// Distinct stored values for an attribute across all entities
+$colors = $product->attributes()->distinctValues('color'); // Collection
+
+// SQL aggregate over a numeric attribute
+$max = $product->attributes()->aggregate('price', 'max');  // ?float
+$min = $product->attributes()->aggregate('price', 'min');
+$avg = $product->attributes()->aggregate('weight', 'avg');
+```
+
+Supported aggregates: `sum`, `avg`, `min`, `max`.
+
+## Find by Attribute Value
+
+Find entity instances directly via the manager without building an Eloquent query:
+
+```php
+$manager = AttributeManager::for(Product::class);
+
+$product = $manager->findBy('sku', 'ABC-123');              // ?Model
+$product = $manager->findBy('price', '<=', 100.0);         // ?Model with operator
+
+$products = $manager->findAllBy('status', 'active');        // Collection
+$products = $manager->findAllBy('price', '>=', 50.0);      // Collection with operator
+```
+
 ## Detaching
 
 Remove stored values for specific attribute IDs:
