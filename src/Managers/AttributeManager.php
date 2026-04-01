@@ -727,7 +727,7 @@ class AttributeManager
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
         match ($operator) {
-            'like' => $query->where($column, 'LIKE', '%'.str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value).'%'),
+            'like' => $query->whereRaw('LOWER('.$column.') LIKE ?', ['%'.mb_strtolower(str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value)).'%']),
             'in' => $query->whereIn($column, (array) $value),
             'not_in' => $query->whereNotIn($column, (array) $value),
             'null' => $query->whereNull($column),
