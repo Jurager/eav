@@ -267,12 +267,16 @@ class AttributeManager
         $attribute = $this->resolveAttributes()->firstWhere('code', $code);
 
         if (! $attribute) {
+            $attribute = $this->resolveAttributeByEntityType($code);
+        }
+
+        if (! $attribute) {
             return null;
         }
 
         $this->hydrate(collect([$attribute]));
 
-        return $this->fields[$code];
+        return $this->fields[$code] ?? null;
     }
 
     /**
@@ -762,6 +766,24 @@ class AttributeManager
     {
         return $this->entity?->getAttributeEntityType()
             ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
+    }
+
+    /**
+     * Resolve an attribute by entity type when schema-scoped lookup returns nothing.
+     *
+     * This keeps query-time helpers (e.g. whereAttribute) working for entities
+     * that expose attributes through relation-scoped schemas.
+     */
+    private function resolveAttributeByEntityType(string $code): ?Attribute
+    {
+        if (! $this->entity) {
+            return null;
+        }
+
+        return EavModels::query('attribute')
+            ->forEntity($this->entity->getAttributeEntityType())
+            ->withRelations()
+            ->firstWhere('code', $code);
     }
 
 }
