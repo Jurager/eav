@@ -736,10 +736,10 @@ class AttributeManager
 
         match ($operator) {
             'like'     => $query->whereRaw('LOWER('.$column.') LIKE ?', ['%'.mb_strtolower((string) $escaped).'%']),
-            '='        => is_string($value)
+            '='        => $this->isTextValue($value)
                             ? $query->whereRaw('LOWER('.$column.') = ?', [mb_strtolower($value)])
                             : $query->where($column, '=', $value),
-            '!='       => is_string($value)
+            '!='       => $this->isTextValue($value)
                             ? $query->whereRaw('LOWER('.$column.') != ?', [mb_strtolower($value)])
                             : $query->where($column, '!=', $value),
             'in'       => $this->applyInLower($query, $column, (array) $value),
@@ -753,7 +753,7 @@ class AttributeManager
 
     private function applyInLower(Builder $query, string $column, array $values): void
     {
-        if (array_any($values, 'is_string')) {
+        if (array_any($values, fn ($v) => $this->isTextValue($v))) {
             $lower = array_map(fn ($v) => is_string($v) ? mb_strtolower($v) : $v, $values);
             $placeholders = implode(',', array_fill(0, count($lower), '?'));
             $query->whereRaw('LOWER('.$column.') IN ('.$placeholders.')', array_values($lower));
@@ -764,13 +764,18 @@ class AttributeManager
 
     private function applyNotInLower(Builder $query, string $column, array $values): void
     {
-        if (array_any($values, 'is_string')) {
+        if (array_any($values, fn ($v) => $this->isTextValue($v))) {
             $lower = array_map(fn ($v) => is_string($v) ? mb_strtolower($v) : $v, $values);
             $placeholders = implode(',', array_fill(0, count($lower), '?'));
             $query->whereRaw('LOWER('.$column.') NOT IN ('.$placeholders.')', array_values($lower));
         } else {
             $query->whereNotIn($column, $values);
         }
+    }
+
+    private function isTextValue(mixed $value): bool
+    {
+        return is_string($value) && ! is_numeric($value);
     }
 
     /**
