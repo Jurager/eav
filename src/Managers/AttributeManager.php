@@ -730,15 +730,47 @@ class AttributeManager
     /** Apply a comparison operator to a query column. */
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
+        $escaped = is_string($value)
+            ? str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value)
+            : $value;
+
         match ($operator) {
-            'like' => $query->whereRaw('LOWER('.$column.') LIKE ?', ['%'.mb_strtolower(str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value)).'%']),
-            'in' => $query->whereIn($column, (array) $value),
-            'not_in' => $query->whereNotIn($column, (array) $value),
-            'null' => $query->whereNull($column),
+            'like'     => $query->whereRaw('LOWER('.$column.') LIKE ?', ['%'.mb_strtolower((string) $escaped).'%']),
+            '='        => is_string($value)
+                            ? $query->whereRaw('LOWER('.$column.') = ?', [mb_strtolower($value)])
+                            : $query->where($column, '=', $value),
+            '!='       => is_string($value)
+                            ? $query->whereRaw('LOWER('.$column.') != ?', [mb_strtolower($value)])
+                            : $query->where($column, '!=', $value),
+            'in'       => $this->applyInLower($query, $column, (array) $value),
+            'not_in'   => $this->applyNotInLower($query, $column, (array) $value),
+            'null'     => $query->whereNull($column),
             'not_null' => $query->whereNotNull($column),
-            'between' => $query->whereBetween($column, $value),
-            default => $query->where($column, $operator, $value),
+            'between'  => $query->whereBetween($column, $value),
+            default    => $query->where($column, $operator, $value),
         };
+    }
+
+    private function applyInLower(Builder $query, string $column, array $values): void
+    {
+        if (array_any($values, 'is_string')) {
+            $lower = array_map(fn ($v) => is_string($v) ? mb_strtolower($v) : $v, $values);
+            $placeholders = implode(',', array_fill(0, count($lower), '?'));
+            $query->whereRaw('LOWER('.$column.') IN ('.$placeholders.')', array_values($lower));
+        } else {
+            $query->whereIn($column, $values);
+        }
+    }
+
+    private function applyNotInLower(Builder $query, string $column, array $values): void
+    {
+        if (array_any($values, 'is_string')) {
+            $lower = array_map(fn ($v) => is_string($v) ? mb_strtolower($v) : $v, $values);
+            $placeholders = implode(',', array_fill(0, count($lower), '?'));
+            $query->whereRaw('LOWER('.$column.') NOT IN ('.$placeholders.')', array_values($lower));
+        } else {
+            $query->whereNotIn($column, $values);
+        }
     }
 
     /**
