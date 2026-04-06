@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
+use Jurager\Eav\Concerns\BuildsTextConditions;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\MissingEntityException;
 use JsonException;
@@ -29,9 +30,7 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeManager
 {
-    private const array OPERATORS = [
-        '=', '!=', '>', '<', '>=', '<=', 'like', 'in', 'not_in', 'null', 'not_null', 'between',
-    ];
+    use BuildsTextConditions;
 
     /** @var array<string, Field> */
     protected array $fields = [];
@@ -559,30 +558,26 @@ class AttributeManager
     }
 
     /**
-     * Find a single entity by attribute value. Accepts an optional operator as the second argument.
+     * Find a single entity by attribute value.
      *
      * @throws JsonException
      * @throws BindingResolutionException
      */
-    public function findBy(string $code, mixed $operatorOrValue, mixed $value = null, ?int $localeId = null): ?Model
+    public function findBy(string $code, mixed $value, string $operator = '=', ?int $localeId = null): ?Model
     {
-        [$operator, $value] = $this->normalizeOperator($operatorOrValue, $value);
-
         return $this->attributeQuery($code, $value, $operator, $localeId)?->first();
     }
 
     /**
-     * Find all entities by attribute value. Accepts an optional operator as the second argument.
+     * Find all entities by attribute value.
      *
      * @return Collection<int, Model>
      *
      * @throws JsonException
      * @throws BindingResolutionException
      */
-    public function findAllBy(string $code, mixed $operatorOrValue, mixed $value = null, ?int $localeId = null): Collection
+    public function findAllBy(string $code, mixed $value, string $operator = '=', ?int $localeId = null): Collection
     {
-        [$operator, $value] = $this->normalizeOperator($operatorOrValue, $value);
-
         return $this->attributeQuery($code, $value, $operator, $localeId)?->get() ?? collect();
     }
 
@@ -730,18 +725,10 @@ class AttributeManager
     /** Apply a comparison operator to a query column. */
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
-        $escaped = is_string($value)
-            ? str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value)
-            : $value;
-
         match ($operator) {
-            'like'     => $query->whereRaw('LOWER('.$column.') LIKE ?', ['%'.mb_strtolower((string) $escaped).'%']),
-            '='        => $this->isTextValue($value)
-                            ? $query->whereRaw('LOWER('.$column.') = ?', [mb_strtolower($value)])
-                            : $query->where($column, '=', $value),
-            '!='       => $this->isTextValue($value)
-                            ? $query->whereRaw('LOWER('.$column.') != ?', [mb_strtolower($value)])
-                            : $query->where($column, '!=', $value),
+            'like'     => $this->applyLike($query, $column, $value),
+            '='        => $this->applyScalarCondition($query, $column, '=', $value),
+            '!='       => $this->applyScalarCondition($query, $column, '!=', $value),
             'in'       => $this->applyInLower($query, $column, (array) $value),
             'not_in'   => $this->applyNotInLower($query, $column, (array) $value),
             'null'     => $query->whereNull($column),
@@ -749,47 +736,6 @@ class AttributeManager
             'between'  => $query->whereBetween($column, $value),
             default    => $query->where($column, $operator, $value),
         };
-    }
-
-    private function applyInLower(Builder $query, string $column, array $values): void
-    {
-        if (array_any($values, fn ($v) => $this->isTextValue($v))) {
-            $lower = array_map(fn ($v) => is_string($v) ? mb_strtolower($v) : $v, $values);
-            $placeholders = implode(',', array_fill(0, count($lower), '?'));
-            $query->whereRaw('LOWER('.$column.') IN ('.$placeholders.')', array_values($lower));
-        } else {
-            $query->whereIn($column, $values);
-        }
-    }
-
-    private function applyNotInLower(Builder $query, string $column, array $values): void
-    {
-        if (array_any($values, fn ($v) => $this->isTextValue($v))) {
-            $lower = array_map(fn ($v) => is_string($v) ? mb_strtolower($v) : $v, $values);
-            $placeholders = implode(',', array_fill(0, count($lower), '?'));
-            $query->whereRaw('LOWER('.$column.') NOT IN ('.$placeholders.')', array_values($lower));
-        } else {
-            $query->whereNotIn($column, $values);
-        }
-    }
-
-    private function isTextValue(mixed $value): bool
-    {
-        return is_string($value) && ! is_numeric($value);
-    }
-
-    /**
-     * Parse the overloaded ($operatorOrValue, $value) signature.
-     *
-     * @return array{string, mixed}
-     */
-    private function normalizeOperator(mixed $operatorOrValue, mixed $value): array
-    {
-        if (is_string($operatorOrValue) && in_array($operatorOrValue, self::OPERATORS, true)) {
-            return [$operatorOrValue, $value];
-        }
-
-        return ['=', $operatorOrValue];
     }
 
     /** @throws JsonException */
