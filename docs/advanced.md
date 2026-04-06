@@ -23,7 +23,7 @@ class Category extends Model implements Attributable
 }
 ```
 
-When `getAttributeScope()` returns `byRelation`, the inheritance resolver is called automatically to expand the scope with ancestor entities.
+When `attributeScopeModel()` returns a non-null class, the inheritance resolver is called automatically to expand the scope with ancestor entities.
 
 **Tree strategies** — the resolver detects automatically:
 

@@ -17,7 +17,6 @@ use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
-use Jurager\Eav\Exceptions\InvalidConfigurationException;
 
 /**
  * Adds EAV attribute support to Eloquent models.
@@ -59,36 +58,26 @@ trait HasAttributes
     /**
      * Return available attribute definitions for this entity.
      *
-     * @param array<string, mixed> $params
+     * @param  array<string, mixed>  $params
      * @return Collection<int, mixed>
-     * @throws BindingResolutionException
-     * @throws CircularDependencyException
      */
-    public function getAvailableAttributes(array $params = []): Collection
+    public function availableAttributes(array $params = []): Collection
     {
-        $query = $this->getAvailableAttributesQuery($params);
-
-        return $query ? $query->get() : collect();
+        return $this->availableAttributesQuery($params)?->get() ?? collect();
     }
 
     /**
      * Return a query builder for available attributes (global or by relation).
      *
-     * @param array<string, mixed> $params
-     * @return Builder|null
-     * @throws BindingResolutionException
-     * @throws CircularDependencyException
+     * @param  array<string, mixed>  $params
      */
-    public function getAvailableAttributesQuery(array $params = []): ?Builder
+    public function availableAttributesQuery(array $params = []): ?Builder
     {
-        if ($this->getAttributeScope() === 'byRelation') {
-            $model = static::getAttributeRelationModel()
-                ?? throw InvalidConfigurationException::missingRelationModel(static::class);
-
-            return $this->getAttributesByRelationQuery($params, $model);
+        if (($model = static::attributeScopeModel()) !== null) {
+            return $this->scopedAttributesQuery($params, $model);
         }
 
-        return $this->getGlobalAttributesQuery();
+        return $this->globalAttributesQuery();
     }
 
     /**
@@ -175,10 +164,10 @@ trait HasAttributes
     }
 
     /**
-     * Default filter parameters passed to getAvailableAttributesQuery().
+     * Default filter parameters passed to availableAttributesQuery().
      * Override in models that use byRelation scope (e.g. return category IDs for Product).
      */
-    public function getDefaultParameters(): array
+    public function attributeParameters(): array
     {
         return [];
     }
@@ -211,21 +200,12 @@ trait HasAttributes
     }
 
     /**
-     * Return the attribute scope strategy for this entity.
-     * Override in models that scope attributes by a related model.
-     */
-    protected function getAttributeScope(): string
-    {
-        return 'global';
-    }
-
-    /**
      * Return the FQCN of the model used to resolve relation-scoped attributes.
-     * Override when getAttributeScope() returns 'byRelation'.
+     * Override in models that scope attributes by a related model (e.g. Category for Product).
      *
      * @return class-string<Attributable>|null
      */
-    protected static function getAttributeRelationModel(): ?string
+    protected static function attributeScopeModel(): ?string
     {
         return null;
     }
@@ -233,10 +213,10 @@ trait HasAttributes
     /**
      * Return a query for all attributes shared globally for this entity type.
      */
-    protected function getGlobalAttributesQuery(): Builder
+    protected function globalAttributesQuery(): Builder
     {
         return EavModels::query('attribute')
-            ->forEntity($this->getAttributeEntityType())
+            ->forEntity($this->attributeEntityType())
             ->withRelations();
     }
 
@@ -249,7 +229,7 @@ trait HasAttributes
      * @throws BindingResolutionException
      * @throws CircularDependencyException
      */
-    protected function getAttributesByRelationQuery(array $params, string $model): ?Builder
+    protected function scopedAttributesQuery(array $params, string $model): ?Builder
     {
         if (empty($params)) {
             return null;

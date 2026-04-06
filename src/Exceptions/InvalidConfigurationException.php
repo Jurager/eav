@@ -22,8 +22,4 @@ class InvalidConfigurationException extends EavException
         return new self("$class must implement Attributable.");
     }
 
-    public static function missingRelationModel(string $class): self
-    {
-        return new self("$class must implement getAttributeRelationModel() when getAttributeScope() returns \"byRelation\".");
-    }
 }

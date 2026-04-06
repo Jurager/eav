@@ -7,7 +7,7 @@ weight: 20
 
 ## Make a Model Attributable
 
-Implement `Attributable` and add the `HasAttributes` trait. Only `getAttributeEntityType()` is required:
+Implement `Attributable` and add the `HasAttributes` trait. Only `attributeEntityType()` is required:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
@@ -17,7 +17,7 @@ class Product extends Model implements Attributable
 {
     use HasAttributes;
 
-    public function getAttributeEntityType(): string
+    public function attributeEntityType(): string
     {
         return 'product';
     }
@@ -51,7 +51,7 @@ class Product extends Model implements Attributable
         HasSearchableAttributes::shouldBeSearchable insteadof Searchable;
     }
 
-    public function getAttributeEntityType(): string
+    public function attributeEntityType(): string
     {
         return 'product';
     }
@@ -60,20 +60,15 @@ class Product extends Model implements Attributable
 
 ## Scoping Attributes via a Related Model
 
-By default all entities of the same type share one attribute schema (`global` scope). If attribute definitions are managed per related model — for example, each product category has its own set of attributes — override three methods:
+By default all entities of the same type share one attribute schema (global scope). If attribute definitions are managed per related model — for example, each product category has its own set of attributes — override two methods:
 
 ```php
-protected function getAttributeScope(): string
-{
-    return 'byRelation';
-}
-
-protected static function getAttributeRelationModel(): string
+protected static function attributeScopeModel(): string
 {
     return Category::class;
 }
 
-public function getDefaultParameters(): array
+public function attributeParameters(): array
 {
     $this->loadMissing('categories');
 

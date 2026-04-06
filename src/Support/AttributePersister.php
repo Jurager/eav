@@ -67,7 +67,7 @@ class AttributePersister
         }
 
         $this->withinTimestamp(fn () => $this->persistGroup(
-            $this->entity->getAttributeEntityType(),
+            $this->entity->attributeEntityType(),
             [$this->entity->id => $fields],
         ));
     }
@@ -95,7 +95,7 @@ class AttributePersister
 
             $this->deleteExcluding($keepIds);
             $this->persistGroup(
-                $this->entity->getAttributeEntityType(),
+                $this->entity->attributeEntityType(),
                 [$this->entity->id => $fields],
             );
         }));
@@ -157,7 +157,7 @@ class AttributePersister
             return;
         }
 
-        $type = $entity->getAttributeEntityType();
+        $type = $entity->attributeEntityType();
         $entityId = $entity->getKey();
 
         $this->pending[$type][$entityId] = ($this->pending[$type][$entityId] ?? collect())
@@ -626,7 +626,7 @@ class AttributePersister
     {
         return $this->entity
             ? EavModels::query(self::MODEL_ATTRIBUTE)
-                ->where('entity_type', $this->entity->getAttributeEntityType())
+                ->where('entity_type', $this->entity->attributeEntityType())
                 ->where('entity_id', $this->entity->id)
             : throw MissingEntityException::forPersister();
     }

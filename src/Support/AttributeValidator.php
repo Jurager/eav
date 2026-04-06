@@ -10,7 +10,6 @@ use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Managers\AttributeManager;
-use Jurager\Eav\Support\EavModels;
 
 /**
  * Validates incoming attribute payloads against field rules and uniqueness.
@@ -39,7 +38,7 @@ class AttributeValidator
         $this->manager = $manager ?? AttributeManager::for($entity);
         $this->manager->ensureSchema();
 
-        $this->entityType      = $entity->getAttributeEntityType();
+        $this->entityType      = $entity->attributeEntityType();
         $this->entityId        = $entity->id ?? null;
 
         $modelClass            = Relation::getMorphedModel($this->entityType);

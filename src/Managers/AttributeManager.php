@@ -135,9 +135,9 @@ class AttributeManager
      */
     private static function buildFromAttributable(Attributable $entity, SchemaRegistry $registry): static
     {
-        $parameters = $entity->getDefaultParameters();
+        $parameters = $entity->attributeParameters();
 
-        $entityType = $entity->getAttributeEntityType();
+        $entityType = $entity->attributeEntityType();
 
         $parametersKey = empty($parameters) ? 'default' : md5(json_encode($parameters, JSON_THROW_ON_ERROR));
 
@@ -196,7 +196,7 @@ class AttributeManager
      */
     public function ensureSchema(): static
     {
-        $params = $this->entity?->getDefaultParameters() ?? [];
+        $params = $this->entity?->attributeParameters() ?? [];
         $key = $this->schemaParamsKey($params);
 
         if (isset($this->schemaLoaded[$key])) {
@@ -263,11 +263,13 @@ class AttributeManager
             return $this->fields[$code];
         }
 
-        $attribute = $this->resolveAttributes()->firstWhere('code', $code);
-
-        if (! $attribute) {
-            $attribute = $this->resolveAttributeByEntityType($code);
-        }
+        $attribute = $this->resolveAttributes()->firstWhere('code', $code)
+            ?? ($this->entity
+                ? EavModels::query('attribute')
+                    ->forEntity($this->entity->attributeEntityType())
+                    ->withRelations()
+                    ->firstWhere('code', $code)
+                : null);
 
         if (! $attribute) {
             return null;
@@ -401,11 +403,18 @@ class AttributeManager
      * @param  array<string>|null  $codes
      * @param  int|null  $paginated  When set, returns a paginator instead of a collection.
      * @return Collection<int, Model>|LengthAwarePaginator
-     *
      */
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
-        $query = $this->valuesQuery($codes);
+        $query = $this->entityQuery()
+            ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
+            ->with([
+                'attribute.type',
+                'attribute.group.translations',
+                'attribute.translations',
+                'attribute.enums.translations',
+                'translations',
+            ]);
 
         $transform = fn (Model $model): Model => tap($model, function ($model) {
             $model->value = $this->fieldRegistry->make($model->attribute)->from($model);
@@ -418,20 +427,6 @@ class AttributeManager
         return $query->get()->map($transform);
     }
 
-    /** @param  array<string>|null  $codes */
-    private function valuesQuery(?array $codes = null): Builder
-    {
-        return $this->entityQuery()
-            ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
-            ->with([
-                'attribute.type',
-                'attribute.group.translations',
-                'attribute.translations',
-                'attribute.enums.translations',
-                'translations',
-            ]);
-    }
-
     /**
      * Return memoized search index data for all searchable attributes.
      *
@@ -440,66 +435,6 @@ class AttributeManager
     public function indexData(): array
     {
         return $this->indexData ??= $this->buildIndexData();
-    }
-
-    /**
-     * Return distinct stored values for a given attribute across all entities of this type.
-     *
-     * @return Collection<int, mixed>
-     *
-     * @throws JsonException
-     * @throws BindingResolutionException
-     */
-    public function distinctValues(string $code): Collection
-    {
-        $field = $this->field($code);
-        $entityType = $this->resolveEntityType($code);
-
-        if (! $field || ! $entityType) {
-            return collect();
-        }
-
-        return EavModels::query('entity_attribute')
-            ->where('entity_type', $entityType)
-            ->where('attribute_id', $field->attribute()->id)
-            ->whereNotNull($field->column())
-            ->distinct()
-            ->pluck($field->column());
-    }
-
-    /**
-     * Run a SQL aggregate (sum, avg, min, max) over a numeric attribute column.
-     *
-     * @throws InvalidArgumentException
-     * @throws JsonException
-     * @throws BindingResolutionException
-     */
-    public function aggregate(string $code, string $aggregate): ?float
-    {
-        if (! in_array($aggregate, ['sum', 'avg', 'min', 'max'], true)) {
-            throw new \InvalidArgumentException("Invalid aggregate '$aggregate'. Allowed: sum, avg, min, max.");
-        }
-
-        $field = $this->field($code);
-        $entityType = $this->resolveEntityType($code);
-
-        if (! $field || ! $entityType) {
-            return null;
-        }
-
-        $col = $field->column();
-
-        if (! in_array($col, [Field::STORAGE_FLOAT, Field::STORAGE_INTEGER], true)) {
-            return null;
-        }
-
-        $result = EavModels::query('entity_attribute')
-            ->where('entity_type', $entityType)
-            ->where('attribute_id', $field->attribute()->id)
-            ->whereNotNull($col)
-            ->{$aggregate}($col);
-
-        return $result !== null ? (float) $result : null;
     }
 
     /**
@@ -633,7 +568,7 @@ class AttributeManager
      */
     public function query(array $params = []): ?Builder
     {
-        return $this->entityOrFail()->getAvailableAttributesQuery($params);
+        return $this->entityOrFail()->availableAttributesQuery($params);
     }
 
     /** @throws LogicException */
@@ -686,16 +621,8 @@ class AttributeManager
         $entity = $this->entityOrFail();
 
         return EavModels::query('entity_attribute')
-            ->where('entity_type', $entity->getAttributeEntityType())
+            ->where('entity_type', $entity->attributeEntityType())
             ->where('entity_id', $entity->id);
-    }
-
-    /** Return a Builder for searchable attribute rows with required relations eager-loaded. */
-    protected function indexQuery(): Builder
-    {
-        return $this->entityQuery()
-            ->whereHas('attribute', fn ($q) => $q->where('searchable', true))
-            ->with(['attribute', 'attribute.enums.translations', 'translations']);
     }
 
     private function persister(): AttributePersister
@@ -710,7 +637,10 @@ class AttributeManager
             return [];
         }
 
-        $attributes = $this->indexQuery()->get()
+        $attributes = $this->entityQuery()
+            ->whereHas('attribute', fn ($q) => $q->where('searchable', true))
+            ->with(['attribute', 'attribute.enums.translations', 'translations'])
+            ->get()
             ->groupBy('attribute_id')
             ->flatMap(function (Collection $group) {
                 $field = $this->fieldRegistry->make($group->first()->attribute);
@@ -747,26 +677,8 @@ class AttributeManager
     /** @throws JsonException */
     private function resolveEntityType(string $code): ?string
     {
-        return $this->entity?->getAttributeEntityType()
+        return $this->entity?->attributeEntityType()
             ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
-    }
-
-    /**
-     * Resolve an attribute by entity type when schema-scoped lookup returns nothing.
-     *
-     * This keeps query-time helpers (e.g. whereAttribute) working for entities
-     * that expose attributes through relation-scoped schemas.
-     */
-    private function resolveAttributeByEntityType(string $code): ?Attribute
-    {
-        if (! $this->entity) {
-            return null;
-        }
-
-        return EavModels::query('attribute')
-            ->forEntity($this->entity->getAttributeEntityType())
-            ->withRelations()
-            ->firstWhere('code', $code);
     }
 
 }

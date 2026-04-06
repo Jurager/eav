@@ -11,18 +11,17 @@ interface Attributable
      * Entity type string used to scope attributes (e.g. 'product', 'category').
      * Must match the morph map key registered for this model.
      */
-    public function getAttributeEntityType(): string;
+    public function attributeEntityType(): string;
 
     /**
-     * Default filter parameters passed to getAvailableAttributesQuery().
-     * Return [] for global scope (all entities share the same attribute set).
-     * Return e.g. category IDs for byRelation scope.
+     * Parameters passed to availableAttributesQuery() to scope the attribute set.
+     * Return [] for global scope. Return e.g. category IDs for relation-scoped entities.
      */
-    public function getDefaultParameters(): array;
+    public function attributeParameters(): array;
 
     /**
      * Whether this entity should inherit attributes from its parent.
-     * Called by AttributeInheritanceResolver when resolving byRelation scope.
+     * Called by AttributeInheritanceResolver when resolving relation-scoped attributes.
      */
     public function shouldInheritAttributes(): bool;
 
@@ -30,7 +29,7 @@ interface Attributable
      * Builder that returns Attribute records available for this entity.
      * Called by AttributeManager to load the attribute schema.
      */
-    public function getAvailableAttributesQuery(array $params = []): ?Builder;
+    public function availableAttributesQuery(array $params = []): ?Builder;
 
     /**
      * Relation that provides available attributes for other entities scoped by this model.
