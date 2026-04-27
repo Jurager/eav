@@ -16,6 +16,9 @@ class LocaleRegistry
 
     private ?int $defaultId = null;
 
+    /** @var array<string>|null Active locales for the current request context. */
+    private ?array $active = null;
+
     /**
      * All locales keyed by ID, values are codes.
      *
@@ -85,11 +88,32 @@ class LocaleRegistry
     }
 
     /**
+     * Set the active locales for the current request context.
+     *
+     * @param array<string> $codes
+     */
+    public function set(array $codes): void
+    {
+        $this->active = $codes;
+    }
+
+    /**
+     * Get the active locales, or null if not set.
+     *
+     * @return array<string>|null
+     */
+    public function get(): ?array
+    {
+        return $this->active;
+    }
+
+    /**
      * Forget all cached data.
      */
     public function forget(): void
     {
         $this->locales = null;
         $this->defaultId = null;
+        $this->active = null;
     }
 }

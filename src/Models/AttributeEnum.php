@@ -5,6 +5,7 @@ namespace Jurager\Eav\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -29,7 +30,8 @@ class AttributeEnum extends Model
         return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
             ->using(EavModels::class('entity_translation'))
             ->withPivot(['id', 'label', 'params'])
-            ->withTimestamps();
+            ->withTimestamps()
+            ->when(app(LocaleRegistry::class)->get(), fn ($q, $codes) => $q->whereIn('code', $codes));
     }
 
     public function attribute(): BelongsTo

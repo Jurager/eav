@@ -2,6 +2,8 @@
 
 namespace Jurager\Eav;
 
+use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeObserver;
@@ -21,7 +23,7 @@ class EavServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/eav.php', 'eav');
 
         $this->app->singleton(AttributeTypeRegistry::class);
-        $this->app->singleton(LocaleRegistry::class);
+        $this->app->scoped(LocaleRegistry::class);
         $this->app->singleton(FieldTypeRegistry::class);
         $this->app->singleton(SchemaRegistry::class);
         $this->app->singleton(EnumRegistry::class);
@@ -45,6 +47,18 @@ class EavServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
         $this->registerObservers();
+        $this->registerLocaleMiddleware();
+    }
+
+    private function registerLocaleMiddleware(): void
+    {
+        if (!config('eav.locale_context.enabled', true)) {
+            return;
+        }
+
+        $middleware = config('eav.locale_context.middleware');
+
+        $this->app->make(Router::class)->pushMiddlewareToGroup('api', $middleware);
     }
 
     private function registerObservers(): void
