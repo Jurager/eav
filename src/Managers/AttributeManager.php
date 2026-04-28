@@ -429,6 +429,41 @@ class AttributeManager
     }
 
     /**
+     * Return min/max ranges for filterable numeric attributes across a set of entity IDs.
+     *
+     * Keyed by attribute code: ['weight' => ['min' => 0.5, 'max' => 150.0], ...]
+     *
+     * @param  array<int>  $entityIds
+     * @return array<string, array{min: float, max: float}>
+     */
+    public function numericRanges(array $entityIds): array
+    {
+        if (empty($entityIds)) {
+            return [];
+        }
+
+        $entityType = $this->entityOrFail()->attributeEntityType();
+        $eaTable    = EavModels::make('entity_attribute')->getTable();
+        $attrTable  = EavModels::make('attribute')->getTable();
+        $typeTable  = EavModels::make('attribute_type')->getTable();
+
+        return EavModels::query('entity_attribute')
+            ->join("$attrTable as _a", '_a.id', '=', "$eaTable.attribute_id")
+            ->join("$typeTable as _at", '_at.id', '=', '_a.attribute_type_id')
+            ->whereIn("$eaTable.entity_id", $entityIds)
+            ->where("$eaTable.entity_type", $entityType)
+            ->where('_a.filterable', true)
+            ->where('_at.code', 'number')
+            ->selectRaw("_a.code, MIN(COALESCE($eaTable.value_float, $eaTable.value_integer)) as range_min, MAX(COALESCE($eaTable.value_float, $eaTable.value_integer)) as range_max")
+            ->groupBy('_a.id', '_a.code')
+            ->get()
+            ->mapWithKeys(fn ($row) => [
+                $row->code => ['min' => (float) $row->range_min, 'max' => (float) $row->range_max],
+            ])
+            ->toArray();
+    }
+
+    /**
      * Return memoized search index data for all searchable attributes.
      *
      * @return array<string, mixed>
