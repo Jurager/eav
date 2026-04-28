@@ -76,19 +76,5 @@ return [
         'link' => LinkField::class,
     ],
 
-    /*
-    |--------------------------------------------------------------------------
-    | Locale Context
-    |--------------------------------------------------------------------------
-    | When enabled, the package automatically registers the middleware on the
-    | api stack. The middleware reads `parameter` from the request query string
-    | and passes the codes to LocaleRegistry::set(). Override `middleware` to
-    | customize the resolution logic entirely.
-    */
-    'locale_context' => [
-        'enabled'    => true,
-        'parameter'  => 'locales',
-        'middleware' => \Jurager\Eav\Http\Middleware\SetLocaleContext::class,
-    ],
 
 ];
