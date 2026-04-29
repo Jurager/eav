@@ -123,7 +123,7 @@ trait HasAttributes
     {
         $sub = $this->attributes()->subquery($code, $value, $operator);
 
-        return $sub ? $query->whereIn('id', $sub) : $query;
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -145,7 +145,7 @@ trait HasAttributes
     {
         $sub = $this->attributes()->subquery($code, [$min, $max], 'between');
 
-        return $sub ? $query->whereIn('id', $sub) : $query;
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -157,7 +157,7 @@ trait HasAttributes
     {
         $sub = $this->attributes()->subquery($code, $values, 'in');
 
-        return $sub ? $query->whereIn('id', $sub) : $query;
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -181,7 +181,7 @@ trait HasAttributes
             );
 
             if ($sub) {
-                $query->whereIn('id', $sub);
+                $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
             }
         }
 
