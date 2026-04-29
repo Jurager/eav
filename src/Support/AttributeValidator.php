@@ -152,8 +152,11 @@ class AttributeValidator
             ->when($this->usesSoftDeletes, function ($q) {
                 $modelClass = Relation::getMorphedModel($this->entityType);
                 $q->whereIn('entity_id', $modelClass::query()->select((new $modelClass())->getKeyName()));
-            })
-            ->when($scopeCallback, fn ($q) => $scopeCallback($q, $this->entity));
+            });
+
+        if ($scopeCallback !== null) {
+            $scopeCallback($base, $this->entity);
+        }
 
         if ($field->isLocalizable()) {
             $labels = collect($field->toStorage())
