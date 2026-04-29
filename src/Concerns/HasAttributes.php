@@ -35,6 +35,27 @@ trait HasAttributes
     protected ?AttributeManager $attributeManager = null;
 
     /**
+     * Override in models to declare scoped uniqueness for specific EAV attributes.
+     *
+     * Return a map of [attributeCode => callable($query, $entity)].
+     * The callable receives the entity_attribute Builder and the model instance,
+     * and should add WHERE conditions to restrict the uniqueness check scope.
+     *
+     * Example:
+     *   return [
+     *       'code' => function ($query, self $entity) {
+     *           $query->whereIn('entity_id', static::query()->whereDescendantOrSelf($entity->id)->select('id'));
+     *       },
+     *   ];
+     *
+     * @return array<string, callable>
+     */
+    protected static function attributeUniqueScopes(): array
+    {
+        return [];
+    }
+
+    /**
      * Return the AttributeManager for this entity (lazy-loaded, cached).
      */
     public function attributes(): AttributeManager
@@ -52,7 +73,20 @@ trait HasAttributes
      */
     public function validate(array $input): array
     {
-        return new AttributeValidator($this, $this->attributeManager)->validate($input);
+        return $this->validator()->validate($input);
+    }
+
+    /**
+     * Return an AttributeValidator for this entity.
+     * Registers any model-defined unique scopes before returning the instance.
+     */
+    protected function validator(): AttributeValidator
+    {
+        foreach (static::attributeUniqueScopes() as $code => $callback) {
+            AttributeValidator::registerUniqueScope($this->attributeEntityType(), $code, $callback);
+        }
+
+        return new AttributeValidator($this, $this->attributeManager);
     }
 
     /**

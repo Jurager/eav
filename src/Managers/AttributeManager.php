@@ -406,8 +406,13 @@ class AttributeManager
      */
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
-        $query = $this->entityQuery()
-            ->whereHas('attribute')
+        $query = $this->entityQuery();
+
+        if (method_exists($query->getModel(), 'scopeFiltered')) {
+            $query->filtered();
+        }
+
+        $query->whereHas('attribute')
             ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
             ->with([
                 'attribute.type',

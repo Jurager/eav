@@ -16,6 +16,9 @@ use Jurager\Eav\Managers\AttributeManager;
  */
 class AttributeValidator
 {
+    /** @var array<string, callable(\Illuminate\Database\Eloquent\Builder, Attributable): void> */
+    private static array $uniqueScopes = [];
+
     private AttributeManager $manager;
 
     private Attributable $entity;
@@ -25,6 +28,24 @@ class AttributeValidator
     private mixed $entityId;
 
     private bool $usesSoftDeletes;
+
+    /**
+     * Register a scope callback for uniqueness validation of a specific entity type + attribute code.
+     *
+     * The callback receives the entity_attribute Builder and the Attributable entity instance,
+     * and should apply additional WHERE conditions to restrict the uniqueness scope.
+     *
+     * Example: limit uniqueness to the same category tree:
+     *   AttributeValidator::registerUniqueScope('category', 'code', function ($query, $entity) {
+     *       $query->whereIn('entity_id', $treeIds);
+     *   });
+     *
+     * @param callable(\Illuminate\Database\Eloquent\Builder, Attributable): void $callback
+     */
+    public static function registerUniqueScope(string $entityType, string $attributeCode, callable $callback): void
+    {
+        self::$uniqueScopes["{$entityType}.{$attributeCode}"] = $callback;
+    }
 
     /**
      * Pass an existing AttributeManager to reuse its schema cache.
@@ -121,6 +142,9 @@ class AttributeValidator
      */
     private function validateUniqueness(Field $field): array
     {
+        $scopeKey = "{$this->entityType}.{$field->attribute()->code}";
+        $scopeCallback = self::$uniqueScopes[$scopeKey] ?? null;
+
         $base = EavModels::query('entity_attribute')
             ->where('entity_type', $this->entityType)
             ->where('attribute_id', $field->attribute()->id)
@@ -128,7 +152,8 @@ class AttributeValidator
             ->when($this->usesSoftDeletes, function ($q) {
                 $modelClass = Relation::getMorphedModel($this->entityType);
                 $q->whereIn('entity_id', $modelClass::query()->select((new $modelClass())->getKeyName()));
-            });
+            })
+            ->when($scopeCallback, fn ($q) => $scopeCallback($q, $this->entity));
 
         if ($field->isLocalizable()) {
             $labels = collect($field->toStorage())
