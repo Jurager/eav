@@ -114,7 +114,6 @@ class AttributeValidator
         $errors = [];
 
         foreach ($this->manager->fields() as $field) {
-
             $attributeCode = $field->attribute()->code;
 
             if ($field->hasErrors()) {
