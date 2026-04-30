@@ -14,7 +14,7 @@ $schema = app(SchemaManager::class);
 ```
 
 > [!NOTE]
-> `SchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use `$model->attributes()`.
+> `SchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use `$model->eav()`.
 
 ## Attributes
 

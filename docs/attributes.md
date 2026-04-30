@@ -5,17 +5,17 @@ weight: 30
 
 # Reading & Writing Attributes
 
-Attribute values are accessed through `$model->attributes()`.
+Attribute values are accessed through `$model->eav()`.
 
 ## Reading
 
 ```php
 $product = Product::find(1);
 
-$value = $product->attributes()->value('color');
+$value = $product->eav()->value('color');
 
 // Specific locale
-$value = $product->attributes()->value('description', localeId: 2);
+$value = $product->eav()->value('description', localeId: 2);
 ```
 
 ## Writing a Single Value
@@ -24,16 +24,16 @@ Set in memory, then persist:
 
 ```php
 // Simple value
-$product->attributes()->set('color', 'red')->save('color');
+$product->eav()->set('color', 'red')->save('color');
 
 // Localizable value
-$product->attributes()->set('description', [
+$product->eav()->set('description', [
     ['locale_id' => 1, 'values' => 'English description'],
     ['locale_id' => 2, 'values' => 'Russian description'],
 ])->save('description');
 
 // Multiple values (attribute must have multiple: true)
-$product->attributes()->set('tags', ['sale', 'new', 'featured'])->save('tags');
+$product->eav()->set('tags', ['sale', 'new', 'featured'])->save('tags');
 ```
 
 `set()` is chainable. `save(string $code)` persists a single attribute by code.
@@ -43,13 +43,13 @@ $product->attributes()->set('tags', ['sale', 'new', 'featured'])->save('tags');
 Replace all existing values for the entity with a new set:
 
 ```php
-$product->attributes()->replace($fields); // persists $fields, deletes all others
+$product->eav()->replace($fields); // persists $fields, deletes all others
 ```
 
 Persist without removing existing values:
 
 ```php
-$product->attributes()->attach($fields);
+$product->eav()->attach($fields);
 ```
 
 Both methods accept `array<string, Field>` as returned by `validate()`.
@@ -84,7 +84,7 @@ class ProductController extends Controller
     {
         $fields = $product->validate($request->validated()['attributes']);
 
-        $product->attributes()->attach($fields);
+        $product->eav()->attach($fields);
 
         return response('', 204);
     }
@@ -148,5 +148,5 @@ $products = $manager->findAllBy('price', 50.0, '>=');       // Collection with o
 Remove stored values for specific attribute IDs:
 
 ```php
-$product->attributes()->detach([12, 34]);
+$product->eav()->detach([12, 34]);
 ```

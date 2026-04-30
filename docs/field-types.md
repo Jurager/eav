@@ -68,7 +68,7 @@ When a field has type `select`, cast it to `SelectField` to access the resolved 
 use Jurager\Eav\Fields\SelectField;
 
 /** @var SelectField $field */
-$field = $product->attributes()->field('color');
+$field = $product->eav()->field('color');
 
 $field->enum();          // ?AttributeEnum — single-select resolved model
 $field->enums();         // array<AttributeEnum> — multi-select resolved models
@@ -81,7 +81,7 @@ $field->label(localeId: 2); // label for a specific locale
 `FileField` and `ImageField` expose `HasFileStorage` helpers for URL resolution and existence checks:
 
 ```php
-$field = $product->attributes()->field('photo');
+$field = $product->eav()->field('photo');
 
 $field->url();                          // string|array|null — public URL(s) on the 'public' disk
 $field->url(disk: 's3');                // URL(s) on a named disk

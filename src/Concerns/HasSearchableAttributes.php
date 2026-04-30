@@ -25,12 +25,12 @@ trait HasSearchableAttributes
      *
      *   public function toSearchableArray(): array
      *   {
-     *       return ['id' => (string) $this->getScoutKey(), 'code' => $this->code, ...$this->attributes()->indexData()];
+     *       return ['id' => (string) $this->getScoutKey(), 'code' => $this->code, ...$this->eav()->indexData()];
      *   }
      */
     public function toSearchableArray(): array
     {
-        return ['id' => (string) $this->getScoutKey(), ...$this->attributes()->indexData()];
+        return ['id' => (string) $this->getScoutKey(), ...$this->eav()->indexData()];
     }
 
     /**
@@ -39,6 +39,6 @@ trait HasSearchableAttributes
      */
     public function shouldBeSearchable(): bool
     {
-        return ! empty($this->attributes()->indexData());
+        return ! empty($this->eav()->indexData());
     }
 }

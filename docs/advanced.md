@@ -91,7 +91,7 @@ To add model-specific fields alongside attribute data, override `toSearchableArr
 ```php
 public function toSearchableArray(): array
 {
-    $data = $this->attributes()?->indexData() ?? [];
+    $data = $this->eav()?->indexData() ?? [];
 
     return ['id' => (string) $this->getScoutKey(), 'code' => $this->code, ...$data];
 }

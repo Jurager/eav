@@ -29,13 +29,13 @@ When an attribute has `localizable: true`, values are stored per locale:
 
 ```php
 // Write
-$product->attributes()->set('name', [
+$product->eav()->set('name', [
     ['locale_id' => 1, 'values' => 'T-Shirt'],
     ['locale_id' => 2, 'values' => 'Футболка'],
 ])->save('name');
 
 // Read
-$product->attributes()->value('name', localeId: 2); // 'Футболка'
+$product->eav()->value('name', localeId: 2); // 'Футболка'
 ```
 
 When no locale is specified, the default locale from `LocaleRegistry::defaultLocaleId()` is used.
