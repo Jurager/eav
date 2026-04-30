@@ -172,7 +172,10 @@ class AttributeValidator
                 ->whereIn('entity_id', $base->select('id'))
                 ->where(function ($q) use ($labels) {
                     foreach ($labels as $t) {
-                        $q->orWhere(fn ($q) => $q->where('locale_id', $t['locale_id'])->where('label', $t['value']));
+                        // Use LOWER() for case-insensitive comparison on both MySQL and PostgreSQL.
+                        $q->orWhere(fn ($q) => $q
+                            ->where('locale_id', $t['locale_id'])
+                            ->whereRaw('LOWER(label) = ?', [mb_strtolower((string) $t['value'])]));
                     }
                 })
                 ->exists();
