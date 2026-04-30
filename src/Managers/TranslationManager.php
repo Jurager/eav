@@ -2,6 +2,7 @@
 
 namespace Jurager\Eav\Managers;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Jurager\Eav\Models\Locale;
@@ -18,7 +19,7 @@ class TranslationManager
     ) {
     }
 
-    /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */
+    /** @param  callable(Builder): mixed|null  $modifier */
     public function locales(?callable $modifier = null): mixed
     {
         $query = EavModels::query('locale');
@@ -74,8 +75,8 @@ class TranslationManager
 
         foreach ($indexed as $localeId => $translation) {
             $params = array_filter([
-                'short_name'  => $translation['short_name'] ?? null,
-                'hint'        => $translation['hint'] ?? null,
+                'short_name' => $translation['short_name'] ?? null,
+                'hint' => $translation['hint'] ?? null,
                 'placeholder' => $translation['placeholder'] ?? null,
             ], static fn ($value) => $value !== null);
 
@@ -88,7 +89,8 @@ class TranslationManager
     /**
      * Persist translations for many models in a single bulk upsert.
      *
-     * @param array<int, array{0: Model, 1: array<int, array<string, mixed>>}> $modelsWithTranslations
+     * @param  array<int, array{0: Model, 1: array<int, array<string, mixed>>}>  $modelsWithTranslations
+     *
      * @throws \JsonException
      */
     public function batch(array $modelsWithTranslations, ?Carbon $timestamp = null): void
@@ -104,19 +106,19 @@ class TranslationManager
 
             foreach ($indexed as $localeId => $translation) {
                 $params = array_filter([
-                    'short_name'  => $translation['short_name'] ?? null,
-                    'hint'        => $translation['hint'] ?? null,
+                    'short_name' => $translation['short_name'] ?? null,
+                    'hint' => $translation['hint'] ?? null,
                     'placeholder' => $translation['placeholder'] ?? null,
                 ], static fn ($value) => $value !== null);
 
                 $rows[] = [
                     'entity_type' => $model->getMorphClass(),
-                    'entity_id'   => $model->getKey(),
-                    'locale_id'   => $localeId,
-                    'label'       => $translation['label'],
-                    'params'      => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
-                    'created_at'  => $timestamp,
-                    'updated_at'  => $timestamp,
+                    'entity_id' => $model->getKey(),
+                    'locale_id' => $localeId,
+                    'label' => $translation['label'],
+                    'params' => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
+                    'created_at' => $timestamp,
+                    'updated_at' => $timestamp,
                 ];
             }
         }

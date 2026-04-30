@@ -90,7 +90,7 @@ class LocaleRegistry
     /**
      * Set the active locales for the current request context.
      *
-     * @param array<string> $codes
+     * @param  array<string>  $codes
      */
     public function set(array $codes): void
     {

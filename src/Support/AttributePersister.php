@@ -7,8 +7,8 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Exceptions\MissingEntityException;
+use Jurager\Eav\Fields\Field;
 
 /**
  * Handles persistence of EAV attribute values and their translations.
@@ -81,7 +81,8 @@ class AttributePersister
     /**
      * Persist fields and delete all existing rows not in this set.
      *
-     * @param Collection<int, Field> $fields
+     * @param  Collection<int, Field>  $fields
+     *
      * @throws \Throwable
      */
     public function replace(Collection $fields): void
@@ -256,7 +257,7 @@ class AttributePersister
         $this->inChunks(
             $updates->pluck('row'),
             fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)
-            ->upsert($chunk->all(), ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
+                ->upsert($chunk->all(), ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
         );
 
         $this->syncTranslations($updates);
@@ -489,8 +490,8 @@ class AttributePersister
      * Ordering by (entity_id, attribute_id, id) guarantees positional alignment
      * with the original insert array for correct translation mapping.
      *
-     * @param  Collection<int, array>  $rows          Inserted row payloads.
-     * @param  int                     $maxIdBefore   Highest entity_attribute.id captured before the bulk insert.
+     * @param  Collection<int, array>  $rows  Inserted row payloads.
+     * @param  int  $maxIdBefore  Highest entity_attribute.id captured before the bulk insert.
      */
     private function fetchCreatedRecords(string $type, Collection $rows, int $maxIdBefore): Collection
     {

@@ -3,6 +3,8 @@
 namespace Jurager\Eav;
 
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Managers\SchemaManager;
+use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
@@ -11,8 +13,6 @@ use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
-use Jurager\Eav\Managers\SchemaManager;
-use Jurager\Eav\Managers\TranslationManager;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -50,7 +50,7 @@ class EavServiceProvider extends ServiceProvider
     private function registerObservers(): void
     {
         $models = [
-            'attribute'      => AttributeObserver::class,
+            'attribute' => AttributeObserver::class,
             'attribute_enum' => AttributeEnumObserver::class,
         ];
 

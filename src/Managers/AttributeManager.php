@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
+use JsonException;
 use Jurager\Eav\Concerns\BuildsTextConditions;
+use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\MissingEntityException;
-use JsonException;
-use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\FieldTypeRegistry;
@@ -38,7 +38,7 @@ class AttributeManager
     /** @var array<string, Collection<int, mixed>> */
     protected array $cachedAttributes = [];
 
-    /** @var array<string, bool> Tracks which schema param keys are fully loaded into $fields. */
+    /** @var array<string, bool> Tracks which schema param keys are fully loaded into. */
     private array $schemaLoaded = [];
 
     protected FieldTypeRegistry $fieldRegistry;
@@ -141,7 +141,7 @@ class AttributeManager
 
         $parametersKey = empty($parameters) ? 'default' : md5(json_encode($parameters, JSON_THROW_ON_ERROR));
 
-        $registryKey = $entityType . ':' . $parametersKey;
+        $registryKey = $entityType.':'.$parametersKey;
 
         // Resolve from cache or query the DB and cache for the process lifetime.
         $attributes = $registry->resolve(
@@ -342,7 +342,8 @@ class AttributeManager
     /**
      * Replace all entity_attribute rows with the given fields.
      *
-     * @param array<string, Field> $fields
+     * @param  array<string, Field>  $fields
+     *
      * @throws \Throwable
      */
     public function replace(array $fields): bool
@@ -448,9 +449,9 @@ class AttributeManager
         }
 
         $entityType = $this->entityOrFail()->attributeEntityType();
-        $eaTable    = EavModels::make('entity_attribute')->getTable();
-        $attrTable  = EavModels::make('attribute')->getTable();
-        $typeTable  = EavModels::make('attribute_type')->getTable();
+        $eaTable = EavModels::make('entity_attribute')->getTable();
+        $attrTable = EavModels::make('attribute')->getTable();
+        $typeTable = EavModels::make('attribute_type')->getTable();
 
         return EavModels::query('entity_attribute')
             ->join("$attrTable as _a", '_a.id', '=', "$eaTable.attribute_id")
@@ -697,15 +698,16 @@ class AttributeManager
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
         match ($operator) {
-            'like'     => $this->applyLike($query, $column, $value),
-            '='        => $this->applyScalarCondition($query, $column, '=', $value),
-            '!='       => $this->applyScalarCondition($query, $column, '!=', $value),
-            'in'       => $this->applyInLower($query, $column, (array) $value),
-            'not_in'   => $this->applyNotInLower($query, $column, (array) $value),
-            'null'     => $query->whereNull($column),
+            'like' => $this->applyLike($query, $column, $value),
+            '=', 'eq' => $this->applyScalarCondition($query, $column, '=', $value),
+            '!=', 'ne' => $this->applyScalarCondition($query, $column, '!=', $value),
+            'in' => $this->applyInLower($query, $column, (array) $value),
+            'nin', 'not_in' => $this->applyNotInLower($query, $column, (array) $value),
+            'null' => $query->whereNull($column),
             'not_null' => $query->whereNotNull($column),
-            'between'  => $query->whereBetween($column, $value),
-            default    => $query->where($column, $operator, $value),
+            'between' => $query->whereBetween($column, $value),
+            'not_between' => $query->whereNotBetween($column, $value),
+            default => $query->where($column, $operator, $value),
         };
     }
 
@@ -721,5 +723,4 @@ class AttributeManager
         return $this->entity?->attributeEntityType()
             ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type;
     }
-
 }

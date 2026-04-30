@@ -4,6 +4,7 @@ namespace Jurager\Eav\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
 
@@ -17,7 +18,6 @@ use Illuminate\Foundation\Queue\Queueable;
 class SyncSearchable implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
-
 
     public function __construct(
         protected string $entityType,
@@ -34,7 +34,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
     {
         $modelClass = Relation::getMorphedModel($this->entityType);
 
-        if (! $modelClass || ! is_subclass_of($modelClass, \Illuminate\Database\Eloquent\Model::class)) {
+        if (! $modelClass || ! is_subclass_of($modelClass, Model::class)) {
             return;
         }
 
@@ -50,7 +50,7 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
             ->whereExists(function ($q) use ($table, $key) {
                 $q->selectRaw(1)
                     ->from('entity_attribute')
-                    ->whereColumn("entity_attribute.entity_id", "$table.$key")
+                    ->whereColumn('entity_attribute.entity_id', "$table.$key")
                     ->where('entity_attribute.attribute_id', $this->attributeId)
                     ->where('entity_attribute.entity_type', $this->entityType);
             });

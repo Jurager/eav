@@ -2,6 +2,7 @@
 
 namespace Jurager\Eav\Managers;
 
+use Illuminate\Database\Eloquent\Builder;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Managers\Schema\AttributeSchema;
 use Jurager\Eav\Managers\Schema\EnumSchema;
@@ -56,7 +57,7 @@ class SchemaManager
         return $this->typeSchema ??= new TypeSchema();
     }
 
-    /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */
+    /** @param  callable(Builder): mixed|null  $modifier */
     public function attributes(?callable $modifier = null): mixed
     {
         $query = EavModels::query('attribute');
@@ -64,7 +65,7 @@ class SchemaManager
         return $modifier ? $modifier($query) : $query->get();
     }
 
-    /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */
+    /** @param  callable(Builder): mixed|null  $modifier */
     public function enums(Attribute $attribute, ?callable $modifier = null): mixed
     {
         $query = $attribute->enums()->getQuery();
@@ -72,7 +73,7 @@ class SchemaManager
         return $modifier ? $modifier($query) : $query->get();
     }
 
-    /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */
+    /** @param  callable(Builder): mixed|null  $modifier */
     public function types(?callable $modifier = null): mixed
     {
         $query = EavModels::query('attribute_type');
@@ -80,7 +81,7 @@ class SchemaManager
         return $modifier ? $modifier($query) : $query->get();
     }
 
-    /** @param  callable(\Illuminate\Database\Eloquent\Builder): mixed|null  $modifier */
+    /** @param  callable(Builder): mixed|null  $modifier */
     public function groups(?callable $modifier = null): mixed
     {
         $query = EavModels::query('attribute_group');

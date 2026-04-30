@@ -6,5 +6,7 @@ use Jurager\Eav\Models\AttributeGroup;
 
 class AttributeGroupDeleted
 {
-    public function __construct(public readonly AttributeGroup $group) {}
+    public function __construct(public readonly AttributeGroup $group)
+    {
+    }
 }

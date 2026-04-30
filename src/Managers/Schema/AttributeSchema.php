@@ -68,7 +68,7 @@ class AttributeSchema extends BaseSchema
         $translations = $this->extractTranslations($data);
 
         $typeId = $data['attribute_type_id'] ?? $attribute->attribute_type_id;
-        $type   = EavModels::query('attribute_type')->findOrFail($typeId);
+        $type = EavModels::query('attribute_type')->findOrFail($typeId);
 
         $data = $this->applyTypeConstraints($data, $type);
 
@@ -118,7 +118,7 @@ class AttributeSchema extends BaseSchema
      * Create many attributes in batch
      *
      * @param  array<int, array<string, mixed>>  $attributesData
-     * @return Collection<string, Attribute>  Keyed by attribute code.
+     * @return Collection<string, Attribute> Keyed by attribute code.
      */
     public function batch(array $attributesData, bool $fireEvents = true): Collection
     {

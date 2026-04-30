@@ -76,5 +76,4 @@ return [
         'link' => LinkField::class,
     ],
 
-
 ];

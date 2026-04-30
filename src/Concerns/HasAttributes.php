@@ -13,8 +13,8 @@ use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Managers\AttributeManager;
+use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
 
@@ -121,6 +121,10 @@ trait HasAttributes
      */
     public function scopeWhereAttribute(Builder $query, string $code, mixed $value, string $operator = '='): Builder
     {
+        if ($operator === 'tree') {
+            return $this->scopeWhereAttributeTree($query, $code, $value);
+        }
+
         $sub = $this->attributes()->subquery($code, $value, $operator);
 
         return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
@@ -186,6 +190,55 @@ trait HasAttributes
         }
 
         return $query;
+    }
+
+    /**
+     * Scope: find entities whose attribute equals $value, then expand to all NestedSet descendants.
+     *
+     * Executes two lightweight queries: one to resolve matching root IDs, one to expand the tree.
+     * Falls back to exact-match filtering when the model does not use NodeTrait.
+     *
+     * @throws JsonException|BindingResolutionException
+     */
+    public function scopeWhereAttributeTree(Builder $query, string $code, mixed $value): Builder
+    {
+        $sub = $this->attributes()->subquery($code, $value, '=');
+
+        if (! $sub) {
+            return $query;
+        }
+
+        $model = $query->getModel();
+        $keyName = $model->getKeyName();
+        $qualifiedKey = $model->getQualifiedKeyName();
+
+        $matchingIds = $model->newQuery()
+            ->whereIn($qualifiedKey, $sub)
+            ->pluck($keyName)
+            ->toArray();
+
+        if (empty($matchingIds)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        if (method_exists($model, 'whereDescendantOrSelf')) {
+            $allIds = $model->newQuery()
+                ->where(function (Builder $q) use ($matchingIds): void {
+                    foreach (array_values($matchingIds) as $i => $id) {
+                        $q->whereDescendantOrSelf($id, $i === 0 ? 'and' : 'or');
+                    }
+                })
+                ->pluck($keyName)
+                ->toArray();
+        } else {
+            $allIds = $matchingIds;
+        }
+
+        if (empty($allIds)) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->whereIn($qualifiedKey, $allIds);
     }
 
     /**
@@ -257,9 +310,9 @@ trait HasAttributes
     /**
      * Return a query for attributes scoped through related entities (e.g. categories for products).
      *
-     * @param array<string, mixed> $params
-     * @param class-string<Attributable> $model
-     * @return Builder|null
+     * @param  array<string, mixed>  $params
+     * @param  class-string<Attributable>  $model
+     *
      * @throws BindingResolutionException
      * @throws CircularDependencyException
      */

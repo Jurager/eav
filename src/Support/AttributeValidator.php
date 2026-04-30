@@ -3,6 +3,7 @@
 namespace Jurager\Eav\Support;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
@@ -16,7 +17,7 @@ use Jurager\Eav\Managers\AttributeManager;
  */
 class AttributeValidator
 {
-    /** @var array<string, callable(\Illuminate\Database\Eloquent\Builder, Attributable): void> */
+    /** @var array<string, callable(Builder, Attributable): void> */
     private static array $uniqueScopes = [];
 
     private AttributeManager $manager;
@@ -40,7 +41,7 @@ class AttributeValidator
      *       $query->whereIn('entity_id', $treeIds);
      *   });
      *
-     * @param callable(\Illuminate\Database\Eloquent\Builder, Attributable): void $callback
+     * @param  callable(Builder, Attributable): void  $callback
      */
     public static function registerUniqueScope(string $entityType, string $attributeCode, callable $callback): void
     {
@@ -59,10 +60,10 @@ class AttributeValidator
         $this->manager = $manager ?? AttributeManager::for($entity);
         $this->manager->ensureSchema();
 
-        $this->entityType      = $entity->attributeEntityType();
-        $this->entityId        = $entity->id ?? null;
+        $this->entityType = $entity->attributeEntityType();
+        $this->entityId = $entity->id ?? null;
 
-        $modelClass            = Relation::getMorphedModel($this->entityType);
+        $modelClass = Relation::getMorphedModel($this->entityType);
 
         $this->usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
     }

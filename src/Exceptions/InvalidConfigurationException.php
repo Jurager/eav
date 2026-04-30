@@ -21,5 +21,4 @@ class InvalidConfigurationException extends EavException
     {
         return new self("$class must implement Attributable.");
     }
-
 }

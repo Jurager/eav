@@ -47,9 +47,9 @@ class SelectField extends Field
         $raw = $this->values[0]['value'] ?? null;
 
         return match (true) {
-            $raw === null  => null,
+            $raw === null => null,
             is_array($raw) => array_map('intval', $raw),
-            default        => (int) $raw,
+            default => (int) $raw,
         };
     }
 
@@ -107,7 +107,7 @@ class SelectField extends Field
      */
     public function indexData(): array
     {
-        $code  = $this->code();
+        $code = $this->code();
         $value = $this->value();
 
         if ($value === null) {
@@ -115,7 +115,7 @@ class SelectField extends Field
         }
 
         $result = [
-            $code          => $value,
+            $code => $value,
             "{$code}_code" => $this->isMultiple()
                 ? array_map(static fn (AttributeEnum $e) => $e->code, $this->enums())
                 : $this->enum()?->code,
@@ -170,7 +170,7 @@ class SelectField extends Field
         }
 
         $validIds = $this->enumRegistry->resolve($this->attribute->id);
-        $invalid  = array_filter(array_map('intval', $values), static fn ($id) => ! isset($validIds[$id]));
+        $invalid = array_filter(array_map('intval', $values), static fn ($id) => ! isset($validIds[$id]));
 
         if (! empty($invalid)) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));

@@ -11,6 +11,7 @@ use Jurager\Eav\Registry\SchemaRegistry;
 class AttributeObserver
 {
     protected SchemaRegistry $schema;
+
     protected EnumRegistry $enums;
 
     public function __construct()
@@ -75,10 +76,6 @@ class AttributeObserver
         }
     }
 
-    /**
-     * @param Attribute $attribute
-     * @return void
-     */
     protected function syncSearchable(Attribute $attribute): void
     {
         SyncSearchable::dispatch($attribute->entity_type, $attribute->id)->afterCommit();
