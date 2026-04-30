@@ -66,7 +66,7 @@ class AttributeManager
     /**
      * Create a manager for an entity instance, FQCN, or morph-map key.
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidConfigurationException
      */
     public static function for(string|Attributable $entity): static
     {

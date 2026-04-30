@@ -179,8 +179,10 @@ class AttributeSchema extends BaseSchema
         }
 
         /** @var Collection<string, Attribute> $created */
+        $entityTypes = array_values(array_unique(array_column($rows, 'entity_type')));
+
         $created = EavModels::query('attribute')
-            ->where('entity_type', $rows[0]['entity_type'])
+            ->whereIn('entity_type', $entityTypes)
             ->whereIn('code', array_column($rows, 'code'))
             ->get()
             ->keyBy('code');
