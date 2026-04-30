@@ -7,6 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
+use Jurager\Eav\Support\EavModels;
 
 /**
  * Re-indexes all entities that have a stored value for the given attribute.
@@ -46,13 +47,15 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
         $key = $model->getKeyName();
         $table = $model->getTable();
 
+        $eaTable = EavModels::make('entity_attribute')->getTable();
+
         $query = $modelClass::query()
-            ->whereExists(function ($q) use ($table, $key) {
+            ->whereExists(function ($q) use ($table, $key, $eaTable) {
                 $q->selectRaw(1)
-                    ->from('entity_attribute')
-                    ->whereColumn('entity_attribute.entity_id', "$table.$key")
-                    ->where('entity_attribute.attribute_id', $this->attributeId)
-                    ->where('entity_attribute.entity_type', $this->entityType);
+                    ->from($eaTable)
+                    ->whereColumn("$eaTable.entity_id", "$table.$key")
+                    ->where("$eaTable.attribute_id", $this->attributeId)
+                    ->where("$eaTable.entity_type", $this->entityType);
             });
 
         $query->chunkById(1000, function ($models) {
