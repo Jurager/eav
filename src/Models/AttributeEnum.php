@@ -2,6 +2,7 @@
 
 namespace Jurager\Eav\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -22,6 +23,10 @@ class AttributeEnum extends Model
     {
         static::deleting(static function (AttributeEnum $enum) {
             $enum->translations()->delete();
+        });
+
+        static::addGlobalScope('ordered', static function (Builder $query) {
+            $query->orderBy('sort')->orderBy('id');
         });
     }
 
