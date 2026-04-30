@@ -16,6 +16,8 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeGroup extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = ['code', 'sort'];
 
     protected static function booted(): void

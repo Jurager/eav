@@ -12,6 +12,8 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeType extends Model
 {
+    public $timestamps = false;
+
     protected $fillable = ['code'];
 
     public function attributes(): HasMany

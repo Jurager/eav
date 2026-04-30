@@ -413,8 +413,11 @@ class AttributeManager
             $query->filtered();
         }
 
-        $query->whereHas('attribute')
-            ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
+        $query->when(
+                $codes,
+                fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)),
+                fn ($q) => $q->whereHas('attribute'),
+            )
             ->with([
                 'attribute.type',
                 'attribute.group.translations',
