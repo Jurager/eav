@@ -221,8 +221,10 @@ trait HasAttributes
             return $query->whereRaw('1 = 0');
         }
 
-        if (method_exists($model, 'whereDescendantOrSelf')) {
-            $allIds = $model->newQuery()
+        $treeQuery = $model->newQuery();
+
+        if (method_exists($treeQuery, 'whereDescendantOrSelf')) {
+            $allIds = $treeQuery
                 ->where(function (Builder $q) use ($matchingIds): void {
                     foreach (array_values($matchingIds) as $i => $id) {
                         $q->whereDescendantOrSelf($id, $i === 0 ? 'and' : 'or');
