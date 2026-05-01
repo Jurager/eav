@@ -11,7 +11,7 @@ return new class () extends Migration {
             $table->id();
             $table->morphs('entity');
             $table->foreignId('locale_id')->constrained('locales')->cascadeOnDelete()->cascadeOnUpdate();
-            $table->text('label');
+            $table->citext('label');
             $table->json('params')->nullable();
 
             $table->unique(['entity_type', 'entity_id', 'locale_id']);

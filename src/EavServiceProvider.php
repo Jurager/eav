@@ -2,6 +2,10 @@
 
 namespace Jurager\Eav;
 
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Database\Schema\Grammars\PostgresGrammar;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Fluent;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
@@ -45,6 +49,28 @@ class EavServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
         $this->registerObservers();
+        $this->registerCitextSupport();
+    }
+
+    /**
+     * Register citext column type support for PostgreSQL.
+     *
+     * Teaches PostgresGrammar to emit "citext" DDL, and adds $table->citext()
+     * to Blueprint — resolves to citext on PostgreSQL, text on MySQL/MariaDB.
+     */
+    private function registerCitextSupport(): void
+    {
+        PostgresGrammar::macro('typeCitext', function (Fluent $column) {
+            return 'citext';
+        });
+
+        Blueprint::macro('citext', function (string $column) {
+            if (DB::connection()->getDriverName() === 'pgsql') {
+                return $this->addColumn('citext', $column);
+            }
+
+            return $this->addColumn('text', $column);
+        });
     }
 
     private function registerObservers(): void

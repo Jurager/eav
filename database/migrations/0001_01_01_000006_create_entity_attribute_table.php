@@ -12,7 +12,7 @@ return new class () extends Migration {
             $table->morphs('entity');
             $table->foreignId('attribute_id')->constrained('attributes')->cascadeOnDelete()->cascadeOnUpdate();
 
-            $table->text('value_text')->nullable();
+            $table->citext('value_text')->nullable();
             $table->bigInteger('value_integer')->nullable();
             $table->double('value_float')->nullable();
             $table->tinyInteger('value_boolean')->nullable();
