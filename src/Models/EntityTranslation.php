@@ -20,7 +20,6 @@ class EntityTranslation extends MorphPivot
 
     protected $fillable = [
         'entity_id', 'entity_type', 'locale_id', 'label', 'params',
-        'params->short_name', 'params->hint', 'params->placeholder',
     ];
 
     protected function casts(): array

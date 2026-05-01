@@ -63,7 +63,13 @@ class TranslationManager
      * Entries without a label are discarded. Optional params (hint, placeholder,
      * short_name) are packed into the params column; absent values are omitted.
      *
+     * Uses upsert + targeted delete instead of sync() to avoid the non-atomic
+     * "delete-all then re-insert" window where the model would briefly have no
+     * translations visible to concurrent readers.
+     *
      * @param  array<int, array<string, mixed>>  $translations
+     *
+     * @throws \JsonException
      */
     public function save(Model $model, array $translations): void
     {
@@ -73,6 +79,27 @@ class TranslationManager
             static fn ($t) => ! is_null($t['label'] ?? null),
         );
 
+        $morphType = $model->getMorphClass();
+        $entityId = $model->getKey();
+        $localeIds = array_keys($indexed);
+
+        // Remove translations for locales that are no longer in the incoming set.
+        EavModels::query('entity_translation')
+            ->where('entity_type', $morphType)
+            ->where('entity_id', $entityId)
+            ->when(
+                $localeIds,
+                fn ($q) => $q->whereNotIn('locale_id', $localeIds),
+            )
+            ->delete();
+
+        if (empty($indexed)) {
+            return;
+        }
+
+        $now = Carbon::now();
+        $rows = [];
+
         foreach ($indexed as $localeId => $translation) {
             $params = array_filter([
                 'short_name' => $translation['short_name'] ?? null,
@@ -80,10 +107,19 @@ class TranslationManager
                 'placeholder' => $translation['placeholder'] ?? null,
             ], static fn ($value) => $value !== null);
 
-            $indexed[$localeId]['params'] = $params ?: null;
+            $rows[] = [
+                'entity_type' => $morphType,
+                'entity_id' => $entityId,
+                'locale_id' => $localeId,
+                'label' => $translation['label'],
+                'params' => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
 
-        $model->translations()->sync($indexed);
+        EavModels::query('entity_translation')
+            ->upsert($rows, ['entity_type', 'entity_id', 'locale_id'], ['label', 'params', 'updated_at']);
     }
 
     /**

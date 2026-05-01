@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
 use JsonException;
+use Jurager\Eav\Concerns\BuildsTextConditions;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\MissingEntityException;
@@ -29,6 +30,8 @@ use Jurager\Eav\Support\EavModels;
  */
 class AttributeManager
 {
+    use BuildsTextConditions;
+
     /** @var array<string, Field> */
     protected array $fields = [];
 
@@ -63,7 +66,7 @@ class AttributeManager
     /**
      * Create a manager for an entity instance, FQCN, or morph-map key.
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidConfigurationException
      */
     public static function for(string|Attributable $entity): static
     {
@@ -76,10 +79,18 @@ class AttributeManager
                 throw InvalidConfigurationException::missingAttributableContract($entity);
             }
 
-            return new static(new $entity());
+            // Schema-only: resolve entity type from a transient instance but do not
+            // store the instance — this prevents accidentally persisting values with
+            // entity_id = null when the returned manager is used for writes.
+            $instance = new $entity();
+
+            return new static(null, EavModels::query('attribute')
+                ->forEntity($instance->attributeEntityType())
+                ->withRelations()
+                ->get());
         }
 
-        // String entity type (e.g. 'product') — schema-only, no entity instance.
+        // Morph-map key (e.g. 'product') — schema-only, no entity instance.
         return new static(null, EavModels::query('attribute')
             ->forEntity($entity)
             ->withRelations()
@@ -141,9 +152,11 @@ class AttributeManager
         $registryKey = $entityType.':'.$parametersKey;
 
         // Resolve from cache or query the DB and cache for the process lifetime.
+        // Call availableAttributesQuery() directly on the entity rather than
+        // constructing a throwaway AttributeManager just to call query() on it.
         $attributes = $registry->resolve(
             $registryKey,
-            fn () => static::for($entity)->query($parameters)?->get() ?? collect()
+            fn () => $entity->availableAttributesQuery($parameters)?->get() ?? collect()
         );
 
         return static::buildFromCollection($attributes);
@@ -410,8 +423,11 @@ class AttributeManager
             $query->filtered();
         }
 
-        $query->whereHas('attribute')
-            ->when($codes, fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)))
+        $query->when(
+                $codes,
+                fn ($q) => $q->whereHas('attribute', fn ($q) => $q->whereIn('code', $codes)),
+                fn ($q) => $q->whereHas('attribute'),
+            )
             ->with([
                 'attribute.type',
                 'attribute.group.translations',
@@ -695,29 +711,18 @@ class AttributeManager
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
         match ($operator) {
-            'like'           => $this->applyLike($query, $column, $value),
-            '=', 'eq'        => $query->where($column, '=', $value),
-            '!=', 'ne'       => $query->where($column, '!=', $value),
-            'in'             => $query->whereIn($column, (array) $value),
-            'nin', 'not_in'  => $query->whereNotIn($column, (array) $value),
-            'null'           => $query->whereNull($column),
-            'not_null'       => $query->whereNotNull($column),
-            'between'        => $query->whereBetween($column, $value),
-            'not_between'    => $query->whereNotBetween($column, $value),
-            default          => $query->where($column, $operator, $value),
+            'like' => $this->applyLike($query, $column, $value),
+            '=', 'eq' => $this->applyScalarCondition($query, $column, '=', $value),
+            '!=', 'ne' => $this->applyScalarCondition($query, $column, '!=', $value),
+            'in' => $this->applyInLower($query, $column, (array) $value),
+            'nin', 'not_in' => $this->applyNotInLower($query, $column, (array) $value),
+            'null' => $query->whereNull($column),
+            'not_null' => $query->whereNotNull($column),
+            'between' => $query->whereBetween($column, $value),
+            'not_between' => $query->whereNotBetween($column, $value),
+            '<', '>', '<=', '>=', '<>' => $query->where($column, $operator, $value),
+            default => throw new \InvalidArgumentException("Unsupported query operator: [{$operator}]."),
         };
-    }
-
-    /** Wrap $value with % wildcards and escape LIKE special characters before binding. */
-    private function applyLike(Builder $query, string $column, mixed $value): void
-    {
-        if (! is_string($value)) {
-            return;
-        }
-
-        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
-
-        $query->whereRaw($column.' LIKE ?', ['%'.$escaped.'%']);
     }
 
     /** @throws JsonException */

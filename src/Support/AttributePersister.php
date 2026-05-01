@@ -46,8 +46,9 @@ class AttributePersister
      *
      * Set once at the beginning of each persist/flush cycle so every row
      * in the batch shares the same created_at / updated_at value.
+     * Null outside of a withinTimestamp() call.
      */
-    private Carbon $timestamp;
+    private ?Carbon $timestamp = null;
 
     /** @param  Attributable|null  $entity  Omit for batch mode. */
     public function __construct(
@@ -562,8 +563,8 @@ class AttributePersister
                             'entity_id' => $recordId,
                             'locale_id' => (int) $t['locale_id'],
                             'label' => $t['value'] ?? null,
-                            'created_at' => $this->timestamp,
-                            'updated_at' => $this->timestamp,
+                            'created_at' => $this->timestamp ?? now(),
+                            'updated_at' => $this->timestamp ?? now(),
                         ],
                     ]),
             )
@@ -595,13 +596,15 @@ class AttributePersister
      */
     private function blankRow(string $type, int|string $entityId, int $attrId): array
     {
+        $ts = $this->timestamp ?? throw new \LogicException('blankRow() called outside withinTimestamp().');
+
         return [
             'entity_type' => $type,
             'entity_id' => $entityId,
             'attribute_id' => $attrId,
             ...array_fill_keys(self::VALUE_COLUMNS, null),
-            'created_at' => $this->timestamp,
-            'updated_at' => $this->timestamp,
+            'created_at' => $ts,
+            'updated_at' => $ts,
         ];
     }
 
@@ -618,7 +621,7 @@ class AttributePersister
         try {
             $callback();
         } finally {
-            unset($this->timestamp);
+            $this->timestamp = null;
         }
     }
 

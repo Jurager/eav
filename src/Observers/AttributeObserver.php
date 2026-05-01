@@ -10,14 +10,10 @@ use Jurager\Eav\Registry\SchemaRegistry;
 
 class AttributeObserver
 {
-    protected SchemaRegistry $schema;
-
-    protected EnumRegistry $enums;
-
-    public function __construct()
-    {
-        $this->schema = app(SchemaRegistry::class);
-        $this->enums = app(EnumRegistry::class);
+    public function __construct(
+        protected SchemaRegistry $schema,
+        protected EnumRegistry $enums,
+    ) {
     }
 
     /**

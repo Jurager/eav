@@ -14,6 +14,10 @@ class LinkField extends Field
 
     protected function validate(mixed $value): bool
     {
+        if ($value === null) {
+            return true;
+        }
+
         if (! is_string($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }

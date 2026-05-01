@@ -14,11 +14,15 @@ class TextField extends Field
 
     protected function validate(mixed $value): bool
     {
+        if ($value === null) {
+            return true;
+        }
+
         if (! is_string($value)) {
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
-        if (strlen($value) > 255) {
+        if (mb_strlen($value) > 255) {
             return $this->addError(__('eav::attributes.validation.text_too_long'));
         }
 

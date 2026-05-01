@@ -21,7 +21,7 @@ class GroupSchema extends BaseSchema
     {
         $translations = $this->extractTranslations($data);
 
-        $data['sort'] = $this->nextGroupSort();
+        $data['sort'] ??= $this->nextGroupSort();
 
         $group = EavModels::query('attribute_group')->create($data);
 
