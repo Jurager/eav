@@ -45,6 +45,9 @@ class AttributeManager
     /** @var array<string, mixed>|null */
     private ?array $indexData = null;
 
+    /** FQCN stored for schema-only managers created from a class string. */
+    protected ?string $entityClass = null;
+
     /**
      * @param  Collection<int, mixed>|null  $preloadedAttributes
      */
@@ -81,10 +84,14 @@ class AttributeManager
             // entity_id = null when the returned manager is used for writes.
             $instance = new $entity();
 
-            return new static(null, EavModels::query('attribute')
+            $manager = new static(null, EavModels::query('attribute')
                 ->forEntity($instance->attributeEntityType())
                 ->withRelations()
                 ->get());
+
+            $manager->entityClass = $entity;
+
+            return $manager;
         }
 
         // Morph-map key (e.g. 'product') — schema-only, no entity instance.
@@ -458,7 +465,7 @@ class AttributeManager
             return [];
         }
 
-        $entityType = $this->entityOrFail()->attributeEntityType();
+        $entityType = $this->resolveEntity()->attributeEntityType();
         $eaTable = EavModels::make('entity_attribute')->getTable();
         $attrTable = EavModels::make('attribute')->getTable();
         $typeTable = EavModels::make('attribute_type')->getTable();
@@ -620,13 +627,17 @@ class AttributeManager
      */
     public function query(array $params = []): ?Builder
     {
-        return $this->entityOrFail()->availableAttributesQuery($params);
+        return $this->resolveEntity()->availableAttributesQuery($params);
     }
 
     /** @throws LogicException */
-    protected function entityOrFail(): Attributable
+    /**
+     * Returns the entity instance, or a transient instance from the stored class for schema-only managers.
+     * Do NOT use when you need entity->id (write operations).
+     */
+    protected function resolveEntity(): Attributable
     {
-        return $this->entity ?? throw MissingEntityException::forManager();
+        return $this->entity ?? ($this->entityClass ? new ($this->entityClass)() : throw MissingEntityException::forManager());
     }
 
     /**
@@ -670,11 +681,13 @@ class AttributeManager
     /** Return a Builder scoped to entity_attribute rows for the current entity. */
     protected function entityQuery(): Builder
     {
-        $entity = $this->entityOrFail();
+        if ($this->entity === null) {
+            throw MissingEntityException::forManager();
+        }
 
         return EavModels::query('entity_attribute')
-            ->where('entity_type', $entity->attributeEntityType())
-            ->where('entity_id', $entity->id);
+            ->where('entity_type', $this->entity->attributeEntityType())
+            ->where('entity_id', $this->entity->id);
     }
 
     private function persister(): AttributePersister
