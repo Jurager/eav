@@ -9,7 +9,6 @@ use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\FieldTypeRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Tests\TestCase;

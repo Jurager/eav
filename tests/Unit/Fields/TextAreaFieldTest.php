@@ -26,7 +26,7 @@ class TextAreaFieldTest extends TestCase
 
     private function makeAttribute(array $attributes = []): Attribute
     {
-        return (new Attribute)->forceFill(array_merge([
+        return (new Attribute())->forceFill(array_merge([
             'code'        => 'description',
             'localizable' => false,
             'multiple'    => false,

@@ -7,14 +7,11 @@ namespace Jurager\Eav\Tests\Unit\Registry;
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
 use Jurager\Eav\Fields\BooleanField;
 use Jurager\Eav\Fields\NumberField;
-use Jurager\Eav\Fields\SelectField;
 use Jurager\Eav\Fields\TextField;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Registry\FieldTypeRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
-use Mockery;
 
 class FieldTypeRegistryTest extends TestCase
 {
@@ -111,10 +108,10 @@ class FieldTypeRegistryTest extends TestCase
 
     public function test_make_creates_correct_field_instance(): void
     {
-        $type = new AttributeType;
+        $type = new AttributeType();
         $type->code = 'text';
 
-        $attribute = (new Attribute)->forceFill([
+        $attribute = (new Attribute())->forceFill([
             'code'        => 'title',
             'localizable' => false,
             'multiple'    => false,
@@ -133,10 +130,10 @@ class FieldTypeRegistryTest extends TestCase
 
     public function test_make_creates_number_field(): void
     {
-        $type = new AttributeType;
+        $type = new AttributeType();
         $type->code = 'number';
 
-        $attribute = (new Attribute)->forceFill([
+        $attribute = (new Attribute())->forceFill([
             'code'        => 'price',
             'localizable' => false,
             'multiple'    => false,
@@ -155,7 +152,7 @@ class FieldTypeRegistryTest extends TestCase
 
     public function test_make_throws_when_type_relation_not_loaded(): void
     {
-        $attribute = (new Attribute)->forceFill([
+        $attribute = (new Attribute())->forceFill([
             'code'        => 'title',
             'localizable' => false,
             'multiple'    => false,
