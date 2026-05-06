@@ -39,5 +39,7 @@
                 "Jurager\\Eav\\EavServiceProvider"
             ]
         }
-    }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
 }
