@@ -383,7 +383,7 @@ class AttributePersister
         // Delete translations where locale_id is NOT in the keep list.
         // Grouped by locale set to minimize the number of queries.
         $localesByRecord
-            ->groupBy(fn ($locales) => implode(',', $locales))
+            ->groupBy(fn ($locales) => implode(',', $locales), preserveKeys: true)
             ->each(function (Collection $group) {
                 $recordIds = $group->keys()->all();
                 $keepLocales = $group->first();
