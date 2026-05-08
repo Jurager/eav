@@ -421,6 +421,24 @@ class AttributeManager
      */
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
+        $transform = fn (Model $model): Model => tap($model, function ($model) {
+            $model->value = $this->fieldRegistry->make($model->attribute)->from($model);
+        });
+
+        // Use pre-loaded relation to avoid N+1 when the caller eager-loads attribute_values.
+        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
+            $collection = $this->entity->attribute_values;
+
+            if ($codes !== null) {
+                $collection = $collection->filter(
+                    fn ($ea) => $ea->relationLoaded('attribute')
+                        && in_array($ea->attribute->code ?? null, $codes, true)
+                );
+            }
+
+            return $collection->map($transform)->values();
+        }
+
         $query = $this->entityQuery();
 
         if (method_exists($query->getModel(), 'scopeFiltered')) {
@@ -439,10 +457,6 @@ class AttributeManager
                 'attribute.enums.translations',
                 'translations',
             ]);
-
-        $transform = fn (Model $model): Model => tap($model, function ($model) {
-            $model->value = $this->fieldRegistry->make($model->attribute)->from($model);
-        });
 
         if ($paginated !== null) {
             return $query->paginate($paginated)->through($transform);
