@@ -15,8 +15,6 @@ return new class () extends Migration {
             $table->morphs('entity');
             $table->foreignId('locale_id')->constrained('locales')->cascadeOnDelete()->cascadeOnUpdate();
 
-            // Citext provides case-insensitive comparisons on PostgreSQL.
-            // On MySQL the column collation handles case-insensitivity instead.
             if ($isPgsql) {
                 $table->citext('label');
             } else {
