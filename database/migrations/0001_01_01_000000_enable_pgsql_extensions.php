@@ -8,11 +8,12 @@ return new class () extends Migration {
     {
         if (DB::getDriverName() === 'pgsql') {
             DB::statement('CREATE EXTENSION IF NOT EXISTS citext');
+            DB::statement('CREATE EXTENSION IF NOT EXISTS pg_trgm');
         }
     }
 
     public function down(): void
     {
-        // citext is a shared database resource — not dropped on rollback
+        // Extensions are shared database resources — not dropped on rollback.
     }
 };

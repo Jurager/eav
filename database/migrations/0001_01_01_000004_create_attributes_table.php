@@ -25,7 +25,6 @@ return new class () extends Migration {
             $table->boolean('searchable')->default(false);
 
             $table->unique(['entity_type', 'code']);
-            $table->index('entity_type');
             $table->index(['entity_type', 'searchable']);
 
             $table->softDeletes();

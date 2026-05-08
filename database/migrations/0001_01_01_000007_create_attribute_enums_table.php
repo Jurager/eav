@@ -11,8 +11,10 @@ return new class () extends Migration {
             $table->id();
             $table->foreignId('attribute_id')->constrained('attributes')->cascadeOnDelete()->cascadeOnUpdate();
             $table->string('code', 100);
+            $table->integer('sort')->default(0);
 
             $table->unique(['attribute_id', 'code']);
+            $table->index(['attribute_id', 'sort']);
 
             $table->timestamps();
         });
