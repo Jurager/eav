@@ -25,7 +25,7 @@ class EavServiceProvider extends ServiceProvider
         $this->mergeConfigFrom(__DIR__.'/../config/eav.php', 'eav');
 
         $this->app->singleton(AttributeTypeRegistry::class);
-        $this->app->scoped(LocaleRegistry::class);
+        $this->app->singleton(LocaleRegistry::class);
         $this->app->singleton(FieldTypeRegistry::class);
         $this->app->singleton(SchemaRegistry::class);
         $this->app->singleton(EnumRegistry::class);

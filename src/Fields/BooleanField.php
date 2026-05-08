@@ -61,6 +61,10 @@ class BooleanField extends Field
 
     protected function normalize(mixed $value): int
     {
+        if ($value === null) {
+            return 0;
+        }
+
         return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
     }
 }

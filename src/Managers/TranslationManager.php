@@ -67,11 +67,15 @@ class TranslationManager
      * "delete-all then re-insert" window where the model would briefly have no
      * translations visible to concurrent readers.
      *
+     * When $partial is false (default), locales not present in $translations are
+     * deleted. Set $partial to true to only upsert the given locales without removing
+     * existing translations for other locales.
+     *
      * @param  array<int, array<string, mixed>>  $translations
      *
      * @throws \JsonException
      */
-    public function save(Model $model, array $translations): void
+    public function save(Model $model, array $translations, bool $partial = false): void
     {
         /** @var array<int, array<string, mixed>> $indexed */
         $indexed = array_filter(
@@ -83,15 +87,17 @@ class TranslationManager
         $entityId = $model->getKey();
         $localeIds = array_keys($indexed);
 
-        // Remove translations for locales that are no longer in the incoming set.
-        EavModels::query('entity_translation')
-            ->where('entity_type', $morphType)
-            ->where('entity_id', $entityId)
-            ->when(
-                $localeIds,
-                fn ($q) => $q->whereNotIn('locale_id', $localeIds),
-            )
-            ->delete();
+        if (! $partial) {
+            // Remove translations for locales that are no longer in the incoming set.
+            EavModels::query('entity_translation')
+                ->where('entity_type', $morphType)
+                ->where('entity_id', $entityId)
+                ->when(
+                    $localeIds,
+                    fn ($q) => $q->whereNotIn('locale_id', $localeIds),
+                )
+                ->delete();
+        }
 
         if (empty($indexed)) {
             return;

@@ -16,6 +16,8 @@ use Jurager\Eav\Support\EavModels;
  */
 class EntityTranslation extends MorphPivot
 {
+    public $incrementing = true;
+
     protected $table = 'entity_translations';
 
     protected $fillable = [

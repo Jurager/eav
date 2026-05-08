@@ -57,6 +57,12 @@ class Attribute extends Model
             $attribute->translations()->delete();
         });
 
+        static::saving(static function (Attribute $attribute) {
+            if ($attribute->type && $attribute->type->code === 'select') {
+                $attribute->localizable = false;
+            }
+        });
+
         static::addGlobalScope('ordered', static function (Builder $query) {
             $query->orderBy('attribute_group_id')->orderBy('sort')->orderBy('id');
         });

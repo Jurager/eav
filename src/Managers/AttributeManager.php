@@ -223,9 +223,7 @@ class AttributeManager
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
             ->each(fn ($attr) => $this->fields[$attr->code] = $this->fieldRegistry->make($attr));
 
-        if (count($this->fields) >= $attributes->count()) {
-            $this->schemaLoaded[$key] = true;
-        }
+        $this->schemaLoaded[$key] = true;
 
         return $this;
     }
@@ -550,7 +548,6 @@ class AttributeManager
             ->where('attribute_id', $field->attribute()->id);
 
         if ($field->isLocalizable()) {
-            // Localizable fields are matched against entity_translations.label.
             $sub->whereHas('translations', function ($q) use ($value, $operator, $localeId) {
                 $this->applyOperator($q, 'entity_translations.label', $operator, $value);
 
@@ -644,10 +641,11 @@ class AttributeManager
         return $this->resolveEntity()->availableAttributesQuery($params);
     }
 
-    /** @throws LogicException */
     /**
      * Returns the entity instance, or a transient instance from the stored class for schema-only managers.
      * Do NOT use when you need entity->id (write operations).
+     *
+     * @throws MissingEntityException When neither an entity instance nor entityClass is available.
      */
     protected function resolveEntity(): Attributable
     {

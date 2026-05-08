@@ -13,7 +13,14 @@ abstract class BaseSchema
     ) {
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /**
+     * Extract and unset translations from the input array.
+     *
+     * Mutates $data by removing the 'translations' key — this prevents mass-assignment
+     * errors when the remaining array is passed to Eloquent::create()/update().
+     *
+     * @return array<int, array<string, mixed>>
+     */
     protected function extractTranslations(array &$data): array
     {
         $translations = $data['translations'] ?? [];

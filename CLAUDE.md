@@ -12,7 +12,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Install dependencies
 composer install
 
-# Run tests (orchestra/testbench is the test harness — no phpunit.xml exists yet)
+# Run tests (orchestra/testbench is the test harness)
 vendor/bin/phpunit
 
 # Publish config to consuming app
@@ -22,19 +22,17 @@ php artisan vendor:publish --tag=eav-config
 php artisan vendor:publish --tag=eav-migrations
 ```
 
-There are currently no tests in the `tests/` directory.
-
 ## Architecture
 
 ### Service Provider
 
-`EavServiceProvider` registers three singletons: `FieldTypeRegistry`, `LocaleRegistry`, and `AttributeInheritanceResolver`. It also loads migrations and wires the `AttributeObserver` to the configured `Attribute` model.
+`EavServiceProvider` registers eight singletons: `AttributeTypeRegistry`, `LocaleRegistry`, `FieldTypeRegistry`, `SchemaRegistry`, `EnumRegistry`, `AttributeInheritanceResolver`, `TranslationManager`, and `SchemaManager`. It also loads migrations, translations, and wires `AttributeObserver` and `AttributeEnumObserver` to the configured models.
 
 ### Making a Model Attributable
 
 A model must implement `Contracts/Attributable` and use the `Concerns/HasAttributes` trait. `getAttributeEntityType()` returns the morph-map key (e.g. `'product'`) used to scope attribute schemas.
 
-### AttributeManager (`src/Support/AttributeManager.php`)
+### AttributeManager (`src/Managers/AttributeManager.php`)
 
 The central orchestrator. Three factory modes:
 - `AttributeManager::for($model)` — entity instance: loads values + schema
@@ -47,7 +45,7 @@ Schema is cached in a static process-level registry (`$schemaRegistry`). Batch p
 
 Abstract base `Field` defines three contracts: `column()` (returns one of the six `STORAGE_*` constants), `validate(mixed $value): bool`, and `normalize(mixed $value): mixed`. Nine built-in types: `TextField`, `TextAreaField`, `NumberField`, `DateField`, `BooleanField`, `SelectField`, `ImageField`, `FileField`, `LinkField`.
 
-Custom fields must extend `Field` and be registered in `config/eav.php` under `field_types`.
+Custom fields must extend `Field` and be registered in `config/eav.php` under `types`.
 
 ### Persistence (`src/Support/AttributePersister.php`)
 
@@ -70,4 +68,4 @@ Available on attributable models: `whereAttribute()`, `whereAttributeLike()`, `w
 
 Two sections:
 - `models` — override any of the six Eloquent models with a custom subclass
-- `field_types` — map type-code strings to `Field` implementations
+- `types` — map type-code strings to `Field` implementations

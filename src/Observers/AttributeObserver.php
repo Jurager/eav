@@ -7,6 +7,7 @@ use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Support\EavModels;
 
 class AttributeObserver
 {
@@ -43,10 +44,13 @@ class AttributeObserver
     {
         $this->schema->forget($attribute->entity_type);
 
-        // It only makes sense to link if participated in the search at all
         if ($attribute->searchable) {
             $this->syncSearchable($attribute);
         }
+
+        EavModels::query('entity_attribute')
+            ->where('attribute_id', $attribute->id)
+            ->delete();
     }
 
     /**

@@ -29,7 +29,9 @@ class SelectField extends Field
     }
 
     /**
-     * SelectField always stores enum_id in value column without translations.
+     * Stores enum_id directly in the value column. Enum labels are translated
+     * via the attribute_enums table, so entity_translations are not used for
+     * value storage regardless of the attribute's localizable flag.
      */
     public function toStorage(): array
     {
@@ -137,8 +139,7 @@ class SelectField extends Field
     }
 
     /**
-     * SelectField stores enum_id directly in value column,
-     * ignoring attribute localizable flag (labels are translated in enums table).
+     * Accept scalar for single-select, array for multi-select.
      */
     protected function validatePayload(mixed $values): bool
     {
