@@ -18,6 +18,7 @@ return new class () extends Migration {
             $table->boolean('mandatory')->default(false);
             $table->json('validations')->nullable();
 
+            $table->boolean('system')->default(false);
             $table->boolean('localizable')->default(false);
             $table->boolean('multiple')->default(false);
             $table->boolean('unique')->default(false);
