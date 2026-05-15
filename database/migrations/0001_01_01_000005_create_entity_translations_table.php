@@ -12,7 +12,8 @@ return new class () extends Migration {
 
         Schema::create('entity_translations', function (Blueprint $table) use ($isPgsql) {
             $table->id();
-            $table->morphs('entity');
+            $table->string('entity_type');
+            $table->unsignedBigInteger('entity_id');
             $table->foreignId('locale_id')->constrained('locales')->cascadeOnDelete()->cascadeOnUpdate();
 
             if ($isPgsql) {

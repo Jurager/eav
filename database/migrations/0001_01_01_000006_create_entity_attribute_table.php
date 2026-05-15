@@ -12,7 +12,8 @@ return new class () extends Migration {
 
         Schema::create('entity_attribute', function (Blueprint $table) use ($isPgsql) {
             $table->id();
-            $table->morphs('entity');
+            $table->string('entity_type');
+            $table->unsignedBigInteger('entity_id');
             $table->foreignId('attribute_id')->constrained('attributes')->cascadeOnDelete()->cascadeOnUpdate();
 
             if ($isPgsql) {
