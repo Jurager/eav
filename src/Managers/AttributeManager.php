@@ -132,10 +132,18 @@ class AttributeManager
         $instance = new static(null, $attributes);
 
         foreach ($attributes as $attribute) {
-            $instance->fields[$attribute->code] = $instance->fieldRegistry->make($attribute);
+            $instance->fields[$attribute->code] = $instance->makeField($attribute);
         }
 
         return $instance;
+    }
+
+    /**
+     * Build a Field for the given Attribute and bind the entity context when present.
+     */
+    private function makeField(Attribute $attribute): Field
+    {
+        return $this->fieldRegistry->make($attribute)->forEntity($this->entity);
     }
 
     /**
@@ -221,7 +229,7 @@ class AttributeManager
 
         $attributes
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
-            ->each(fn ($attr) => $this->fields[$attr->code] = $this->fieldRegistry->make($attr));
+            ->each(fn ($attr) => $this->fields[$attr->code] = $this->makeField($attr));
 
         $this->schemaLoaded[$key] = true;
 
@@ -420,7 +428,7 @@ class AttributeManager
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
         $transform = fn (Model $model): Model => tap($model, function ($model) {
-            $model->value = $this->fieldRegistry->make($model->attribute)->from($model);
+            $model->value = $this->makeField($model->attribute)->from($model);
         });
 
         // Use pre-loaded relation to avoid N+1 when the caller eager-loads attribute_values.
@@ -684,7 +692,7 @@ class AttributeManager
             : collect();
 
         foreach ($attributes as $attribute) {
-            $field = $this->fieldRegistry->make($attribute);
+            $field = $this->makeField($attribute);
             $field->hydrate($records->get($attribute->id, collect()));
             $this->fields[$attribute->code] = $field;
         }
@@ -720,7 +728,7 @@ class AttributeManager
             ->get()
             ->groupBy('attribute_id')
             ->flatMap(function (Collection $group) {
-                $field = $this->fieldRegistry->make($group->first()->attribute);
+                $field = $this->makeField($group->first()->attribute);
                 $field->hydrate($group);
 
                 return $field->indexData();

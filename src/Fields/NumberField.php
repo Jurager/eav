@@ -2,6 +2,8 @@
 
 namespace Jurager\Eav\Fields;
 
+use Jurager\Eav\Contracts\Attributable;
+
 /**
  * Numeric field with integer/float normalization.
  */
@@ -12,7 +14,7 @@ class NumberField extends Field
         return self::STORAGE_FLOAT;
     }
 
-    protected function validate(mixed $value): bool
+    protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null) {
             return true;

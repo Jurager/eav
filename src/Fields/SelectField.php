@@ -4,6 +4,7 @@ namespace Jurager\Eav\Fields;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\CircularDependencyException;
+use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -197,7 +198,7 @@ class SelectField extends Field
      * @throws CircularDependencyException
      * @throws BindingResolutionException
      */
-    protected function validate(mixed $value): bool
+    protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null) {
             return true;

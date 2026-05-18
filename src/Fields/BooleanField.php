@@ -2,6 +2,8 @@
 
 namespace Jurager\Eav\Fields;
 
+use Jurager\Eav\Contracts\Attributable;
+
 /**
  * Boolean attribute field with tolerant input parsing.
  */
@@ -42,7 +44,7 @@ class BooleanField extends Field
         return $values ? [$code => $values] : [];
     }
 
-    protected function validate(mixed $value): bool
+    protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null) {
             return true;

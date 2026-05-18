@@ -5,6 +5,7 @@ namespace Jurager\Eav\Fields;
 use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 use Exception;
+use Jurager\Eav\Contracts\Attributable;
 
 /**
  * Date/time field stored as datetime and exposed as Carbon instances.
@@ -76,7 +77,7 @@ class DateField extends Field
         return $values ? [$code => $values] : [];
     }
 
-    protected function validate(mixed $value): bool
+    protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null || $value === '') {
             return true;

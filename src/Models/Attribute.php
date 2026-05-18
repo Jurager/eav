@@ -25,6 +25,7 @@ use Jurager\Eav\Support\EavModels;
  * @property bool $filterable
  * @property bool $searchable
  * @property array|null $validations
+ * @property array|null $meta
  *
  * @mixin Builder
  */
@@ -35,13 +36,14 @@ class Attribute extends Model
     protected $fillable = [
         'entity_type', 'attribute_type_id', 'attribute_group_id',
         'code', 'sort', 'mandatory', 'localizable', 'multiple', 'unique',
-        'filterable', 'searchable', 'validations',
+        'filterable', 'searchable', 'validations', 'meta',
     ];
 
     protected function casts(): array
     {
         return [
             'validations' => 'array',
+            'meta' => 'array',
             'mandatory' => 'boolean',
             'localizable' => 'boolean',
             'multiple' => 'boolean',

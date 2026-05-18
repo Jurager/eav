@@ -4,6 +4,7 @@ namespace Jurager\Eav\Fields;
 
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
+use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\LocaleRegistry;
 
@@ -12,6 +13,12 @@ use Jurager\Eav\Registry\LocaleRegistry;
  */
 abstract class Field
 {
+    /**
+     * Bound entity context, set by AttributeManager when the field is attached
+     * to a concrete entity. Null in schema-only managers.
+     */
+    protected ?Attributable $entity = null;
+
     public const string STORAGE_TEXT = 'value_text';
 
     public const string STORAGE_INTEGER = 'value_integer';
@@ -53,13 +60,46 @@ abstract class Field
     /**
      * Validate a single typed value. Implemented by each concrete field type.
      * Return false and call $this->addError() to report failures.
+     *
+     * The optional $entity argument carries the bound entity context when validation
+     * needs to assert relations against the owning record (e.g. ownership checks).
      */
-    abstract protected function validate(mixed $value): bool;
+    abstract protected function validate(mixed $value, ?Attributable $entity = null): bool;
 
     /**
      * Normalize raw input to the stored type. Implemented by each concrete field type.
      */
     abstract protected function normalize(mixed $value): mixed;
+
+    /**
+     * Transform a raw stored value into its high-level representation.
+     *
+     * Default identity — subclasses override to convert raw scalars (IDs, paths, etc.)
+     * into domain objects without losing access to the entity context.
+     */
+    public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
+    {
+        return $rawValue;
+    }
+
+    /**
+     * Bind the field to a concrete entity. AttributeManager calls this after
+     * instantiating fields to make the entity available to resolve()/validate().
+     */
+    public function forEntity(?Attributable $entity): static
+    {
+        $this->entity = $entity;
+
+        return $this;
+    }
+
+    /**
+     * Return the bound entity, if any.
+     */
+    public function entity(): ?Attributable
+    {
+        return $this->entity;
+    }
 
     /**
      * Validate and normalize an incoming value payload.
@@ -166,6 +206,9 @@ abstract class Field
 
     /**
      * Return the typed value for a specific locale.
+     *
+     * The raw stored value is passed through resolve() so subclasses can rehydrate
+     * domain objects (e.g. resolve a media ID into a Media model).
      */
     public function value(?int $localeId = null): mixed
     {
@@ -174,7 +217,9 @@ abstract class Field
         }
 
         if (! $this->isLocalizable()) {
-            return $this->values[0]['value'] ?? null;
+            $raw = $this->values[0]['value'] ?? null;
+
+            return $this->resolveValue($raw);
         }
 
         $localeId ??= $this->localeRegistry->default();
@@ -182,7 +227,28 @@ abstract class Field
         $localeIds = array_column($this->values, 'locale_id');
         $key = array_search($localeId, $localeIds, true);
 
-        return $key !== false ? $this->values[$key]['value'] : null;
+        if ($key === false) {
+            return null;
+        }
+
+        return $this->resolveValue($this->values[$key]['value']);
+    }
+
+    /**
+     * Apply resolve() to a single raw value or to each element if it is an array
+     * (multi-value fields). Null short-circuits to null.
+     */
+    protected function resolveValue(mixed $raw): mixed
+    {
+        if ($raw === null) {
+            return null;
+        }
+
+        if (is_array($raw)) {
+            return array_map(fn ($v) => $this->resolve($v, $this->entity), $raw);
+        }
+
+        return $this->resolve($raw, $this->entity);
     }
 
     /**
@@ -452,7 +518,7 @@ abstract class Field
      */
     private function applyRules(mixed $value): bool
     {
-        if (! $this->validate($value)) {
+        if (! $this->validate($value, $this->entity)) {
             return false;
         }
 
