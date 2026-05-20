@@ -14,6 +14,11 @@ class BooleanField extends Field
         return self::STORAGE_BOOLEAN;
     }
 
+    public function cast(mixed $value): mixed
+    {
+        return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+    }
+
     public function value(?int $localeId = null): ?bool
     {
         $raw = parent::value($localeId);

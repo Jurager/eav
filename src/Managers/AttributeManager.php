@@ -574,6 +574,10 @@ class AttributeManager
                     return $sub->whereRaw('1 = 0');
                 }
             }
+        } elseif (! in_array($operator, ['null', 'not_null'], true)) {
+            $value = in_array($operator, ['in', 'nin'], true)
+                ? array_map(fn ($v) => $field->cast($v), (array) $value)
+                : $field->cast($value);
         }
 
         if ($field->isLocalizable()) {

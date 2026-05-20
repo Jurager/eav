@@ -66,6 +66,11 @@ abstract class Field
         return false;
     }
 
+    public function cast(mixed $value): mixed
+    {
+        return $value;
+    }
+
     /**
      * Validate a single typed value. Implemented by each concrete field type.
      * Return false and call $this->addError() to report failures.
