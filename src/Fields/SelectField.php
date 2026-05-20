@@ -2,8 +2,6 @@
 
 namespace Jurager\Eav\Fields;
 
-use Illuminate\Contracts\Container\BindingResolutionException;
-use Illuminate\Contracts\Container\CircularDependencyException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
@@ -29,11 +27,11 @@ class SelectField extends Field
         return self::STORAGE_INTEGER;
     }
 
-    /**
-     * Stores enum_id directly in the value column. Enum labels are translated
-     * via the attribute_enums table, so entity_translations are not used for
-     * value storage regardless of the attribute's localizable flag.
-     */
+    public function isEnum(): bool
+    {
+        return true;
+    }
+
     public function toStorage(): array
     {
         $value = $this->values[0]['value'] ?? null;
@@ -42,9 +40,6 @@ class SelectField extends Field
         return array_map(static fn ($v) => ['value' => $v, 'translations' => []], $items);
     }
 
-    /**
-     * Return the stored enum ID(s). Ignores $localeId as enums are not locale-scoped.
-     */
     public function value(?int $localeId = null): int|array|null
     {
         $raw = $this->values[0]['value'] ?? null;
@@ -56,9 +51,6 @@ class SelectField extends Field
         };
     }
 
-    /**
-     * Return the AttributeEnum model for the current single-select value.
-     */
     public function enum(?int $localeId = null): ?AttributeEnum
     {
         $enumId = $this->value($localeId);
@@ -67,14 +59,10 @@ class SelectField extends Field
             return null;
         }
 
-        return $this->attribute->enums->firstWhere('id', $enumId);
+        return $this->enumRegistry->find($this->attribute->id, $enumId);
     }
 
-    /**
-     * Return AttributeEnum models for the current multi-select values.
-     *
-     * @return AttributeEnum[]
-     */
+    /** @return AttributeEnum[] */
     public function enums(?int $localeId = null): array
     {
         $value = $this->value($localeId);
@@ -83,34 +71,29 @@ class SelectField extends Field
             return [];
         }
 
-        return $this->attribute->enums->whereIn('id', (array) $value)->values()->all();
+        return $this->enumRegistry->all($this->attribute->id)
+            ->whereIn('id', (array) $value)
+            ->values()
+            ->all();
     }
 
-    /**
-     * Return the translated label(s) for the current value.
-     */
     public function label(?int $localeId = null): string|array|null
     {
         $localeId ??= $this->localeRegistry->default();
 
         if ($this->isMultiple()) {
             return array_map(
-                fn (AttributeEnum $enum) => $this->enumLabel($enum, $localeId),
-                $this->enums($localeId)
+                fn (AttributeEnum $enum) => $enum->label($localeId),
+                $this->enums()
             );
         }
 
-        $enum = $this->enum($localeId);
-
-        return $enum !== null ? $this->enumLabel($enum, $localeId) : null;
+        return $this->enum()?->label($localeId);
     }
 
-    /**
-     * @return array<string, mixed>
-     */
     public function indexData(): array
     {
-        $code = $this->code();
+        $code  = $this->code();
         $value = $this->value();
 
         if ($value === null) {
@@ -118,7 +101,7 @@ class SelectField extends Field
         }
 
         $result = [
-            $code => $value,
+            $code          => $value,
             "{$code}_code" => $this->isMultiple()
                 ? array_map(static fn (AttributeEnum $e) => $e->code, $this->enums())
                 : $this->enum()?->code,
@@ -139,52 +122,6 @@ class SelectField extends Field
         return $result;
     }
 
-    /**
-     * Accept scalar for single-select, array for multi-select.
-     */
-    protected function validatePayload(mixed $values): bool
-    {
-        if (! $this->isMultiple()) {
-            return $this->validate($values);
-        }
-
-        if (! is_array($values)) {
-            return $this->addError(__('eav::attributes.validation.array_expected'));
-        }
-
-        return $this->validateMultipleValues($values);
-    }
-
-    /**
-     * @throws CircularDependencyException
-     * @throws BindingResolutionException
-     */
-    private function validateMultipleValues(array $values): bool
-    {
-        foreach ($values as $value) {
-            if (is_array($value)) {
-                return $this->addError(__('eav::attributes.validation.invalid_format'));
-            }
-
-            if (! is_numeric($value)) {
-                return $this->addError(__('eav::attributes.validation.invalid_value'));
-            }
-        }
-
-        $validIds = $this->enumRegistry->resolve($this->attribute->id);
-        $invalid = array_filter(array_map('intval', $values), static fn ($id) => ! isset($validIds[$id]));
-
-        if (! empty($invalid)) {
-            return $this->addError(__('eav::attributes.validation.invalid_enum'));
-        }
-
-        return true;
-    }
-
-    /**
-     * @param  array<int, int|string>|int|string  $values
-     * @return array<int, array{locale_id: int|null, value: int|array<int, int>}>
-     */
     protected function normalizeValues(array|string|int $values): array
     {
         $normalized = is_array($values)
@@ -194,10 +131,6 @@ class SelectField extends Field
         return [['locale_id' => null, 'value' => $normalized]];
     }
 
-    /**
-     * @throws CircularDependencyException
-     * @throws BindingResolutionException
-     */
     protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null) {
@@ -208,19 +141,11 @@ class SelectField extends Field
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
-        if (! isset($this->enumRegistry->resolve($this->attribute->id)[(int) $value])) {
+        if (! $this->enumRegistry->isValidId($this->attribute->id, (int) $value)) {
             return $this->addError(__('eav::attributes.validation.invalid_enum'));
         }
 
         return true;
-    }
-
-    private function enumLabel(AttributeEnum $enum, int $localeId): ?string
-    {
-        return $enum->translations
-            ->first(fn ($t) => $t->pivot->locale_id === $localeId)
-            ?->pivot
-            ?->label;
     }
 
     protected function normalize(mixed $value): int

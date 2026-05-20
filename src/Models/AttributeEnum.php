@@ -43,4 +43,12 @@ class AttributeEnum extends Model
     {
         return $this->belongsTo(EavModels::class('attribute'), 'attribute_id');
     }
+
+    public function label(int $localeId): ?string
+    {
+        return $this->translations
+            ->first(fn ($t) => $t->pivot->locale_id === $localeId)
+            ?->pivot
+            ?->label;
+    }
 }

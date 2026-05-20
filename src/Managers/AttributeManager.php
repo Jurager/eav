@@ -14,6 +14,7 @@ use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\MissingEntityException;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributePersister;
@@ -40,6 +41,8 @@ class AttributeManager
 
     protected FieldTypeRegistry $fieldRegistry;
 
+    protected EnumRegistry $enumRegistry;
+
     private readonly ?AttributePersister $persister;
 
     /** @var array<string, mixed>|null */
@@ -56,7 +59,8 @@ class AttributeManager
         ?Collection $preloadedAttributes = null,
     ) {
         $this->fieldRegistry = app(FieldTypeRegistry::class);
-        $this->persister = $entity !== null ? new AttributePersister($entity) : null;
+        $this->enumRegistry  = app(EnumRegistry::class);
+        $this->persister     = $entity !== null ? new AttributePersister($entity) : null;
 
         if ($preloadedAttributes !== null) {
             $this->cachedAttributes['default'] = $preloadedAttributes;
@@ -554,6 +558,23 @@ class AttributeManager
             ->select('entity_id')
             ->where('entity_type', $entityType)
             ->where('attribute_id', $field->attribute()->id);
+
+        if ($field->isEnum()) {
+            $attrId = $field->attribute()->id;
+
+            if (in_array($operator, ['in', 'nin'], true)) {
+                $value = array_values(array_filter(
+                    array_map(fn ($v) => $this->enumRegistry->coerce($attrId, $v), (array) $value),
+                    fn ($v) => $v !== null,
+                ));
+            } elseif (! in_array($operator, ['null', 'not_null', 'like'], true)) {
+                $value = $this->enumRegistry->coerce($attrId, $value);
+
+                if ($value === null) {
+                    return $sub->whereRaw('1 = 0');
+                }
+            }
+        }
 
         if ($field->isLocalizable()) {
             $sub->whereHas('translations', function ($q) use ($value, $operator, $localeId) {

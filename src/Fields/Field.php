@@ -58,6 +58,15 @@ abstract class Field
     abstract public function column(): string;
 
     /**
+     * Whether this field's values are backed by enum records.
+     * Override in enum-backed fields (e.g. SelectField).
+     */
+    public function isEnum(): bool
+    {
+        return false;
+    }
+
+    /**
      * Validate a single typed value. Implemented by each concrete field type.
      * Return false and call $this->addError() to report failures.
      *
