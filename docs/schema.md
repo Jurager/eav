@@ -3,9 +3,9 @@ title: Managing Schema
 weight: 50
 ---
 
-# Managing Schema
+## Introduction
 
-`SchemaManager` is the entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values.
+The `SchemaManager` is the entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values. You may resolve it from the container wherever you need it:
 
 ```php
 use Jurager\Eav\Managers\SchemaManager;
@@ -13,12 +13,13 @@ use Jurager\Eav\Managers\SchemaManager;
 $schema = app(SchemaManager::class);
 ```
 
-> [!NOTE]
-> `SchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use `$model->eav()`.
+`SchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use the `eav()` accessor described in [Reading & Writing Attributes](attributes.md).
 
-## Attributes
+## Managing Attributes
 
-### Create
+### Creating an Attribute
+
+To create a new attribute, you may pass the attribute payload to `createAttribute`. Translations are persisted automatically when included in the data:
 
 ```php
 $attribute = $schema->createAttribute([
@@ -35,40 +36,41 @@ $attribute = $schema->createAttribute([
 ]);
 ```
 
-- `sort` is auto-positioned at the end of the group when omitted.
-- Translations are persisted automatically when `translations` is present.
-- Flag constraints are enforced by the attribute type (unsupported flags are forced to `false`).
-- Dispatches `AttributeCreated`.
+The `sort` value is auto-positioned at the end of the group when omitted. Flag constraints are enforced by the attribute type — unsupported flags are silently forced to `false`. An `AttributeCreated` event is dispatched after a successful create.
 
-### Update
+### Updating an Attribute
 
 ```php
 $schema->updateAttribute($attribute, [
-    'code'        => 'base_color',
-    'localizable' => false,
+    'code'         => 'base_color',
+    'localizable'  => false,
     'translations' => [
         ['locale_id' => 1, 'label' => 'Base Color'],
     ],
 ]);
 ```
 
-Type constraints are re-evaluated on every update. Dispatches `AttributeUpdated`.
+Type constraints are re-evaluated on every update. An `AttributeUpdated` event is dispatched on success.
 
-### Delete
+### Deleting an Attribute
 
 ```php
-$schema->deleteAttribute($attribute); // dispatches AttributeDeleted (pre-deletion snapshot)
+$schema->deleteAttribute($attribute);
 ```
 
-### Sort
+An `AttributeDeleted` event is dispatched with a pre-deletion snapshot of the attribute, so listeners can act on the data that's about to disappear.
 
-Move to a zero-based position within the group. Siblings are renumbered automatically:
+### Sorting Attributes
+
+To move an attribute to a specific position within its group, you may call `sortAttribute` with a zero-based index. Siblings are renumbered automatically:
 
 ```php
 $schema->sortAttribute($attribute, position: 0); // move to top
 ```
 
-## Groups
+## Managing Groups
+
+Groups organize attributes for display. The same CRUD pattern applies:
 
 ```php
 $group = $schema->createGroup([
@@ -82,12 +84,17 @@ $group = $schema->createGroup([
 $schema->updateGroup($group, ['code' => 'measurements']);
 $schema->deleteGroup($group);
 $schema->sortGroup($group, position: 1);
+```
 
-// Attach attributes by ID (existing rows unaffected)
+To attach existing attributes to a group by ID without affecting any other rows:
+
+```php
 $schema->attachAttributesToGroup($group, attributeIds: [4, 7, 12]);
 ```
 
-## Enum Values
+## Managing Enum Values
+
+For `select`-typed attributes, you may manage the available options through enum methods:
 
 ```php
 $enum = $schema->createEnum($attribute, [
@@ -102,9 +109,9 @@ $schema->updateEnum($enum, ['code' => 'crimson']);
 $schema->deleteEnum($enum);
 ```
 
-## Querying
+## Querying the Schema
 
-All query methods accept an optional `callable` modifier. Without a modifier they return a `Collection`. Pass a modifier to apply scopes, sorting, or pagination:
+Every query method accepts an optional `callable` modifier. Without a modifier, the method returns a `Collection`. You may pass a modifier to apply scopes, sorting, or pagination:
 
 ```php
 $attributes = $schema->getAttributes(); // Collection
@@ -118,18 +125,20 @@ $types  = $schema->getTypes();
 $groups = $schema->getGroups(fn ($q) => $q->paginate(15));
 ```
 
-## Find by ID
+## Finding a Record by ID
+
+The `get*` methods look up a single record and throw `ModelNotFoundException` when nothing matches:
 
 ```php
-$schema->getAttribute(42); // throws ModelNotFoundException if not found
+$schema->getAttribute(42);
 $schema->getGroup(3);
 $schema->getEnum(18);
 $schema->getType(1);
 ```
 
-## Full-text Search
+## Full-Text Search Over Attributes
 
-Requires [Laravel Scout](https://laravel.com/docs/scout) on the `Attribute` model:
+When [Laravel Scout](https://laravel.com/docs/scout) is configured on the `Attribute` model, you may search by code and translated labels through `searchAttributes`:
 
 ```php
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
@@ -137,6 +146,6 @@ use Jurager\Eav\Exceptions\SearchNotAvailableException;
 try {
     $results = $schema->searchAttributes('color', fn ($b) => $b->paginate(15));
 } catch (SearchNotAvailableException $e) {
-    // Scout not configured on the attribute model
+    // Scout is not configured on the attribute model
 }
 ```
