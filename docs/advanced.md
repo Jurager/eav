@@ -3,26 +3,24 @@ title: Advanced
 weight: 80
 ---
 
-# Advanced
-
 ## Eager Loading Attribute Values
 
-The `HasAttributes` trait exposes the `attribute_values` relation (`MorphMany` → `entity_attribute`) and a static helper that declares every sub-relation required to fully hydrate attribute values without N+1 queries.
+The `HasAttributes` trait exposes the `attribute_values` relation (a `MorphMany` to `entity_attribute`) along with a static helper that declares every sub-relation required to fully hydrate attribute values without N+1 queries.
 
-### `attribute_values` relation
+### Accessing Raw Rows
 
-Use it anywhere you need raw access to the EAV rows:
+You may use the relation directly anywhere you need raw access to the EAV rows:
 
 ```php
 $product->load('attribute_values');
 $product->attribute_values; // Collection<EntityAttribute>
 ```
 
-### `eav()->values()`
+### Hydrating Typed Field Instances
 
-`AttributeManager::values()` transforms the raw rows into typed `Field` instances (resolving text, select, boolean, etc.). It checks whether `attribute_values` is already loaded on the model and, if so, uses the in-memory collection instead of running a new query.
+`AttributeManager::values()` transforms the raw rows into typed `Field` instances, resolving text, select, boolean, and so on. The manager checks whether `attribute_values` is already loaded on the model and uses the in-memory collection when available, avoiding a new query.
 
-For this pre-loaded path to work without lazy-loading `attribute->type`, `attribute->enums`, and translations, those sub-relations must be present on the already-loaded `attribute_values`. Load them in one batch before serializing:
+For this pre-loaded path to work without lazy-loading `attribute->type`, `attribute->enums`, and translations, those sub-relations must be present on the already-loaded `attribute_values`. You should load them in one batch before serialization:
 
 ```php
 $products->load([
@@ -36,7 +34,7 @@ $products->load([
 ]);
 ```
 
-### `attributeRelations()`
+### Reusing the Canonical Relation List
 
 To avoid repeating the relation list across projects, `HasAttributes` exposes the canonical set as a static method:
 
@@ -51,31 +49,30 @@ Product::attributeRelations();
 // ]
 ```
 
-This is intentionally structured as top-level-prefixed paths so it can be passed to `load()` or `with()` directly on the entity collection:
+The list is intentionally structured as top-level-prefixed paths so you may pass it to `load()` or `with()` directly on the entity collection:
 
 ```php
 $products->load(Product::attributeRelations());
+
 // or on a query:
 Product::query()->with(Product::attributeRelations())->get();
 ```
 
-> [!TIP]
-> When serializing a collection of entities and calling `values()` on each, batch-load with `attributeRelations()` beforehand. This ensures `values()` uses the in-memory collection and never triggers per-model queries:
-> ```php
-> $products->load(Product::attributeRelations());
->
-> foreach ($products as $product) {
->     $values = $product->eav()->values(); // no DB queries
-> }
-> ```
+When serializing a collection of entities and calling `values()` on each, batch-load with `attributeRelations()` beforehand. This ensures `values()` uses the in-memory collection and never triggers per-model queries:
 
----
+```php
+$products->load(Product::attributeRelations());
+
+foreach ($products as $product) {
+    $values = $product->eav()->values(); // no DB queries
+}
+```
 
 ## Attribute Inheritance
 
-Entities in a hierarchy can inherit the attribute schema of their ancestors. A typical use case is a category tree where a subcategory exposes all attributes from its parent categories.
+Entities arranged in a hierarchy may inherit the attribute schema of their ancestors. A common use case is a category tree where a subcategory exposes every attribute from its parent categories.
 
-Override `shouldInheritAttributes()` to enable it:
+To enable inheritance, override `shouldInheritAttributes()` on the scope model:
 
 ```php
 class Category extends Model implements Attributable
@@ -91,26 +88,28 @@ class Category extends Model implements Attributable
 
 When `attributeScopeModel()` returns a non-null class, the inheritance resolver is called automatically to expand the scope with ancestor entities.
 
-**Tree strategies** — the resolver detects automatically:
+### Tree Detection Strategies
 
-- **Nested set** (`_lft`/`_rgt` columns, e.g. via `kalnoy/nestedset`) — all ancestors in a single bounds query.
-- **Parent ID chain** — walks `parent_id` level by level (max 10 levels deep).
+The inheritance resolver detects the tree strategy automatically:
+
+- **Nested set** (`_lft`/`_rgt` columns, for example via `kalnoy/nestedset`) — every ancestor is resolved in a single bounds query.
+- **Parent ID chain** — walks `parent_id` level by level, up to ten levels deep.
 
 Inheritance stops at the first ancestor where `shouldInheritAttributes()` returns `false`.
 
-**Example** — given:
+Given the following tree:
+
 ```
 Root (inherits: false)
 └── Electronics (inherits: true)
     └── Phones (inherits: true)
 ```
-A product assigned to `Phones` sees attributes from `Phones` and `Electronics`. `Root` attributes are excluded.
 
----
+A product assigned to `Phones` sees attributes from `Phones` and `Electronics`. `Root` attributes are excluded because inheritance stops there.
 
 ## Events
 
-`SchemaManager` dispatches a domain event after every successful mutation. All events are in the `Jurager\Eav\Events\` namespace.
+`SchemaManager` dispatches a domain event after every successful mutation. All events live in the `Jurager\Eav\Events\` namespace:
 
 | Event | Property | When |
 |---|---|---|
@@ -124,7 +123,7 @@ A product assigned to `Phones` sees attributes from `Phones` and `Electronics`. 
 | `AttributeEnumUpdated` | `AttributeEnum $enum` | Enum value updated (fresh instance) |
 | `AttributeEnumDeleted` | `AttributeEnum $enum` | Enum value deleted (snapshot) |
 
-Laravel auto-discovers listeners by type-hint in `handle()` — no manual registration needed:
+Laravel auto-discovers listeners by type-hint on `handle()`, so no manual registration is needed:
 
 ```php
 namespace App\Listeners;
@@ -142,17 +141,15 @@ class AttachAttributeToDefaultCategory
 }
 ```
 
----
-
 ## Search Indexing
 
 The package integrates with [Laravel Scout](https://laravel.com/docs/scout). An observer and two queued jobs keep the search index in sync automatically when attribute definitions change.
 
-### Search array
+### Building the Search Array
 
 `HasSearchableAttributes` provides `toSearchableArray()` and `shouldBeSearchable()` that delegate to `AttributeManager::indexData()`. Only attributes with `searchable: true` are included.
 
-To add model-specific fields alongside attribute data, override `toSearchableArray()`:
+To add model-specific fields alongside attribute data, you may override `toSearchableArray()`:
 
 ```php
 public function toSearchableArray(): array
@@ -163,27 +160,26 @@ public function toSearchableArray(): array
 }
 ```
 
-### Automatic sync
+### Automatic Index Sync
 
-`AttributeObserver` is registered automatically. It dispatches `SyncSearchable` when:
+`AttributeObserver` is registered automatically. It dispatches the `SyncSearchable` job when:
 
 | Event | Condition |
 |---|---|
 | `updated` | The `searchable` flag changed on the attribute |
 | `deleted` | The attribute was soft-deleted |
 
-`SyncSearchable` implements `ShouldQueue` and `ShouldBeUnique`. It finds all entity instances with a stored value for the changed attribute and calls `->searchable()` on the collection.
+`SyncSearchable` implements `ShouldQueue` and `ShouldBeUnique`. It finds every entity instance with a stored value for the changed attribute and calls `->searchable()` on the collection.
 
-### Deletion cleanup
+### Cleanup on Permanent Deletion
 
-When an attribute is force-deleted, `PruneAttribute` is dispatched. It permanently removes all `entity_attribute` rows for that attribute and flushes the `SelectField` enum cache.
+When an attribute is force-deleted, `PruneAttribute` is dispatched. It permanently removes every `entity_attribute` row for that attribute and flushes the `SelectField` enum cache.
 
-> [!NOTE]
-> This two-step process (soft-delete → re-index → force-delete → prune) gives a window to restore an attribute before its data is permanently removed.
+This two-step process — soft-delete → re-index → force-delete → prune — gives you a window to restore an attribute before its data is permanently removed.
 
-### Queue
+### Running the Queue Worker
 
-Both jobs are queued. Ensure a queue worker is running:
+Both jobs are queued, so you should ensure a queue worker is running:
 
 ```bash
 php artisan queue:work

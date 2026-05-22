@@ -3,28 +3,34 @@ title: Installation
 weight: 10
 ---
 
-# Installation
+## Installing the Package
 
-## Composer
+You may install the package via Composer:
 
 ```bash
 composer require jurager/eav
 ```
 
-## Configuration
+## Publishing the Configuration
+
+Publish the configuration file to your application:
 
 ```bash
 php artisan vendor:publish --tag=eav-config
 ```
 
-Creates `config/eav.php` with two sections: `models` (override any package model with a subclass) and `field_types` (register custom field types).
+This creates `config/eav.php` with two sections: `models` (override any package model with a subclass) and `field_types` (register custom field types). See [Overriding Models](#overriding-models) and [Field Types](field-types.md) for details.
 
-## Database
+## Running Migrations
+
+Publish the package migrations and run them:
 
 ```bash
 php artisan vendor:publish --tag=eav-migrations
 php artisan migrate
 ```
+
+The package adds the following tables to your database:
 
 | Table | Purpose |
 |---|---|
@@ -36,12 +42,11 @@ php artisan migrate
 | `entity_attribute` | Polymorphic typed values per entity instance |
 | `entity_translations` | Localized labels for any model |
 
-> [!NOTE]
-> To add custom columns to the `attributes` table (e.g. `measurement_id`), create a separate migration in your application after publishing.
+To add application-specific columns to the `attributes` table — for example, a `measurement_id` foreign key — you should create a separate migration in your application after publishing the package migrations. This keeps your customizations clear of the package's upgrade path.
 
 ## Overriding Models
 
-Every model inside the package is resolved via the `eav.models` config key. To extend a model, create a subclass and point the config at it:
+Every model inside the package is resolved via the `eav.models` config key. To extend a model, you may create a subclass and point the config at it:
 
 ```php
 // app/Models/Attribute.php
@@ -61,7 +66,7 @@ class Attribute extends \Jurager\Eav\Models\Attribute
 ],
 ```
 
-All six keys can be overridden independently:
+All seven model keys may be overridden independently:
 
 | Key | Default class |
 |---|---|
@@ -73,5 +78,4 @@ All six keys can be overridden independently:
 | `entity_translation` | `Jurager\Eav\Models\EntityTranslation` |
 | `locale` | `Jurager\Eav\Models\Locale` |
 
-> [!NOTE]
-> Relations and observers defined in the base models remain active in subclasses. Only override what you need to extend.
+Relations and observers defined in the base models remain active in subclasses — you only need to override what you intend to extend.

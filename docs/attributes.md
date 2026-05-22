@@ -3,24 +3,31 @@ title: Reading & Writing Attributes
 weight: 30
 ---
 
-# Reading & Writing Attributes
+## Introduction
 
-Attribute values are accessed through `$model->eav()`.
+Every attributable model exposes an `eav()` accessor that returns a per-instance attribute manager. You may use this manager to read and write attribute values, validate input, persist single attributes or full sets, and batch-sync large collections.
 
-## Reading
+## Reading Values
+
+To retrieve the value of an attribute, you may use the `value` method:
 
 ```php
 $product = Product::find(1);
 
 $value = $product->eav()->value('color');
+```
 
-// Specific locale
+For localizable attributes, you may request a specific locale:
+
+```php
 $value = $product->eav()->value('description', localeId: 2);
 ```
 
+When no locale is specified, the default locale (resolved through `LocaleRegistry`) is used.
+
 ## Writing a Single Value
 
-Set in memory, then persist:
+The fluent `set` method stores a value in memory; `save` persists a single attribute by code:
 
 ```php
 // Simple value
@@ -32,31 +39,31 @@ $product->eav()->set('description', [
     ['locale_id' => 2, 'values' => 'Russian description'],
 ])->save('description');
 
-// Multiple values (attribute must have multiple: true)
+// Multiple values (the attribute must have multiple: true)
 $product->eav()->set('tags', ['sale', 'new', 'featured'])->save('tags');
 ```
 
-`set()` is chainable. `save(string $code)` persists a single attribute by code.
+The `set` method is chainable, so you may stage several values before persisting them.
 
-## Syncing a Full Set
+## Persisting a Full Set
 
-Replace all existing values for the entity with a new set:
+To replace every stored value on the entity with a new set, you may use `replace`:
 
 ```php
-$product->eav()->replace($fields); // persists $fields, deletes all others
+$product->eav()->replace($fields); // persists $fields, deletes everything else
 ```
 
-Persist without removing existing values:
+To add or update values without removing the rest, use `attach`:
 
 ```php
 $product->eav()->attach($fields);
 ```
 
-Both methods accept `array<string, Field>` as returned by `validate()`.
+Both methods accept `array<string, Field>` — the exact shape returned by `validate()` below.
 
 ## Validation in Controllers
 
-The FormRequest validates the HTTP envelope; `$model->validate()` handles EAV-specific rules and returns `array<string, Field>` ready for persistence:
+A FormRequest validates the HTTP envelope; `$model->validate()` handles the EAV-specific rules (cardinality, localization, custom field validations) and returns `array<string, Field>` ready for persistence:
 
 ```php
 // PATCH /products/{product}/attributes
@@ -91,11 +98,11 @@ class ProductController extends Controller
 }
 ```
 
-`validate()` throws `ValidationException` on failure — Laravel renders it as `422` automatically. Errors are keyed by attribute code.
+The `validate` method throws `ValidationException` on failure — Laravel renders this as `422` automatically. Errors are keyed by attribute code, so frontend forms can map them back to specific inputs.
 
 ## Batch Import
 
-For bulk operations, `AttributeManager::sync()` loads the schema once per unique `(entity_type, params)` combination and persists all entities in chunked transactions:
+For bulk operations, you may use `AttributeManager::sync()`. It loads the schema once per unique `(entity_type, params)` combination and persists every entity in chunked transactions:
 
 ```php
 use Jurager\Eav\Managers\AttributeManager;
@@ -106,7 +113,7 @@ AttributeManager::sync(collect([
 ]));
 ```
 
-When all entities share the same schema, build it once to avoid repeated lookups:
+When every entity in the batch shares the same schema, you may build it once and pass it in to avoid repeated lookups:
 
 ```php
 $schema = AttributeManager::schema(Product::first());
@@ -114,11 +121,11 @@ $schema = AttributeManager::schema(Product::first());
 AttributeManager::sync($batch, prebuiltSchema: $schema, chunkSize: 200);
 ```
 
-Default chunk size is 500. Each chunk runs in a single transaction (~7 queries regardless of entity or attribute count).
+The default chunk size is 500 entities per transaction. Each chunk runs as a single transaction with roughly seven queries, regardless of how many entities or attributes are involved.
 
-### Error handling
+### Handling Errors During Batch Import
 
-By default a failing entity re-throws and stops the batch. Pass `$onError` to handle failures per-entity and continue:
+By default, a failing entity re-throws and stops the batch. To handle failures per-entity and continue, you may pass a callback as the `onError` parameter:
 
 ```php
 AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $entity): void {
@@ -127,25 +134,27 @@ AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $e
 });
 ```
 
-The failed entity's transaction is rolled back; all others are unaffected.
+The failed entity's transaction is rolled back; all other entities in the batch are unaffected.
 
-## Find by Attribute Value
+## Finding Entities by Attribute Value
 
-Find entity instances directly via the manager without building an Eloquent query:
+To look up an entity directly by an attribute value without writing an Eloquent query yourself, you may use the manager's `findBy` and `findAllBy` methods:
 
 ```php
 $manager = AttributeManager::for(Product::class);
 
 $product = $manager->findBy('sku', 'ABC-123');               // ?Model
-$product = $manager->findBy('price', 100.0, '<=');          // ?Model with operator
+$product = $manager->findBy('price', 100.0, '<=');           // ?Model with operator
 
 $products = $manager->findAllBy('status', 'active');         // Collection
-$products = $manager->findAllBy('price', 50.0, '>=');       // Collection with operator
+$products = $manager->findAllBy('price', 50.0, '>=');        // Collection with operator
 ```
 
-## Detaching
+For more advanced filtering you should use the Eloquent scopes documented in [Querying](querying.md).
 
-Remove stored values for specific attribute IDs:
+## Detaching Values
+
+To remove stored values for specific attribute IDs, you may use the `detach` method:
 
 ```php
 $product->eav()->detach([12, 34]);

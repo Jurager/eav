@@ -3,11 +3,9 @@ title: Localization
 weight: 70
 ---
 
-# Localization
-
 ## Locale Registry
 
-`LocaleRegistry` resolves locale IDs and codes with a single cached query per request:
+`LocaleRegistry` resolves locale IDs and codes using a single cached query per request. You may use it anywhere you need to translate between the two:
 
 ```php
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -23,9 +21,9 @@ $registry->isValidLocaleId(2);   // check if a locale ID exists
 $registry->forget();             // clear cache (useful in tests)
 ```
 
-## Per-locale Attribute Values
+## Per-Locale Attribute Values
 
-When an attribute has `localizable: true`, values are stored per locale:
+When an attribute has `localizable: true`, values are stored per locale. You may write multiple translations in a single call and read them back by locale ID:
 
 ```php
 // Write
@@ -42,15 +40,15 @@ When no locale is specified, the default locale from `LocaleRegistry::defaultLoc
 
 ## Managing Locales
 
-`TranslationManager` handles locale CRUD. Each write method flushes the `LocaleRegistry` cache automatically:
+`TranslationManager` handles locale CRUD. Each write method flushes the `LocaleRegistry` cache automatically, so subsequent lookups always see the latest data:
 
 ```php
 use Jurager\Eav\Managers\TranslationManager;
 
 $manager = app(TranslationManager::class);
 
-$locales = $manager->getLocales();                               // Collection
-$locales = $manager->getLocales(fn ($q) => $q->paginate(15));  // Paginator
+$locales = $manager->getLocales();                              // Collection
+$locales = $manager->getLocales(fn ($q) => $q->paginate(15));   // Paginator
 $locale  = $manager->getLocale(1);
 
 $locale = $manager->createLocale(['code' => 'de', 'name' => 'German']);
@@ -60,7 +58,7 @@ $manager->deleteLocale($locale);
 
 ## Saving Translations
 
-`save()` syncs translated labels for any model with a `translations()` MorphToMany relation:
+The `save` method syncs translated labels for any model with a `translations()` MorphToMany relation:
 
 ```php
 $manager->save($attribute, [
@@ -69,9 +67,9 @@ $manager->save($attribute, [
 ]);
 ```
 
-Locales not present in the array are removed. Entries without a `label` are discarded.
+Locales not present in the array are removed; entries without a `label` are discarded.
 
-Optional display fields are stored in the `params` JSON column:
+You may also store optional display fields in the `params` JSON column:
 
 ```php
 $manager->save($attribute, [
@@ -85,12 +83,11 @@ $manager->save($attribute, [
 ]);
 ```
 
-> [!NOTE]
-> When using `SchemaManager`, translations are handled automatically — pass `translations` in the data array. Use `TranslationManager::save()` directly only for non-EAV models or standalone locale management.
+When you use `SchemaManager` to create or update attributes, translations are handled automatically — pass the `translations` array in the data payload. You should reach for `TranslationManager::save()` directly only for non-EAV models or standalone locale management.
 
 ## Translating Non-EAV Models
 
-Any application model can use the same `entity_translations` table. Add the relation:
+Any application model may use the same `entity_translations` table. Add the relation using the `EavModels` helper so your model picks up the configured class overrides:
 
 ```php
 use Jurager\Eav\Support\EavModels;
@@ -110,7 +107,7 @@ class Region extends Model
 }
 ```
 
-Then call `save()` as with any EAV model:
+Once the relation is in place, you may call `save()` exactly as you would for an EAV model:
 
 ```php
 app(TranslationManager::class)->save($region, [

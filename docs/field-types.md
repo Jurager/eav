@@ -3,13 +3,13 @@ title: Field Types
 weight: 40
 ---
 
-# Field Types
-
 ## Built-in Types
+
+Every attribute has a field type that determines which typed column its values are stored in and how those values are validated. The package ships the following types out of the box:
 
 | Code | Storage column | Notes |
 |---|---|---|
-| `text` | `value_text` | Short string (max 255 chars) |
+| `text` | `value_text` | Short string (max 255 characters) |
 | `textarea` | `value_text` | Long text |
 | `number` | `value_float` | Integer or float |
 | `boolean` | `value_boolean` | `true` / `false` |
@@ -32,12 +32,11 @@ Flags are set per attribute definition and control how values are stored and val
 | `filterable` | Attribute is available for query scopes |
 | `searchable` | Value is included in the Scout search index |
 
-> [!NOTE]
-> Flags `localizable`, `multiple`, `unique`, `filterable`, and `searchable` are silently forced to `false` when the attribute type does not support them.
+Each field type declares which flags it supports. Flags that the type doesn't support are silently forced to `false` — for example, a `boolean` attribute is never `localizable` no matter what you ask for at the API layer.
 
 ## Validation Rules
 
-Extra validation rules are stored as a JSON array in the `validations` column on the attribute:
+Beyond the type-level constraints, you may attach extra validation rules to an attribute by storing them as a JSON array in the `validations` column:
 
 ```json
 [
@@ -46,6 +45,8 @@ Extra validation rules are stored as a JSON array in the `validations` column on
   { "type": "regex",      "value": "/^[a-z]+$/i" }
 ]
 ```
+
+These map to Laravel's standard validation rules at runtime:
 
 | Rule | Laravel equivalent |
 |---|---|
@@ -60,9 +61,9 @@ Extra validation rules are stored as a JSON array in the `validations` column on
 | `after` | `after:date` |
 | `before` | `before:date` |
 
-## Working with Select Fields
+## Working With Select Fields
 
-When a field has type `select`, cast it to `SelectField` to access the resolved enum model:
+When a field has type `select`, you may cast it to `SelectField` to access the resolved enum model and its localized labels:
 
 ```php
 use Jurager\Eav\Fields\SelectField;
@@ -70,29 +71,29 @@ use Jurager\Eav\Fields\SelectField;
 /** @var SelectField $field */
 $field = $product->eav()->field('color');
 
-$field->enum();          // ?AttributeEnum — single-select resolved model
-$field->enums();         // array<AttributeEnum> — multi-select resolved models
-$field->label();         // string|array|null — translated label(s) for current locale
+$field->enum();             // ?AttributeEnum — single-select resolved model
+$field->enums();            // array<AttributeEnum> — multi-select resolved models
+$field->label();            // string|array|null — translated label(s) for current locale
 $field->label(localeId: 2); // label for a specific locale
 ```
 
-## Working with File / Image Fields
+## Working With File and Image Fields
 
-`FileField` and `ImageField` expose `HasFileStorage` helpers for URL resolution and existence checks:
+`FileField` and `ImageField` expose `HasFileStorage` helpers for URL resolution and existence checks on Laravel's storage disks:
 
 ```php
 $field = $product->eav()->field('photo');
 
-$field->url();                          // string|array|null — public URL(s) on the 'public' disk
-$field->url(disk: 's3');                // URL(s) on a named disk
+$field->url();                            // string|array|null — public URL(s) on the 'public' disk
+$field->url(disk: 's3');                  // URL(s) on a named disk
 $field->url(disk: 'public', localeId: 2); // localized file URL
-$field->firstUrl();                     // ?string — first URL from a multiple-file field
-$field->exists();                       // bool — check file existence in storage
+$field->firstUrl();                       // ?string — first URL from a multiple-file field
+$field->exists();                         // bool — check file existence in storage
 ```
 
-## Custom Field Types
+## Defining Custom Field Types
 
-Extend `Field` and implement three abstract methods:
+You may define your own field type by extending the `Field` base class and implementing three abstract methods. The example below stores a measurement with a unit reference:
 
 ```php
 use Jurager\Eav\Fields\Field;
@@ -124,7 +125,7 @@ class MeasurementField extends Field
 }
 ```
 
-`column()` returns one of the storage constants:
+The `column` method returns one of the storage constants exposed by the base class:
 
 ```php
 Field::STORAGE_TEXT      // value_text
@@ -135,9 +136,9 @@ Field::STORAGE_DATE      // value_date
 Field::STORAGE_DATETIME  // value_datetime
 ```
 
-### Non-standard payload shape
+### Handling Non-Standard Payload Shapes
 
-If your field accepts a complex payload (e.g. `{value, unit_id}` rather than a plain scalar), override `validatePayload()` to handle cardinality and localization before delegating to `validate()`:
+If your field accepts a complex payload — for example, `{value, unit_id}` rather than a plain scalar — you should override `validatePayload()` to handle cardinality and localization before delegating to `validate()`:
 
 ```php
 protected function validatePayload(mixed $values): bool
@@ -154,17 +155,20 @@ protected function validatePayload(mixed $values): bool
 }
 ```
 
-### Registering
+### Registering Custom Types
 
-**Via config** — add to `config/eav.php`:
+To make a custom field type available, you should register it in either configuration or a service provider. The type code must match the `code` value of the corresponding record in the `attribute_types` table.
+
+You may register the type through the configuration file:
 
 ```php
+// config/eav.php
 'field_types' => [
     'measurement' => \App\Fields\MeasurementField::class,
 ],
 ```
 
-**At runtime** — register in a service provider:
+Or at runtime through the `FieldTypeRegistry`:
 
 ```php
 use Jurager\Eav\Registry\FieldTypeRegistry;
@@ -175,6 +179,3 @@ public function boot(): void
         ->register('measurement', \App\Fields\MeasurementField::class);
 }
 ```
-
-> [!NOTE]
-> The type code must match the `code` value of the corresponding record in the `attribute_types` table.
