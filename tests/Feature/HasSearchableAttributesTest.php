@@ -120,4 +120,57 @@ class HasSearchableAttributesTest extends FeatureTestCase
 
         $this->assertFalse($product->shouldBeSearchable());
     }
+
+    public function test_to_searchable_array_includes_filterable_only_attribute_values(): void
+    {
+        $textType = $this->createAttributeType('text');
+        $this->createAttribute($textType, [
+            'code'        => 'sku',
+            'filterable'  => true,
+            'searchable'  => false,
+            'entity_type' => 'searchable_product',
+        ]);
+
+        $product = $this->createSearchableProduct();
+        $product->eav()->set('sku', 'SKU-001')->save('sku');
+
+        $array = $product->fresh()->toSearchableArray();
+
+        $this->assertArrayHasKey('attributes', $array);
+        $this->assertSame('SKU-001', $array['attributes']['sku']);
+    }
+
+    public function test_should_be_searchable_returns_true_when_only_filterable_value_exists(): void
+    {
+        $textType = $this->createAttributeType('text');
+        $this->createAttribute($textType, [
+            'code'        => 'sku',
+            'filterable'  => true,
+            'searchable'  => false,
+            'entity_type' => 'searchable_product',
+        ]);
+
+        $product = $this->createSearchableProduct();
+        $product->eav()->set('sku', 'SKU-001')->save('sku');
+
+        $this->assertTrue($product->fresh()->shouldBeSearchable());
+    }
+
+    public function test_to_searchable_array_excludes_attribute_when_neither_searchable_nor_filterable(): void
+    {
+        $textType = $this->createAttributeType('text');
+        $this->createAttribute($textType, [
+            'code'        => 'internal_note',
+            'filterable'  => false,
+            'searchable'  => false,
+            'entity_type' => 'searchable_product',
+        ]);
+
+        $product = $this->createSearchableProduct();
+        $product->eav()->set('internal_note', 'Do not index')->save('internal_note');
+
+        $array = $product->fresh()->toSearchableArray();
+
+        $this->assertArrayNotHasKey('attributes', $array);
+    }
 }

@@ -3,6 +3,7 @@
 namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Jobs\PruneAttribute;
+use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -23,16 +24,25 @@ class AttributeObserver
     public function created(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
+
+        if ($attribute->filterable) {
+            $this->syncFilterable($attribute);
+        }
     }
 
     /**
-     * Re-index entities when an attribute's searchable flag changes.
+     * Re-index entities and sync filterable settings when searchable/filterable flags change.
      */
     public function updated(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
 
         if ($attribute->wasChanged('searchable')) {
+            $this->syncSearchable($attribute);
+        }
+
+        if ($attribute->wasChanged('filterable')) {
+            $this->syncFilterable($attribute);
             $this->syncSearchable($attribute);
         }
     }
@@ -48,6 +58,10 @@ class AttributeObserver
             $this->syncSearchable($attribute);
         }
 
+        if ($attribute->filterable) {
+            $this->syncFilterable($attribute);
+        }
+
         EavModels::query('entity_attribute')
             ->where('attribute_id', $attribute->id)
             ->delete();
@@ -61,11 +75,15 @@ class AttributeObserver
         $this->schema->forget($attribute->entity_type);
         $this->enums->forget($attribute->id);
 
+        if ($attribute->filterable) {
+            $this->syncFilterable($attribute);
+        }
+
         PruneAttribute::dispatch($attribute->id);
     }
 
     /**
-     * Forget the schema cache when a soft-deleted attribute is restored.
+     * Re-index and sync filterable settings when a soft-deleted attribute is restored.
      */
     public function restored(Attribute $attribute): void
     {
@@ -74,10 +92,19 @@ class AttributeObserver
         if ($attribute->searchable) {
             $this->syncSearchable($attribute);
         }
+
+        if ($attribute->filterable) {
+            $this->syncFilterable($attribute);
+        }
     }
 
     protected function syncSearchable(Attribute $attribute): void
     {
         SyncSearchable::dispatch($attribute->entity_type, $attribute->id)->afterCommit();
+    }
+
+    protected function syncFilterable(Attribute $attribute): void
+    {
+        SyncFilterable::dispatch($attribute->entity_type)->afterCommit();
     }
 }

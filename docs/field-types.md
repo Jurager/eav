@@ -29,8 +29,8 @@ Flags are set per attribute definition and control how values are stored and val
 | `multiple` | Allows storing multiple values for the same attribute |
 | `mandatory` | Value is required on fill |
 | `unique` | Value must be unique across all entity instances |
-| `filterable` | Attribute is available for query scopes |
-| `searchable` | Value is included in the Scout search index |
+| `filterable` | Value is included in the Scout index and registered as a Meilisearch `filterableAttribute`; also available for Eloquent query scopes |
+| `searchable` | Value is included in the Scout search index and available for full-text search |
 
 Each field type declares which flags it supports. Flags that the type doesn't support are silently forced to `false` — for example, a `boolean` attribute is never `localizable` no matter what you ask for at the API layer.
 

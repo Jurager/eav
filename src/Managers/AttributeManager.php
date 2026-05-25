@@ -748,7 +748,7 @@ class AttributeManager
         }
 
         $attributes = $this->entityQuery()
-            ->whereHas('attribute', fn ($q) => $q->where('searchable', true))
+            ->whereHas('attribute', fn ($q) => $q->where('searchable', true)->orWhere('filterable', true))
             ->with(['attribute', 'attribute.enums.translations', 'translations'])
             ->get()
             ->groupBy('attribute_id')

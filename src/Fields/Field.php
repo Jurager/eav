@@ -377,6 +377,17 @@ abstract class Field
     }
 
     /**
+     * Return the attribute-level keys this field type contributes to filterableAttributes.
+     * Used by SyncIndexSettings to register paths with Meilisearch (prefixed with "attributes.").
+     *
+     * @return array<string>
+     */
+    public function filterableKeys(): array
+    {
+        return [$this->code()];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toMetadata(): array

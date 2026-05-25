@@ -91,6 +91,11 @@ class SelectField extends Field
         return $this->enum()?->label($localeId);
     }
 
+    public function filterableKeys(): array
+    {
+        return [$this->code(), "{$this->code()}_code"];
+    }
+
     public function indexData(): array
     {
         $code  = $this->code();

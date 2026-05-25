@@ -31,7 +31,10 @@ class SelectFieldTest extends TestCase
         $this->localeRegistry->shouldReceive('ids')->andReturn([1]);
 
         $this->enumRegistry = Mockery::mock(EnumRegistry::class);
-        $this->enumRegistry->shouldReceive('resolve')->andReturn($this->validEnumIds);
+        $this->enumRegistry->shouldReceive('isValidId')
+            ->andReturnUsing(fn ($attrId, $id) => isset($this->validEnumIds[$id]));
+        $this->enumRegistry->shouldReceive('find')
+            ->andReturnNull();
     }
 
     private function makeAttribute(array $attributes = []): Attribute
@@ -218,5 +221,16 @@ class SelectFieldTest extends TestCase
         $this->assertArrayHasKey('color', $data);
         $this->assertArrayHasKey('color_code', $data);
         $this->assertSame(10, $data['color']);
+    }
+
+    // -----------------------------------------------------------------------
+    // filterableKeys()
+    // -----------------------------------------------------------------------
+
+    public function test_filterable_keys_includes_code_and_code_code(): void
+    {
+        $field = $this->makeField(['code' => 'color']);
+
+        $this->assertSame(['color', 'color_code'], $field->filterableKeys());
     }
 }
