@@ -37,7 +37,7 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
 
     public function handle(FieldTypeRegistry $fieldRegistry): void
     {
-        if (! class_exists(\Laravel\Scout\EngineManager::class)) {
+        if (! class_exists(\Laravel\Scout\EngineManager::class) || ! class_exists(\Meilisearch\Client::class)) {
             return;
         }
 
@@ -73,7 +73,7 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
             ->values()
             ->all();
 
-        $index = $engine->getMeilisearch()->index($indexName);
+        $index = app(\Meilisearch\Client::class)->index($indexName);
 
         try {
             $existing = $index->getFilterableAttributes();
