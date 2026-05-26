@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\EavModels;
+use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
 
 /**
@@ -51,7 +52,7 @@ class Search
         private readonly FilterCompiler $compiler,
         private readonly FieldTypeRegistry $fieldRegistry,
         private readonly LocaleRegistry $localeRegistry,
-        private readonly mixed $meilisearch = null,
+        private readonly Client $meilisearch,
     ) {
     }
 
@@ -107,7 +108,7 @@ class Search
     {
         $modelClass = Relation::getMorphedModel($this->entityType);
 
-        if (! $modelClass || ! method_exists($modelClass, 'searchableAs') || $this->meilisearch === null) {
+        if (! $modelClass || ! method_exists($modelClass, 'searchableAs')) {
             return new SearchResult([], 0, []);
         }
 

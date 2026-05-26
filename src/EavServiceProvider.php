@@ -20,7 +20,6 @@ use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Search\FilterCompiler;
 use Jurager\Eav\Search\Search;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
-use Meilisearch\Client;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -37,12 +36,7 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(TranslationManager::class);
         $this->app->singleton(SchemaManager::class);
         $this->app->singleton(FilterCompiler::class);
-        $this->app->bind(Search::class, fn ($app) => new Search(
-            $app->make(FilterCompiler::class),
-            $app->make(FieldTypeRegistry::class),
-            $app->make(LocaleRegistry::class),
-            class_exists(Client::class) ? $app->make(Client::class) : null,
-        ));
+        $this->app->bind(Search::class);
 
         if (class_exists(\Laravel\Scout\Console\SyncIndexSettingsCommand::class)) {
             $this->app->bind(\Laravel\Scout\Console\SyncIndexSettingsCommand::class, SyncIndexSettingsCommand::class);
