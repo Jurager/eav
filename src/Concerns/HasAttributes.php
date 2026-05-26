@@ -125,7 +125,7 @@ trait HasAttributes
             return $this->scopeWhereAttributeTree($query, $code, $value);
         }
 
-        $sub = $this->eav()->subquery($code, $value, $operator);
+        $sub = $this->eav()->builder()->subquery($code, $value, $operator);
 
         return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
@@ -147,7 +147,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeBetween(Builder $query, string $code, float|int $min, float|int $max): Builder
     {
-        $sub = $this->eav()->subquery($code, [$min, $max], 'between');
+        $sub = $this->eav()->builder()->subquery($code, [$min, $max], 'between');
 
         return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
@@ -159,7 +159,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeIn(Builder $query, string $code, array $values): Builder
     {
-        $sub = $this->eav()->subquery($code, $values, 'in');
+        $sub = $this->eav()->builder()->subquery($code, $values, 'in');
 
         return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
@@ -175,10 +175,10 @@ trait HasAttributes
      */
     public function scopeWhereAttributes(Builder $query, array $conditions): Builder
     {
-        $manager = $this->eav();
+        $builder = $this->eav()->builder();
 
         foreach ($conditions as $condition) {
-            $sub = $manager->subquery(
+            $sub = $builder->subquery(
                 $condition['code'],
                 $condition['value'],
                 $condition['operator'] ?? '=',
@@ -202,7 +202,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeTree(Builder $query, string $code, mixed $value): Builder
     {
-        $sub = $this->eav()->subquery($code, $value, '=');
+        $sub = $this->eav()->builder()->subquery($code, $value, '=');
 
         if (! $sub) {
             return $query;

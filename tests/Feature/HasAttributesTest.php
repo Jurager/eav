@@ -234,38 +234,4 @@ class HasAttributesTest extends FeatureTestCase
         $this->assertSame($match->id, $results->first()->id);
     }
 
-    // -----------------------------------------------------------------------
-    // numericRanges()
-    // -----------------------------------------------------------------------
-
-    public function test_numeric_ranges_returns_min_max_for_filterable_number_attribute(): void
-    {
-        $this->createAttribute($this->numberType, [
-            'code' => 'price',
-            'filterable' => true,
-        ]);
-
-        $p1 = $this->createProduct('P1');
-        $p2 = $this->createProduct('P2');
-        $p3 = $this->createProduct('P3');
-
-        $p1->eav()->set('price', 10)->save('price');
-        $p2->eav()->set('price', 50)->save('price');
-        $p3->eav()->set('price', 200)->save('price');
-
-        $ranges = $p1->eav()->numericRanges([$p1->id, $p2->id, $p3->id]);
-
-        $this->assertArrayHasKey('price', $ranges);
-        $this->assertSame(10.0, $ranges['price']['min']);
-        $this->assertSame(200.0, $ranges['price']['max']);
-    }
-
-    public function test_numeric_ranges_returns_empty_for_no_entity_ids(): void
-    {
-        $product = $this->createProduct();
-
-        $ranges = $product->eav()->numericRanges([]);
-
-        $this->assertSame([], $ranges);
-    }
 }

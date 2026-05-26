@@ -82,7 +82,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $p2->eav()->set('sku', 'SKU-002')->save('sku');
 
         $manager = AttributeManager::for($p1);
-        $found = $manager->findBy('sku', 'SKU-002');
+        $found = $manager->builder()->findBy('sku', 'SKU-002');
 
         $this->assertNotNull($found);
         $this->assertSame($p2->id, $found->id);
@@ -96,7 +96,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $product->eav()->set('sku', 'SKU-001')->save('sku');
 
         $manager = AttributeManager::for($product);
-        $found = $manager->findBy('sku', 'NONEXISTENT');
+        $found = $manager->builder()->findBy('sku', 'NONEXISTENT');
 
         $this->assertNull($found);
     }
@@ -118,7 +118,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $inactive->eav()->set('status', 'inactive')->save('status');
 
         $manager = AttributeManager::for($active1);
-        $results = $manager->findAllBy('status', 'active');
+        $results = $manager->builder()->findAllBy('status', 'active');
 
         $this->assertCount(2, $results);
         $ids = $results->pluck('id')->all();
@@ -141,7 +141,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $p2->eav()->set('ref', 'REF-B')->save('ref');
 
         $manager = AttributeManager::for($p1);
-        $results = $manager->findWhereIn('ref', ['REF-A', 'REF-B']);
+        $results = $manager->builder()->findWhereIn('ref', ['REF-A', 'REF-B']);
 
         $this->assertCount(2, $results);
         $this->assertSame($p1->id, $results['REF-A']->id);
@@ -156,7 +156,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $product->eav()->set('ref', 'REF-A')->save('ref');
 
         $manager = AttributeManager::for($product);
-        $results = $manager->findWhereIn('ref', ['NONEXISTENT']);
+        $results = $manager->builder()->findWhereIn('ref', ['NONEXISTENT']);
 
         $this->assertCount(0, $results);
     }
@@ -241,7 +241,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $product = $this->createProduct();
         $manager = AttributeManager::for($product);
 
-        $this->assertNull($manager->subquery('nonexistent', 'value'));
+        $this->assertNull($manager->builder()->subquery('nonexistent', 'value'));
     }
 
     public function test_where_attribute_with_not_equal_operator(): void
