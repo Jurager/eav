@@ -7,6 +7,7 @@ use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Console\SyncIndexSettingsCommand;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Search\EavSearch;
@@ -36,6 +37,10 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(SchemaManager::class);
         $this->app->singleton(FilterCompiler::class);
         $this->app->bind(EavSearch::class);
+
+        if (class_exists(\Laravel\Scout\Console\SyncIndexSettingsCommand::class)) {
+            $this->app->bind(\Laravel\Scout\Console\SyncIndexSettingsCommand::class, SyncIndexSettingsCommand::class);
+        }
     }
 
     public function boot(): void

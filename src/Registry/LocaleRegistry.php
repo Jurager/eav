@@ -71,6 +71,24 @@ class LocaleRegistry
     }
 
     /**
+     * Return the locale ID for the current request context.
+     * Uses the first active locale set by the request (e.g. Accept-Language middleware),
+     * falling back to the application default.
+     */
+    public function current(): int
+    {
+        foreach ($this->active ?? [] as $code) {
+            $id = $this->find($code);
+
+            if ($id !== null) {
+                return $id;
+            }
+        }
+
+        return $this->default();
+    }
+
+    /**
      * The default locale ID from application configuration.
      *
      * @throws InvalidConfigurationException
@@ -106,6 +124,7 @@ class LocaleRegistry
     {
         return $this->active;
     }
+
 
     /**
      * Forget all cached data.

@@ -752,14 +752,14 @@ class AttributeManager
             ->with(['attribute', 'attribute.enums.translations', 'translations'])
             ->get()
             ->groupBy('attribute_id')
-            ->flatMap(function (Collection $group) {
+            ->reduce(function (array $carry, Collection $group) {
                 $field = $this->makeField($group->first()->attribute);
                 $field->hydrate($group);
 
-                return $field->indexData();
-            });
+                return $carry + $field->indexData();
+            }, []);
 
-        return $attributes->isNotEmpty() ? ['attributes' => $attributes->all()] : [];
+        return $attributes ? ['attributes' => $attributes] : [];
     }
 
     /** Apply a comparison operator to a query column. */

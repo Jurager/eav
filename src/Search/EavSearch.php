@@ -5,9 +5,8 @@ namespace Jurager\Eav\Search;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
 use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -22,8 +21,8 @@ use Jurager\Eav\Support\EavModels;
  *   — EAV attribute codes (filterable=true) → "attributes.{code}"
  *   — Non-EAV keys → must be listed in fieldMap(); otherwise silently dropped.
  *
- * Hydration: returns a LengthAwarePaginator of Eloquent models for the entity,
- * ordered by Meilisearch's relevance.
+ * Returns {@see EavSearchResult} with hit IDs, total, and enriched facets.
+ * Call {@see EavSearchResult::paginate()} with the model class to hydrate models.
  *
  * Usage:
  *   EavSearch::for('product')
@@ -32,7 +31,8 @@ use Jurager\Eav\Support\EavModels;
  *       ->fieldMap(['categories.category_id' => 'category_ids'])
  *       ->facets($facetCodes)
  *       ->disjunctive($facetCodes)
- *       ->paginate($perPage, $page);
+ *       ->search($perPage, $page)
+ *       ->paginate(Product::class, $perPage, $page);
  */
 class EavSearch
 {
@@ -55,7 +55,9 @@ class EavSearch
     public function __construct(
         private FilterCompiler $compiler,
         private FieldTypeRegistry $fieldRegistry,
-    ) {}
+        private LocaleRegistry $localeRegistry,
+    ) {
+    }
 
     public static function for(string $entityType): static
     {
@@ -115,16 +117,16 @@ class EavSearch
     /**
      * @return EavSearchResult<Model>
      */
-    public function paginate(int $perPage = 15, int $page = 1): EavSearchResult
+    public function search(int $perPage = 15, int $page = 1): EavSearchResult
     {
         $modelClass = Relation::getMorphedModel($this->entityType);
 
         if (! $modelClass || ! method_exists($modelClass, 'searchableAs')) {
-            return new EavSearchResult($this->emptyPaginator($perPage, $page), []);
+            return new EavSearchResult([], 0, []);
         }
 
         if (! class_exists(\Meilisearch\Client::class)) {
-            return new EavSearchResult($this->emptyPaginator($perPage, $page), []);
+            return new EavSearchResult([], 0, []);
         }
 
         $eavAttrs = EavModels::query('attribute')
@@ -178,9 +180,11 @@ class EavSearch
             }
         }
 
-        $paginator = $this->hydrate($modelClass, $main->getHits(), $main->getEstimatedTotalHits() ?? 0, $perPage, $page);
-
-        return new EavSearchResult($paginator, $facets);
+        return new EavSearchResult(
+            ids: array_column($main->getHits(), 'id'),
+            total: $main->getEstimatedTotalHits() ?? 0,
+            facets: $this->enrichFacets($facets, $eavAttrs),
+        );
     }
 
     /**
@@ -227,34 +231,23 @@ class EavSearch
             ->all();
     }
 
-    /**
-     * @param  class-string<Model>  $modelClass
-     * @param  array<int, array{id: string|int}>  $hits
-     * @return LengthAwarePaginator<int, Model>
-     */
-    private function hydrate(string $modelClass, array $hits, int $total, int $perPage, int $page): LengthAwarePaginator
+    private function enrichFacets(array $facets, Collection $eavAttrs): array
     {
-        $ids = array_column($hits, 'id');
+        $localeId = $this->localeRegistry->current();
+        $byCode   = $eavAttrs->keyBy('code');
+        $result   = [];
 
-        $items = $ids
-            ? $modelClass::query()
-                ->whereIn('id', $ids)
-                ->get()
-                ->sortBy(fn ($m) => array_search((string) $m->getKey(), array_map('strval', $ids)))
-                ->values()
-            : collect();
+        foreach ($facets as $facetKey => $distribution) {
+            $code  = str_replace('attributes.', '', $facetKey);
+            $attr  = $byCode->get($code);
+            $field = $attr ? $this->fieldRegistry->make($attr) : null;
 
-        return new LengthAwarePaginator(
-            $items,
-            $total,
-            $perPage,
-            $page,
-            ['path' => Paginator::resolveCurrentPath()],
-        );
+            $result[$facetKey] = $field
+                ? $field->enrichFacetDistribution($distribution, $localeId)
+                : $distribution;
+        }
+
+        return $result;
     }
 
-    private function emptyPaginator(int $perPage, int $page): LengthAwarePaginator
-    {
-        return new LengthAwarePaginator(collect(), 0, $perPage, $page);
-    }
 }

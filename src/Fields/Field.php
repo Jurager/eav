@@ -388,6 +388,19 @@ abstract class Field
     }
 
     /**
+     * Enrich a raw Meilisearch facet distribution with display labels.
+     * Default: pass through unchanged (value IS the display key).
+     * Override in enum-backed fields to add translated labels.
+     *
+     * @param  array<string, int>  $distribution
+     * @return array<string, array{count: int, label: string}>|array<string, int>
+     */
+    public function enrichFacetDistribution(array $distribution, ?int $localeId = null): array
+    {
+        return $distribution;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function toMetadata(): array

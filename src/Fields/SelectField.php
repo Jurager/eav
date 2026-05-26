@@ -93,7 +93,7 @@ class SelectField extends Field
 
     public function filterableKeys(): array
     {
-        return [$this->code(), "{$this->code()}_code"];
+        return [$this->code()];
     }
 
     public function indexData(): array
@@ -105,12 +105,15 @@ class SelectField extends Field
             return [];
         }
 
-        $result = [
-            $code          => $value,
-            "{$code}_code" => $this->isMultiple()
-                ? array_map(static fn (AttributeEnum $e) => $e->code, $this->enums())
-                : $this->enum()?->code,
-        ];
+        $codeValue = $this->isMultiple()
+            ? array_map(static fn (AttributeEnum $e) => $e->code, $this->enums())
+            : $this->enum()?->code;
+
+        if ($codeValue === null || $codeValue === []) {
+            return [];
+        }
+
+        $result = [$code => $codeValue];
 
         $labels = array_values(array_unique(array_filter(
             array_merge(...array_map(
@@ -122,6 +125,33 @@ class SelectField extends Field
 
         if ($labels) {
             $result["{$code}_label"] = $labels;
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param  array<string, int>  $distribution
+     * @return array<string, array{count: int, label: string}>
+     */
+    public function enrichFacetDistribution(array $distribution, ?int $localeId = null): array
+    {
+        $enums = $this->enumRegistry->all($this->attribute->id)->keyBy('code');
+        $result = [];
+
+        foreach ($distribution as $code => $count) {
+            $enum  = $enums->get($code);
+            $label = $code;
+
+            if ($enum !== null) {
+                if ($localeId !== null) {
+                    $label = $enum->label($localeId) ?? $code;
+                } else {
+                    $label = $enum->translations->first()?->pivot?->label ?? $code;
+                }
+            }
+
+            $result[$code] = ['count' => $count, 'label' => $label];
         }
 
         return $result;
