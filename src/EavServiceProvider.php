@@ -9,6 +9,8 @@ use Illuminate\Support\Fluent;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
+use Jurager\Eav\Search\EavSearch;
+use Jurager\Eav\Search\FilterCompiler;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
@@ -32,6 +34,8 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(AttributeInheritanceResolver::class);
         $this->app->singleton(TranslationManager::class);
         $this->app->singleton(SchemaManager::class);
+        $this->app->singleton(FilterCompiler::class);
+        $this->app->bind(EavSearch::class);
     }
 
     public function boot(): void
