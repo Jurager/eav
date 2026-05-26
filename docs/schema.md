@@ -17,12 +17,12 @@ $schema = app(SchemaManager::class);
 
 ## Managing Attributes
 
+`SchemaManager` delegates attribute operations to `AttributeSchema`, accessed via `$schema->attribute()`.
+
 ### Creating an Attribute
 
-To create a new attribute, you may pass the attribute payload to `createAttribute`. Translations are persisted automatically when included in the data:
-
 ```php
-$attribute = $schema->createAttribute([
+$attribute = $schema->attribute()->create([
     'entity_type'        => 'product',
     'attribute_type_id'  => 1,
     'attribute_group_id' => 2,
@@ -41,7 +41,7 @@ The `sort` value is auto-positioned at the end of the group when omitted. Flag c
 ### Updating an Attribute
 
 ```php
-$schema->updateAttribute($attribute, [
+$schema->attribute()->update($attribute, [
     'code'         => 'base_color',
     'localizable'  => false,
     'translations' => [
@@ -55,25 +55,47 @@ Type constraints are re-evaluated on every update. An `AttributeUpdated` event i
 ### Deleting an Attribute
 
 ```php
-$schema->deleteAttribute($attribute);
+$schema->attribute()->delete($attribute);
 ```
 
-An `AttributeDeleted` event is dispatched with a pre-deletion snapshot of the attribute, so listeners can act on the data that's about to disappear.
+An `AttributeDeleted` event is dispatched with a pre-deletion snapshot of the attribute.
 
 ### Sorting Attributes
 
-To move an attribute to a specific position within its group, you may call `sortAttribute` with a zero-based index. Siblings are renumbered automatically:
+To move an attribute to a specific position within its group, call `sort` with a zero-based index. Siblings are renumbered automatically:
 
 ```php
-$schema->sortAttribute($attribute, position: 0); // move to top
+$schema->attribute()->sort($attribute, position: 0); // move to top
 ```
+
+### Finding an Attribute
+
+```php
+$attribute = $schema->attribute()->find(42); // throws ModelNotFoundException if missing
+```
+
+### Find or Create
+
+To look up an attribute by entity type and code, or create it when it doesn't exist:
+
+```php
+$attribute = $schema->attribute()->findOrCreate('product', 'color', [
+    'attribute_type_id'  => 1,
+    'attribute_group_id' => 2,
+    'translations'       => [
+        ['locale_id' => 1, 'label' => 'Color'],
+    ],
+]);
+```
+
+For existing attributes only translations are updated — other fields are not overwritten.
 
 ## Managing Groups
 
-Groups organize attributes for display. The same CRUD pattern applies:
+Groups organize attributes for display. Operations are accessed via `$schema->group()`:
 
 ```php
-$group = $schema->createGroup([
+$group = $schema->group()->create([
     'code'         => 'dimensions',
     'translations' => [
         ['locale_id' => 1, 'label' => 'Dimensions'],
@@ -81,23 +103,24 @@ $group = $schema->createGroup([
     ],
 ]);
 
-$schema->updateGroup($group, ['code' => 'measurements']);
-$schema->deleteGroup($group);
-$schema->sortGroup($group, position: 1);
+$schema->group()->update($group, ['code' => 'measurements']);
+$schema->group()->delete($group);
+$schema->group()->sort($group, position: 1);
+$schema->group()->find(3);
 ```
 
-To attach existing attributes to a group by ID without affecting any other rows:
+To assign existing attributes to a group by ID without affecting other rows:
 
 ```php
-$schema->attachAttributesToGroup($group, attributeIds: [4, 7, 12]);
+$schema->group()->attach($group, attributeIds: [4, 7, 12]);
 ```
 
 ## Managing Enum Values
 
-For `select`-typed attributes, you may manage the available options through enum methods:
+For `select`-typed attributes, manage the available options via `$schema->enum()`:
 
 ```php
-$enum = $schema->createEnum($attribute, [
+$enum = $schema->enum()->create($attribute, [
     'code'         => 'red',
     'translations' => [
         ['locale_id' => 1, 'label' => 'Red'],
@@ -105,8 +128,9 @@ $enum = $schema->createEnum($attribute, [
     ],
 ]);
 
-$schema->updateEnum($enum, ['code' => 'crimson']);
-$schema->deleteEnum($enum);
+$schema->enum()->update($enum, ['code' => 'crimson']);
+$schema->enum()->delete($enum);
+$schema->enum()->find(18);
 ```
 
 ## Querying the Schema
@@ -114,38 +138,50 @@ $schema->deleteEnum($enum);
 Every query method accepts an optional `callable` modifier. Without a modifier, the method returns a `Collection`. You may pass a modifier to apply scopes, sorting, or pagination:
 
 ```php
-$attributes = $schema->getAttributes(); // Collection
+$attributes = $schema->attributes(); // Collection
 
-$paginated = $schema->getAttributes(
+$paginated = $schema->attributes(
     fn ($q) => $q->where('entity_type', 'product')->paginate(15)
 );
 
-$enums  = $schema->getEnums($attribute, fn ($q) => $q->orderBy('sort')->get());
-$types  = $schema->getTypes();
-$groups = $schema->getGroups(fn ($q) => $q->paginate(15));
-```
-
-## Finding a Record by ID
-
-The `get*` methods look up a single record and throw `ModelNotFoundException` when nothing matches:
-
-```php
-$schema->getAttribute(42);
-$schema->getGroup(3);
-$schema->getEnum(18);
-$schema->getType(1);
+$enums  = $schema->enums($attribute, fn ($q) => $q->orderBy('sort')->get());
+$types  = $schema->types();
+$groups = $schema->groups(fn ($q) => $q->paginate(15));
 ```
 
 ## Full-Text Search Over Attributes
 
-When [Laravel Scout](https://laravel.com/docs/scout) is configured on the `Attribute` model, you may search by code and translated labels through `searchAttributes`:
+When [Laravel Scout](https://laravel.com/docs/scout) is configured on the `Attribute` model, you may search by code and translated labels:
 
 ```php
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 
 try {
-    $results = $schema->searchAttributes('color', fn ($b) => $b->paginate(15));
+    $results = $schema->search('color', fn ($b) => $b->paginate(15));
 } catch (SearchNotAvailableException $e) {
     // Scout is not configured on the attribute model
 }
 ```
+
+## Batch Creating Attributes
+
+To create many attributes at once — for example during an import — use the batch API. Existing attributes (matched by `entity_type` + `code`) are skipped; only missing ones are inserted:
+
+```php
+$created = $schema->attribute()->batch()->execute([
+    [
+        'entity_type'        => 'product',
+        'attribute_type_id'  => 1,
+        'code'               => 'color',
+        'translations'       => [['locale_id' => 1, 'label' => 'Color']],
+    ],
+    [
+        'entity_type'        => 'product',
+        'attribute_type_id'  => 2,
+        'code'               => 'weight',
+        'translations'       => [['locale_id' => 1, 'label' => 'Weight']],
+    ],
+], fireEvents: false);
+```
+
+Pass `fireEvents: false` to suppress `AttributeCreated` events during large imports.

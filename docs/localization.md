@@ -47,13 +47,13 @@ use Jurager\Eav\Managers\TranslationManager;
 
 $manager = app(TranslationManager::class);
 
-$locales = $manager->getLocales();                              // Collection
-$locales = $manager->getLocales(fn ($q) => $q->paginate(15));   // Paginator
-$locale  = $manager->getLocale(1);
+$locales = $manager->locales();                              // Collection
+$locales = $manager->locales(fn ($q) => $q->paginate(15));  // Paginator
+$locale  = $manager->locale(1);                             // throws ModelNotFoundException if missing
 
-$locale = $manager->createLocale(['code' => 'de', 'name' => 'German']);
-$locale = $manager->updateLocale($locale, ['name' => 'Deutsch']);
-$manager->deleteLocale($locale);
+$locale = $manager->create(['code' => 'de', 'name' => 'German']);
+$locale = $manager->update($locale, ['name' => 'Deutsch']);
+$manager->delete($locale);
 ```
 
 ## Saving Translations
@@ -83,6 +83,14 @@ $manager->save($attribute, [
 ]);
 ```
 
+To update only specific locales without removing existing translations for others, pass `partial: true`:
+
+```php
+$manager->save($attribute, [
+    ['locale_id' => 3, 'label' => 'Farbe'],
+], partial: true);
+```
+
 When you use `SchemaManager` to create or update attributes, translations are handled automatically — pass the `translations` array in the data payload. You should reach for `TranslationManager::save()` directly only for non-EAV models or standalone locale management.
 
 ## Translating Non-EAV Models
@@ -107,7 +115,7 @@ class Region extends Model
 }
 ```
 
-Once the relation is in place, you may call `save()` exactly as you would for an EAV model:
+Once the relation is in place, call `save()` exactly as you would for an EAV model:
 
 ```php
 app(TranslationManager::class)->save($region, [
