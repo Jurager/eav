@@ -8,22 +8,26 @@ use Jurager\Eav\Events\AttributeEnumDeleted;
 use Jurager\Eav\Events\AttributeEnumUpdated;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Support\EavModels;
 
 class EnumSchema extends BaseSchema
 {
+    protected function modelKey(): string
+    {
+        return 'attribute_enum';
+    }
+
     public function find(int $id): AttributeEnum
     {
-        return EavModels::query('attribute_enum')->findOrFail($id);
+        /** @var AttributeEnum */
+        return $this->query()->findOrFail($id);
     }
 
     public function create(Attribute $attribute, array $data): AttributeEnum
     {
         $translations = $this->extractTranslations($data);
 
-        $enum = $attribute->enums()->create($data);
-
-        $this->saveTranslations($enum, $translations);
+        /** @var AttributeEnum $enum */
+        $enum = $this->createRecord(fn () => $attribute->enums()->create($data), $translations);
 
         Event::dispatch(new AttributeEnumCreated($enum));
 
@@ -34,9 +38,8 @@ class EnumSchema extends BaseSchema
     {
         $translations = $this->extractTranslations($data);
 
-        $enum->update($data);
-
-        $this->saveTranslations($enum, $translations);
+        /** @var AttributeEnum $enum */
+        $enum = $this->updateRecord($enum, $data, $translations);
 
         Event::dispatch(new AttributeEnumUpdated($enum->fresh()));
 
@@ -45,10 +48,6 @@ class EnumSchema extends BaseSchema
 
     public function delete(AttributeEnum $enum): void
     {
-        $snapshot = clone $enum;
-
-        $enum->delete();
-
-        Event::dispatch(new AttributeEnumDeleted($snapshot));
+        Event::dispatch(new AttributeEnumDeleted($this->deleteRecord($enum)));
     }
 }

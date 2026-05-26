@@ -7,6 +7,7 @@ namespace Jurager\Eav\Tests\Unit\Fields;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\NumberField;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 use Mockery;
@@ -15,6 +16,8 @@ class NumberFieldTest extends TestCase
 {
     private LocaleRegistry $localeRegistry;
 
+    private EnumRegistry $enumRegistry;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -22,6 +25,8 @@ class NumberFieldTest extends TestCase
         $this->localeRegistry = Mockery::mock(LocaleRegistry::class);
         $this->localeRegistry->shouldReceive('has')->andReturn(true);
         $this->localeRegistry->shouldReceive('default')->andReturn(1);
+
+        $this->enumRegistry = Mockery::mock(EnumRegistry::class);
     }
 
     private function makeAttribute(array $attributes = []): Attribute
@@ -40,7 +45,7 @@ class NumberFieldTest extends TestCase
 
     private function makeField(array $attributes = []): NumberField
     {
-        return new NumberField($this->makeAttribute($attributes), $this->localeRegistry);
+        return new NumberField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------

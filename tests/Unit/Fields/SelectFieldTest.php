@@ -34,6 +34,7 @@ class SelectFieldTest extends TestCase
         $this->enumRegistry->shouldReceive('isValidId')
             ->andReturnUsing(fn ($attrId, $id) => isset($this->validEnumIds[$id]));
         $this->enumRegistry->shouldReceive('find')
+            ->byDefault()
             ->andReturnNull();
     }
 
@@ -211,26 +212,37 @@ class SelectFieldTest extends TestCase
         $this->assertSame([], $field->indexData());
     }
 
-    public function test_index_data_includes_value_and_code_keys(): void
+    public function test_index_data_returns_enum_code_as_value(): void
     {
+        $enum = (new \Jurager\Eav\Models\AttributeEnum())->forceFill([
+            'id' => 10, 'code' => 'red', 'attribute_id' => 1,
+        ]);
+        $enum->setRelation('translations', collect());
+
+        $this->enumRegistry->shouldReceive('find')
+            ->with(1, 10)
+            ->andReturn($enum);
+        $this->enumRegistry->shouldReceive('all')
+            ->with(1)
+            ->andReturn(collect([$enum]));
+
         $field = $this->makeField(['code' => 'color']);
         $field->fill(10);
 
         $data = $field->indexData();
 
         $this->assertArrayHasKey('color', $data);
-        $this->assertArrayHasKey('color_code', $data);
-        $this->assertSame(10, $data['color']);
+        $this->assertSame('red', $data['color']);
     }
 
     // -----------------------------------------------------------------------
     // filterableKeys()
     // -----------------------------------------------------------------------
 
-    public function test_filterable_keys_includes_code_and_code_code(): void
+    public function test_filterable_keys_returns_attribute_code(): void
     {
         $field = $this->makeField(['code' => 'color']);
 
-        $this->assertSame(['color', 'color_code'], $field->filterableKeys());
+        $this->assertSame(['color'], $field->filterableKeys());
     }
 }

@@ -216,7 +216,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
 
-        $created = $this->schema->attribute()->batch([
+        $created = $this->schema->attribute()->batch()->execute([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch1'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch2'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch3'],
@@ -234,7 +234,7 @@ class SchemaManagerTest extends FeatureTestCase
 
         Event::fake();
 
-        $this->schema->attribute()->batch([
+        $this->schema->attribute()->batch()->execute([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev1'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev2'],
         ]);
@@ -248,7 +248,7 @@ class SchemaManagerTest extends FeatureTestCase
 
         Event::fake();
 
-        $this->schema->attribute()->batch([
+        $this->schema->attribute()->batch()->execute([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'silent'],
         ], false);
 

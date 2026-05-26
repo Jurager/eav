@@ -7,6 +7,7 @@ namespace Jurager\Eav\Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Fields\TextField;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\AttributePersister;
 
@@ -48,7 +49,7 @@ class LocalizableFieldTest extends FeatureTestCase
 
         $registry = app(LocaleRegistry::class);
 
-        return new TextField($attr, $registry);
+        return new TextField($attr, $registry, app(EnumRegistry::class));
     }
 
     // -----------------------------------------------------------------------
@@ -132,7 +133,7 @@ class LocalizableFieldTest extends FeatureTestCase
         $product = $this->createProduct();
         $persister = new AttributePersister($product);
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($this->attr, $registry);
+        $field = new TextField($this->attr, $registry, app(EnumRegistry::class));
 
         $field->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Color'],
@@ -166,7 +167,7 @@ class LocalizableFieldTest extends FeatureTestCase
         $product = $this->createProduct();
         $persister = new AttributePersister($product);
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($this->attr, $registry);
+        $field = new TextField($this->attr, $registry, app(EnumRegistry::class));
 
         $field->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Color'],
@@ -196,7 +197,7 @@ class LocalizableFieldTest extends FeatureTestCase
         $product = $this->createProduct();
         $persister = new AttributePersister($product);
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($this->attr, $registry);
+        $field = new TextField($this->attr, $registry, app(EnumRegistry::class));
 
         // Persist both EN and FR
         $field->fill([
@@ -206,7 +207,7 @@ class LocalizableFieldTest extends FeatureTestCase
         $persister->persist(collect([$field]));
 
         // Update with only EN — FR should be removed
-        $field2 = new TextField($this->attr, $registry);
+        $field2 = new TextField($this->attr, $registry, app(EnumRegistry::class));
         $field2->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Colour'],
         ]);

@@ -164,7 +164,7 @@ class AttributePersister
 
         $this->pending[$type][$entityId] = ($this->pending[$type][$entityId] ?? collect())
             ->merge($fields)
-            ->unique()
+            ->unique(fn (Field $f) => $f->attribute()->id)
             ->values();
 
         $this->entities[$entityId] = $entity;

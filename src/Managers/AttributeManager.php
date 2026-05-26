@@ -756,7 +756,7 @@ class AttributeManager
                 $field = $this->makeField($group->first()->attribute);
                 $field->hydrate($group);
 
-                return $carry + $field->indexData();
+                return array_merge($carry, $field->indexData());
             }, []);
 
         return $attributes ? ['attributes' => $attributes] : [];

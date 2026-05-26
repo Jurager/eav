@@ -13,13 +13,9 @@ use Jurager\Eav\Registry\LocaleRegistry;
  */
 class SelectField extends Field
 {
-    protected EnumRegistry $enumRegistry;
-
-    public function __construct(Attribute $attribute, ?LocaleRegistry $localeRegistry = null, ?EnumRegistry $enumRegistry = null)
+    public function __construct(Attribute $attribute, LocaleRegistry $localeRegistry, EnumRegistry $enumRegistry)
     {
-        parent::__construct($attribute, $localeRegistry);
-
-        $this->enumRegistry = $enumRegistry ?? app(EnumRegistry::class);
+        parent::__construct($attribute, $localeRegistry, $enumRegistry);
     }
 
     public function column(): string

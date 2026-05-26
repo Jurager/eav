@@ -6,6 +6,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
@@ -41,16 +42,11 @@ abstract class Field
      */
     protected array $validationErrors = [];
 
-    protected LocaleRegistry $localeRegistry;
-
-    /**
-     * @param  Attribute  $attribute  Attribute definition model.
-     * @param  LocaleRegistry|null  $localeRegistry  Locale registry dependency.
-     */
-    public function __construct(protected Attribute $attribute, ?LocaleRegistry $localeRegistry = null)
-    {
-        $this->localeRegistry = $localeRegistry ?? app(LocaleRegistry::class);
-    }
+    public function __construct(
+        protected Attribute $attribute,
+        protected LocaleRegistry $localeRegistry,
+        protected EnumRegistry $enumRegistry,
+    ) {}
 
     /**
      * Return the storage column name for this field type.

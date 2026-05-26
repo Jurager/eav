@@ -17,8 +17,10 @@ class FieldTypeRegistry
     /** @var array<string, class-string<Field>> */
     protected array $types;
 
-    public function __construct(private readonly LocaleRegistry $localeRegistry)
-    {
+    public function __construct(
+        private readonly LocaleRegistry $localeRegistry,
+        private readonly EnumRegistry $enumRegistry,
+    ) {
         $this->types = config('eav.types', []);
     }
 
@@ -70,7 +72,7 @@ class FieldTypeRegistry
 
         $class = $this->resolve($attribute->type->code);
 
-        return new $class($attribute, $this->localeRegistry);
+        return new $class($attribute, $this->localeRegistry, $this->enumRegistry);
     }
 
     /** @return array<string, class-string<Field>> */

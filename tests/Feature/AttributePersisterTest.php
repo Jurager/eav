@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Fields\TextField;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\AttributePersister;
 
@@ -29,7 +30,7 @@ class AttributePersisterTest extends FeatureTestCase
     private function makeTextField(Attribute $attribute, string $value): TextField
     {
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($attribute, $registry);
+        $field = new TextField($attribute, $registry, app(EnumRegistry::class));
         $field->fill($value);
 
         return $field;
@@ -264,7 +265,7 @@ class AttributePersisterTest extends FeatureTestCase
         $persister = new AttributePersister($product);
 
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($multiAttr, $registry);
+        $field = new TextField($multiAttr, $registry, app(EnumRegistry::class));
         $field->fill(['tag1', 'tag2', 'tag3']);
 
         $persister->persist(collect([$field]));

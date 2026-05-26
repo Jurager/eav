@@ -19,18 +19,13 @@ use Jurager\Eav\Support\EavModels;
  */
 class SchemaManager
 {
-    private ?AttributeSchema $attributeSchema = null;
-
-    private ?GroupSchema $groupSchema = null;
-
-    private ?EnumSchema $enumSchema = null;
-
-    private ?TypeSchema $typeSchema = null;
-
     public function __construct(
-        protected TranslationManager $translations,
-    ) {
-    }
+        private TranslationManager $translations,
+        private AttributeSchema $attributeSchema,
+        private GroupSchema $groupSchema,
+        private EnumSchema $enumSchema,
+        private TypeSchema $typeSchema,
+    ) {}
 
     public function translations(): TranslationManager
     {
@@ -39,22 +34,22 @@ class SchemaManager
 
     public function attribute(): AttributeSchema
     {
-        return $this->attributeSchema ??= new AttributeSchema($this->translations);
+        return $this->attributeSchema;
     }
 
     public function group(): GroupSchema
     {
-        return $this->groupSchema ??= new GroupSchema($this->translations);
+        return $this->groupSchema;
     }
 
     public function enum(): EnumSchema
     {
-        return $this->enumSchema ??= new EnumSchema($this->translations);
+        return $this->enumSchema;
     }
 
     public function type(): TypeSchema
     {
-        return $this->typeSchema ??= new TypeSchema();
+        return $this->typeSchema;
     }
 
     /** @param  callable(Builder): mixed|null  $modifier */

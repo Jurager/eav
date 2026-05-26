@@ -6,14 +6,21 @@ use Illuminate\Support\Facades\Event;
 use Jurager\Eav\Events\AttributeGroupCreated;
 use Jurager\Eav\Events\AttributeGroupDeleted;
 use Jurager\Eav\Events\AttributeGroupUpdated;
+use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeGroup;
 use Jurager\Eav\Support\EavModels;
 
 class GroupSchema extends BaseSchema
 {
+    protected function modelKey(): string
+    {
+        return 'attribute_group';
+    }
+
     public function find(int $id): AttributeGroup
     {
-        return EavModels::query('attribute_group')->findOrFail($id);
+        /** @var AttributeGroup */
+        return $this->query()->findOrFail($id);
     }
 
     /** Create a new attribute group, auto-positioned at the end. */
@@ -21,11 +28,10 @@ class GroupSchema extends BaseSchema
     {
         $translations = $this->extractTranslations($data);
 
-        $data['sort'] ??= $this->nextGroupSort();
+        $data['sort'] ??= (int) $this->query()->max('sort') + 1;
 
-        $group = EavModels::query('attribute_group')->create($data);
-
-        $this->saveTranslations($group, $translations);
+        /** @var AttributeGroup $group */
+        $group = $this->createRecord(fn () => $this->query()->create($data), $translations);
 
         Event::dispatch(new AttributeGroupCreated($group));
 
@@ -36,9 +42,8 @@ class GroupSchema extends BaseSchema
     {
         $translations = $this->extractTranslations($data);
 
-        $group->update($data);
-
-        $this->saveTranslations($group, $translations);
+        /** @var AttributeGroup $group */
+        $group = $this->updateRecord($group, $data, $translations);
 
         Event::dispatch(new AttributeGroupUpdated($group->fresh()));
 
@@ -47,11 +52,7 @@ class GroupSchema extends BaseSchema
 
     public function delete(AttributeGroup $group): void
     {
-        $snapshot = clone $group;
-
-        $group->delete();
-
-        Event::dispatch(new AttributeGroupDeleted($snapshot));
+        Event::dispatch(new AttributeGroupDeleted($this->deleteRecord($group)));
     }
 
     /**
@@ -60,18 +61,13 @@ class GroupSchema extends BaseSchema
      */
     public function sort(AttributeGroup $group, int $position): AttributeGroup
     {
-        $all = EavModels::query('attribute_group')
+        $all = $this->query()
             ->withoutGlobalScope('ordered')
             ->orderBy('sort')
             ->orderBy('id')
             ->get();
 
-        $reordered = $this->reorder($all, $group->id, $position);
-
-        $reordered->each(function (AttributeGroup $item, int $index): void {
-            $item->sort = $index;
-            $item->saveQuietly();
-        });
+        $this->applySort($this->reorder($all, $group->id, $position));
 
         return $group->fresh();
     }
@@ -86,10 +82,5 @@ class GroupSchema extends BaseSchema
         EavModels::query('attribute')
             ->whereIn('id', $attributeIds)
             ->update(['attribute_group_id' => $group->id]);
-    }
-
-    private function nextGroupSort(): int
-    {
-        return (int) EavModels::query('attribute_group')->max('sort') + 1;
     }
 }

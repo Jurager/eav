@@ -7,6 +7,7 @@ namespace Jurager\Eav\Tests\Unit\Fields;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\TextField;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 use Mockery;
@@ -14,6 +15,8 @@ use Mockery;
 class TextFieldTest extends TestCase
 {
     private LocaleRegistry $localeRegistry;
+
+    private EnumRegistry $enumRegistry;
 
     protected function setUp(): void
     {
@@ -23,6 +26,8 @@ class TextFieldTest extends TestCase
         $this->localeRegistry->shouldReceive('has')->andReturn(true);
         $this->localeRegistry->shouldReceive('default')->andReturn(1);
         $this->localeRegistry->shouldReceive('ids')->andReturn([1]);
+
+        $this->enumRegistry = Mockery::mock(EnumRegistry::class);
     }
 
     // -----------------------------------------------------------------------
@@ -45,7 +50,7 @@ class TextFieldTest extends TestCase
 
     private function makeField(array $attributes = []): TextField
     {
-        return new TextField($this->makeAttribute($attributes), $this->localeRegistry);
+        return new TextField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------

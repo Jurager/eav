@@ -8,6 +8,7 @@ use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FileField;
 use Jurager\Eav\Fields\ImageField;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 use Mockery;
@@ -16,6 +17,8 @@ class FileFieldTest extends TestCase
 {
     private LocaleRegistry $localeRegistry;
 
+    private EnumRegistry $enumRegistry;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -23,6 +26,8 @@ class FileFieldTest extends TestCase
         $this->localeRegistry = Mockery::mock(LocaleRegistry::class);
         $this->localeRegistry->shouldReceive('has')->andReturn(true);
         $this->localeRegistry->shouldReceive('default')->andReturn(1);
+
+        $this->enumRegistry = Mockery::mock(EnumRegistry::class);
     }
 
     private function makeAttribute(array $attributes = []): Attribute
@@ -41,7 +46,7 @@ class FileFieldTest extends TestCase
 
     private function makeField(array $attributes = []): FileField
     {
-        return new FileField($this->makeAttribute($attributes), $this->localeRegistry);
+        return new FileField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------
@@ -60,7 +65,7 @@ class FileFieldTest extends TestCase
     public function test_image_field_extends_file_field(): void
     {
         $attribute = $this->makeAttribute(['code' => 'photo']);
-        $field = new ImageField($attribute, $this->localeRegistry);
+        $field = new ImageField($attribute, $this->localeRegistry, $this->enumRegistry);
 
         $this->assertInstanceOf(FileField::class, $field);
         $this->assertSame(Field::STORAGE_TEXT, $field->column());
