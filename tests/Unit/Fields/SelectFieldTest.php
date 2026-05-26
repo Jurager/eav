@@ -40,14 +40,14 @@ class SelectFieldTest extends TestCase
     private function makeAttribute(array $attributes = []): Attribute
     {
         $attr = (new Attribute())->forceFill(array_merge([
-            'id'          => 1,
-            'code'        => 'color',
+            'id' => 1,
+            'code' => 'color',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ], $attributes));
 

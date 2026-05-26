@@ -125,7 +125,6 @@ class LocaleRegistry
         return $this->active;
     }
 
-
     /**
      * Forget all cached data.
      */

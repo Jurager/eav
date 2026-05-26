@@ -42,9 +42,9 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $attr = $this->schema->attribute()->create([
-            'entity_type'       => 'product',
+            'entity_type' => 'product',
             'attribute_type_id' => $type->id,
-            'code'              => 'title',
+            'code' => 'title',
         ]);
 
         $this->assertInstanceOf(Attribute::class, $attr);
@@ -56,9 +56,9 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $this->schema->attribute()->create([
-            'entity_type'       => 'product',
+            'entity_type' => 'product',
             'attribute_type_id' => $type->id,
-            'code'              => 'title',
+            'code' => 'title',
         ]);
 
         Event::assertDispatched(AttributeCreated::class);
@@ -85,10 +85,10 @@ class SchemaManagerTest extends FeatureTestCase
         // AttributeType defaults: localizable=false, multiple=false, etc.
 
         $attr = $this->schema->attribute()->create([
-            'entity_type'       => 'product',
+            'entity_type' => 'product',
             'attribute_type_id' => $type->id,
-            'code'              => 'constrained',
-            'localizable'       => true,   // should be forced to false by type constraint
+            'code' => 'constrained',
+            'localizable' => true,   // should be forced to false by type constraint
         ]);
 
         $this->assertFalse($attr->localizable);
@@ -162,9 +162,9 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $attr = $this->schema->attribute()->findOrCreate('product', 'new_attr', [
-            'entity_type'       => 'product',
+            'entity_type' => 'product',
             'attribute_type_id' => $type->id,
-            'code'              => 'new_attr',
+            'code' => 'new_attr',
         ]);
 
         $this->assertInstanceOf(Attribute::class, $attr);
@@ -177,10 +177,10 @@ class SchemaManagerTest extends FeatureTestCase
         $existing = $this->createAttribute($type, ['code' => 'existing', 'mandatory' => false]);
 
         $this->schema->attribute()->findOrCreate('product', 'existing', [
-            'entity_type'       => 'product',
+            'entity_type' => 'product',
             'attribute_type_id' => $type->id,
-            'code'              => 'existing',
-            'mandatory'         => true,  // should NOT overwrite
+            'code' => 'existing',
+            'mandatory' => true,  // should NOT overwrite
         ]);
 
         $this->assertDatabaseHas('attributes', ['id' => $existing->id, 'mandatory' => false]);
@@ -298,10 +298,10 @@ class SchemaManagerTest extends FeatureTestCase
 
     public function test_group_attach_assigns_attributes_to_group(): void
     {
-        $type  = $this->createAttributeType('text');
+        $type = $this->createAttributeType('text');
         $group = $this->schema->group()->create(['code' => 'details']);
-        $a1    = $this->createAttribute($type, ['code' => 'ga1']);
-        $a2    = $this->createAttribute($type, ['code' => 'ga2']);
+        $a1 = $this->createAttribute($type, ['code' => 'ga1']);
+        $a2 = $this->createAttribute($type, ['code' => 'ga2']);
 
         $this->schema->group()->attach($group, [$a1->id, $a2->id]);
 

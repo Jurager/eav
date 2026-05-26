@@ -59,8 +59,8 @@ class AttributeManager
         ?Collection $preloadedAttributes = null,
     ) {
         $this->fieldRegistry = app(FieldTypeRegistry::class);
-        $this->enumRegistry  = app(EnumRegistry::class);
-        $this->persister     = $entity !== null ? new AttributePersister($entity) : null;
+        $this->enumRegistry = app(EnumRegistry::class);
+        $this->persister = $entity !== null ? new AttributePersister($entity) : null;
 
         if ($preloadedAttributes !== null) {
             $this->cachedAttributes['default'] = $preloadedAttributes;
@@ -766,16 +766,16 @@ class AttributeManager
     private function applyOperator(Builder $query, string $column, string $operator, mixed $value): void
     {
         match ($operator) {
-            'like'          => $this->applyLike($query, $column, $value),
-            '=', 'eq'       => $query->where($column, '=', $value),
-            '!=', 'ne'      => $query->where($column, '!=', $value),
-            'in'            => $query->whereIn($column, (array) $value),
+            'like' => $this->applyLike($query, $column, $value),
+            '=', 'eq' => $query->where($column, '=', $value),
+            '!=', 'ne' => $query->where($column, '!=', $value),
+            'in' => $query->whereIn($column, (array) $value),
             'nin', 'not_in' => $query->whereNotIn($column, (array) $value),
-            'null'          => $query->whereNull($column),
-            'not_null'      => $query->whereNotNull($column),
-            'between'       => $query->whereBetween($column, $value),
-            'not_between'   => $query->whereNotBetween($column, $value),
-            default         => $query->where($column, $operator, $value),
+            'null' => $query->whereNull($column),
+            'not_null' => $query->whereNotNull($column),
+            'between' => $query->whereBetween($column, $value),
+            'not_between' => $query->whereNotBetween($column, $value),
+            default => $query->where($column, $operator, $value),
         };
     }
 

@@ -112,13 +112,13 @@ class FieldTypeRegistryTest extends TestCase
         $type->code = 'text';
 
         $attribute = (new Attribute())->forceFill([
-            'code'        => 'title',
+            'code' => 'title',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ]);
         $attribute->setRelation('type', $type);
@@ -134,13 +134,13 @@ class FieldTypeRegistryTest extends TestCase
         $type->code = 'number';
 
         $attribute = (new Attribute())->forceFill([
-            'code'        => 'price',
+            'code' => 'price',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ]);
         $attribute->setRelation('type', $type);
@@ -153,13 +153,13 @@ class FieldTypeRegistryTest extends TestCase
     public function test_make_throws_when_type_relation_not_loaded(): void
     {
         $attribute = (new Attribute())->forceFill([
-            'code'        => 'title',
+            'code' => 'title',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ]);
 

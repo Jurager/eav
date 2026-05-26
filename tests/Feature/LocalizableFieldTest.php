@@ -31,9 +31,9 @@ class LocalizableFieldTest extends FeatureTestCase
         $textType = $this->createAttributeType('text');
 
         $this->attr = $this->createAttribute($textType, [
-            'code'        => 'label',
+            'code' => 'label',
             'localizable' => true,
-            'multiple'    => false,
+            'multiple' => false,
         ]);
     }
 
@@ -129,10 +129,10 @@ class LocalizableFieldTest extends FeatureTestCase
 
     public function test_persister_saves_localizable_field_to_translations_table(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
-        $registry  = app(LocaleRegistry::class);
-        $field     = new TextField($this->attr, $registry);
+        $registry = app(LocaleRegistry::class);
+        $field = new TextField($this->attr, $registry);
 
         $field->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Color'],
@@ -163,10 +163,10 @@ class LocalizableFieldTest extends FeatureTestCase
 
     public function test_persister_saves_correct_translation_labels(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
-        $registry  = app(LocaleRegistry::class);
-        $field     = new TextField($this->attr, $registry);
+        $registry = app(LocaleRegistry::class);
+        $field = new TextField($this->attr, $registry);
 
         $field->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Color'],
@@ -193,10 +193,10 @@ class LocalizableFieldTest extends FeatureTestCase
 
     public function test_updating_localizable_field_prunes_removed_locale(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
-        $registry  = app(LocaleRegistry::class);
-        $field     = new TextField($this->attr, $registry);
+        $registry = app(LocaleRegistry::class);
+        $field = new TextField($this->attr, $registry);
 
         // Persist both EN and FR
         $field->fill([

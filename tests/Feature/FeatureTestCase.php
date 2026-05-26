@@ -64,16 +64,16 @@ abstract class FeatureTestCase extends TestCase
     protected function createAttribute(AttributeType $type, array $overrides = []): Attribute
     {
         return Attribute::create(array_merge([
-            'entity_type'        => 'product',
-            'attribute_type_id'  => $type->id,
-            'code'               => 'name',
-            'sort'               => 0,
-            'mandatory'          => false,
-            'localizable'        => false,
-            'multiple'           => false,
-            'unique'             => false,
-            'filterable'         => false,
-            'searchable'         => false,
+            'entity_type' => 'product',
+            'attribute_type_id' => $type->id,
+            'code' => 'name',
+            'sort' => 0,
+            'mandatory' => false,
+            'localizable' => false,
+            'multiple' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
         ], $overrides));
     }
 
@@ -86,7 +86,7 @@ abstract class FeatureTestCase extends TestCase
     {
         return AttributeEnum::create([
             'attribute_id' => $attribute->id,
-            'code'         => $code,
+            'code' => $code,
         ]);
     }
 }

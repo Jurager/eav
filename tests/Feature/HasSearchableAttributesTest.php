@@ -36,7 +36,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
     public function test_to_searchable_array_contains_id(): void
     {
         $product = $this->createSearchableProduct();
-        $array   = $product->toSearchableArray();
+        $array = $product->toSearchableArray();
 
         $this->assertArrayHasKey('id', $array);
         $this->assertSame((string) $product->id, $array['id']);
@@ -59,7 +59,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'       => 'description',
+            'code' => 'description',
             'searchable' => true,
             'entity_type' => 'searchable_product',
         ]);
@@ -81,8 +81,8 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'        => 'sku',
-            'searchable'  => false,
+            'code' => 'sku',
+            'searchable' => false,
             'entity_type' => 'searchable_product',
         ]);
 
@@ -96,8 +96,8 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'        => 'title',
-            'searchable'  => true,
+            'code' => 'title',
+            'searchable' => true,
             'entity_type' => 'searchable_product',
         ]);
 
@@ -111,8 +111,8 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'        => 'title',
-            'searchable'  => true,
+            'code' => 'title',
+            'searchable' => true,
             'entity_type' => 'searchable_product',
         ]);
 
@@ -125,9 +125,9 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'        => 'sku',
-            'filterable'  => true,
-            'searchable'  => false,
+            'code' => 'sku',
+            'filterable' => true,
+            'searchable' => false,
             'entity_type' => 'searchable_product',
         ]);
 
@@ -144,9 +144,9 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'        => 'sku',
-            'filterable'  => true,
-            'searchable'  => false,
+            'code' => 'sku',
+            'filterable' => true,
+            'searchable' => false,
             'entity_type' => 'searchable_product',
         ]);
 
@@ -160,9 +160,9 @@ class HasSearchableAttributesTest extends FeatureTestCase
     {
         $textType = $this->createAttributeType('text');
         $this->createAttribute($textType, [
-            'code'        => 'internal_note',
-            'filterable'  => false,
-            'searchable'  => false,
+            'code' => 'internal_note',
+            'filterable' => false,
+            'searchable' => false,
             'entity_type' => 'searchable_product',
         ]);
 

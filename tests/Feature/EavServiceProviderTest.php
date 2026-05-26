@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature;
 
+use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
@@ -117,42 +118,42 @@ class EavServiceProviderTest extends TestCase
     public function test_migrations_create_locales_table(): void
     {
         $this->assertTrue(
-            \Illuminate\Support\Facades\Schema::hasTable('locales')
+            Schema::hasTable('locales')
         );
     }
 
     public function test_migrations_create_attributes_table(): void
     {
         $this->assertTrue(
-            \Illuminate\Support\Facades\Schema::hasTable('attributes')
+            Schema::hasTable('attributes')
         );
     }
 
     public function test_migrations_create_entity_attribute_table(): void
     {
         $this->assertTrue(
-            \Illuminate\Support\Facades\Schema::hasTable('entity_attribute')
+            Schema::hasTable('entity_attribute')
         );
     }
 
     public function test_migrations_create_entity_translations_table(): void
     {
         $this->assertTrue(
-            \Illuminate\Support\Facades\Schema::hasTable('entity_translations')
+            Schema::hasTable('entity_translations')
         );
     }
 
     public function test_migrations_create_attribute_types_table(): void
     {
         $this->assertTrue(
-            \Illuminate\Support\Facades\Schema::hasTable('attribute_types')
+            Schema::hasTable('attribute_types')
         );
     }
 
     public function test_migrations_create_attribute_enums_table(): void
     {
         $this->assertTrue(
-            \Illuminate\Support\Facades\Schema::hasTable('attribute_enums')
+            Schema::hasTable('attribute_enums')
         );
     }
 }

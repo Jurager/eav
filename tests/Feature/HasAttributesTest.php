@@ -19,7 +19,7 @@ class HasAttributesTest extends FeatureTestCase
         parent::setUp();
 
         $this->createLocale('en');
-        $this->textType   = $this->createAttributeType('text');
+        $this->textType = $this->createAttributeType('text');
         $this->numberType = $this->createAttributeType('number');
     }
 
@@ -169,8 +169,8 @@ class HasAttributesTest extends FeatureTestCase
     {
         $this->createAttribute($this->numberType, ['code' => 'price', 'filterable' => true]);
 
-        $cheap  = $this->createProduct('cheap');
-        $mid    = $this->createProduct('mid');
+        $cheap = $this->createProduct('cheap');
+        $mid = $this->createProduct('mid');
         $expensive = $this->createProduct('expensive');
 
         $cheap->eav()->set('price', 5)->save('price');
@@ -191,9 +191,9 @@ class HasAttributesTest extends FeatureTestCase
     {
         $this->createAttribute($this->textType, ['code' => 'status']);
 
-        $active   = $this->createProduct('active');
+        $active = $this->createProduct('active');
         $inactive = $this->createProduct('inactive');
-        $pending  = $this->createProduct('pending');
+        $pending = $this->createProduct('pending');
 
         $active->eav()->set('status', 'active')->save('status');
         $inactive->eav()->set('status', 'inactive')->save('status');
@@ -216,7 +216,7 @@ class HasAttributesTest extends FeatureTestCase
         $this->createAttribute($this->textType, ['code' => 'status']);
         $this->createAttribute($this->numberType, ['code' => 'price']);
 
-        $match    = $this->createProduct('match');
+        $match = $this->createProduct('match');
         $no_match = $this->createProduct('no_match');
 
         $match->eav()->set('status', 'active')->save('status');
@@ -241,7 +241,7 @@ class HasAttributesTest extends FeatureTestCase
     public function test_numeric_ranges_returns_min_max_for_filterable_number_attribute(): void
     {
         $this->createAttribute($this->numberType, [
-            'code'       => 'price',
+            'code' => 'price',
             'filterable' => true,
         ]);
 

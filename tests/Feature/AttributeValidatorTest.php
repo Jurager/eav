@@ -20,7 +20,7 @@ class AttributeValidatorTest extends FeatureTestCase
         parent::setUp();
 
         $this->createLocale('en');
-        $this->textType   = $this->createAttributeType('text');
+        $this->textType = $this->createAttributeType('text');
         $this->numberType = $this->createAttributeType('number');
     }
 
@@ -80,7 +80,7 @@ class AttributeValidatorTest extends FeatureTestCase
     public function test_validate_throws_for_mandatory_field_with_null_value(): void
     {
         $this->createAttribute($this->textType, [
-            'code'      => 'title',
+            'code' => 'title',
             'mandatory' => true,
         ]);
 
@@ -96,7 +96,7 @@ class AttributeValidatorTest extends FeatureTestCase
     public function test_validate_throws_for_mandatory_field_not_included_in_input(): void
     {
         $this->createAttribute($this->textType, [
-            'code'      => 'title',
+            'code' => 'title',
             'mandatory' => true,
         ]);
 
@@ -110,7 +110,7 @@ class AttributeValidatorTest extends FeatureTestCase
     public function test_validate_passes_when_mandatory_field_has_value(): void
     {
         $this->createAttribute($this->textType, [
-            'code'      => 'title',
+            'code' => 'title',
             'mandatory' => true,
         ]);
 
@@ -148,7 +148,7 @@ class AttributeValidatorTest extends FeatureTestCase
     public function test_validate_throws_for_duplicate_unique_field_value(): void
     {
         $this->createAttribute($this->textType, [
-            'code'   => 'sku',
+            'code' => 'sku',
             'unique' => true,
         ]);
 
@@ -168,7 +168,7 @@ class AttributeValidatorTest extends FeatureTestCase
     public function test_validate_allows_same_unique_value_for_same_entity(): void
     {
         $this->createAttribute($this->textType, [
-            'code'   => 'sku',
+            'code' => 'sku',
             'unique' => true,
         ]);
 
@@ -206,7 +206,7 @@ class AttributeValidatorTest extends FeatureTestCase
     public function test_register_unique_scope_restricts_uniqueness_check(): void
     {
         $this->createAttribute($this->textType, [
-            'code'   => 'ref',
+            'code' => 'ref',
             'unique' => true,
         ]);
 

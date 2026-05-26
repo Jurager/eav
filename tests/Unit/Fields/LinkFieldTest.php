@@ -27,13 +27,13 @@ class LinkFieldTest extends TestCase
     private function makeAttribute(array $attributes = []): Attribute
     {
         return (new Attribute())->forceFill(array_merge([
-            'code'        => 'website',
+            'code' => 'website',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ], $attributes));
     }

@@ -22,7 +22,7 @@ class AttributePersisterTest extends FeatureTestCase
         parent::setUp();
 
         $this->createLocale('en');
-        $this->textType  = $this->createAttributeType('text');
+        $this->textType = $this->createAttributeType('text');
         $this->titleAttr = $this->createAttribute($this->textType, ['code' => 'title']);
     }
 
@@ -41,7 +41,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_persist_inserts_a_new_row(): void
     {
-        $product  = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $field = $this->makeTextField($this->titleAttr, 'Hello');
@@ -59,7 +59,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_persist_updates_existing_row(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'First')]));
@@ -82,7 +82,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_persist_does_nothing_for_empty_collection(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $persister->persist(collect());
@@ -96,9 +96,9 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_save_persists_single_field(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
-        $field     = $this->makeTextField($this->titleAttr, 'Saved');
+        $field = $this->makeTextField($this->titleAttr, 'Saved');
 
         $persister->save($field);
 
@@ -118,7 +118,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_replace_removes_rows_not_in_the_new_set(): void
     {
         $priceAttr = $this->createAttribute($this->textType, ['code' => 'price']);
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         // Persist both
@@ -146,7 +146,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_detach_removes_rows_for_given_attribute_ids(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'To Delete')]));
@@ -160,7 +160,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_detach_does_nothing_when_no_rows_exist(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $persister->detach([$this->titleAttr->id]);
@@ -174,7 +174,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_delete_removes_given_row_ids(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'Delete Me')]));
@@ -188,7 +188,7 @@ class AttributePersisterTest extends FeatureTestCase
 
     public function test_delete_with_empty_array_is_no_op(): void
     {
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'Keep Me')]));
@@ -256,11 +256,11 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_persist_multiple_values_inserts_multiple_rows(): void
     {
         $multiAttr = $this->createAttribute($this->textType, [
-            'code'     => 'tags',
+            'code' => 'tags',
             'multiple' => true,
         ]);
 
-        $product   = $this->createProduct();
+        $product = $this->createProduct();
         $persister = new AttributePersister($product);
 
         $registry = app(LocaleRegistry::class);

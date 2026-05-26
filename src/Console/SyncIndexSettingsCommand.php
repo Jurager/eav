@@ -5,6 +5,7 @@ namespace Jurager\Eav\Console;
 use Jurager\Eav\Jobs\SyncFilterable;
 use Laravel\Scout\Console\SyncIndexSettingsCommand as ScoutSyncIndexSettingsCommand;
 use Laravel\Scout\EngineManager;
+use Meilisearch\Client;
 
 class SyncIndexSettingsCommand extends ScoutSyncIndexSettingsCommand
 {
@@ -12,7 +13,7 @@ class SyncIndexSettingsCommand extends ScoutSyncIndexSettingsCommand
     {
         parent::handle($manager);
 
-        if (! class_exists(\Meilisearch\Client::class)) {
+        if (! class_exists(Client::class)) {
             return;
         }
 

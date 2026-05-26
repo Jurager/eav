@@ -23,7 +23,7 @@ class AttributeManagerTest extends FeatureTestCase
         parent::setUp();
 
         $this->createLocale('en');
-        $this->textType   = $this->createAttributeType('text');
+        $this->textType = $this->createAttributeType('text');
         $this->numberType = $this->createAttributeType('number');
     }
 

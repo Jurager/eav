@@ -10,8 +10,6 @@ use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Console\SyncIndexSettingsCommand;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
-use Jurager\Eav\Search\EavSearch;
-use Jurager\Eav\Search\FilterCompiler;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
@@ -19,7 +17,10 @@ use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Search\FilterCompiler;
+use Jurager\Eav\Search\Search;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
+use Meilisearch\Client;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -36,7 +37,12 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(TranslationManager::class);
         $this->app->singleton(SchemaManager::class);
         $this->app->singleton(FilterCompiler::class);
-        $this->app->bind(EavSearch::class);
+        $this->app->bind(Search::class, fn ($app) => new Search(
+            $app->make(FilterCompiler::class),
+            $app->make(FieldTypeRegistry::class),
+            $app->make(LocaleRegistry::class),
+            class_exists(Client::class) ? $app->make(Client::class) : null,
+        ));
 
         if (class_exists(\Laravel\Scout\Console\SyncIndexSettingsCommand::class)) {
             $this->app->bind(\Laravel\Scout\Console\SyncIndexSettingsCommand::class, SyncIndexSettingsCommand::class);

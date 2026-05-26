@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Registry\FieldTypeRegistry;
 use Jurager\Eav\Support\EavModels;
+use Laravel\Scout\EngineManager;
+use Laravel\Scout\Engines\MeilisearchEngine;
+use Meilisearch\Client;
 
 /**
  * Synchronises filterableAttributes on the Meilisearch index for the given entity type.
@@ -28,7 +31,8 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         protected string $entityType,
-    ) {}
+    ) {
+    }
 
     public function uniqueId(): string
     {
@@ -37,13 +41,13 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
 
     public function handle(FieldTypeRegistry $fieldRegistry): void
     {
-        if (! class_exists(\Laravel\Scout\EngineManager::class) || ! class_exists(\Meilisearch\Client::class)) {
+        if (! class_exists(EngineManager::class) || ! class_exists(Client::class)) {
             return;
         }
 
-        $engine = app(\Laravel\Scout\EngineManager::class)->driver();
+        $engine = app(EngineManager::class)->driver();
 
-        if (! $engine instanceof \Laravel\Scout\Engines\MeilisearchEngine) {
+        if (! $engine instanceof MeilisearchEngine) {
             return;
         }
 
@@ -73,7 +77,7 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
             ->values()
             ->all();
 
-        $index = app(\Meilisearch\Client::class)->index($indexName);
+        $index = app(Client::class)->index($indexName);
 
         try {
             $existing = $index->getFilterableAttributes();

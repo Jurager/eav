@@ -28,13 +28,13 @@ class BooleanFieldTest extends TestCase
     private function makeAttribute(array $attributes = []): Attribute
     {
         return (new Attribute())->forceFill(array_merge([
-            'code'        => 'active',
+            'code' => 'active',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ], $attributes));
     }

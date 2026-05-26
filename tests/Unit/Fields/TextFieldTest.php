@@ -32,13 +32,13 @@ class TextFieldTest extends TestCase
     private function makeAttribute(array $attributes = []): Attribute
     {
         return (new Attribute())->forceFill(array_merge([
-            'code'        => 'name',
+            'code' => 'name',
             'localizable' => false,
-            'multiple'    => false,
-            'mandatory'   => false,
-            'unique'      => false,
-            'filterable'  => false,
-            'searchable'  => false,
+            'multiple' => false,
+            'mandatory' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
             'validations' => null,
         ], $attributes));
     }

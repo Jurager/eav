@@ -98,7 +98,7 @@ class SelectField extends Field
 
     public function indexData(): array
     {
-        $code  = $this->code();
+        $code = $this->code();
         $value = $this->value();
 
         if ($value === null) {
@@ -140,7 +140,7 @@ class SelectField extends Field
         $result = [];
 
         foreach ($distribution as $code => $count) {
-            $enum  = $enums->get($code);
+            $enum = $enums->get($code);
             $label = $code;
 
             if ($enum !== null) {

@@ -21,7 +21,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         parent::setUp();
 
         $this->createLocale('en');
-        $this->textType   = $this->createAttributeType('text');
+        $this->textType = $this->createAttributeType('text');
         $this->numberType = $this->createAttributeType('number');
     }
 
@@ -82,7 +82,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $p2->eav()->set('sku', 'SKU-002')->save('sku');
 
         $manager = AttributeManager::for($p1);
-        $found   = $manager->findBy('sku', 'SKU-002');
+        $found = $manager->findBy('sku', 'SKU-002');
 
         $this->assertNotNull($found);
         $this->assertSame($p2->id, $found->id);
@@ -96,7 +96,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $product->eav()->set('sku', 'SKU-001')->save('sku');
 
         $manager = AttributeManager::for($product);
-        $found   = $manager->findBy('sku', 'NONEXISTENT');
+        $found = $manager->findBy('sku', 'NONEXISTENT');
 
         $this->assertNull($found);
     }
@@ -109,9 +109,9 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
     {
         $this->createAttribute($this->textType, ['code' => 'status']);
 
-        $active1   = $this->createProduct('Active 1');
-        $active2   = $this->createProduct('Active 2');
-        $inactive  = $this->createProduct('Inactive');
+        $active1 = $this->createProduct('Active 1');
+        $active2 = $this->createProduct('Active 2');
+        $inactive = $this->createProduct('Inactive');
 
         $active1->eav()->set('status', 'active')->save('status');
         $active2->eav()->set('status', 'active')->save('status');
@@ -200,7 +200,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
 
         $product = $product->fresh();
 
-        $first  = $product->eav()->indexData();
+        $first = $product->eav()->indexData();
         $second = $product->eav()->indexData();
 
         $this->assertSame($first, $second);
@@ -248,7 +248,7 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
     {
         $this->createAttribute($this->textType, ['code' => 'status']);
 
-        $active   = $this->createProduct('active');
+        $active = $this->createProduct('active');
         $inactive = $this->createProduct('inactive');
 
         $active->eav()->set('status', 'active')->save('status');
@@ -264,19 +264,19 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
     {
         $attr = $this->createAttribute($this->numberType, ['code' => 'weight']);
 
-        $withWeight    = $this->createProduct('with');
+        $withWeight = $this->createProduct('with');
         $withoutWeight = $this->createProduct('without');
 
         $withWeight->eav()->set('weight', 5)->save('weight');
 
         // Insert a row with explicit null value so the 'null' operator can match it
         DB::table('entity_attribute')->insert([
-            'entity_type'  => 'product',
-            'entity_id'    => $withoutWeight->id,
+            'entity_type' => 'product',
+            'entity_id' => $withoutWeight->id,
             'attribute_id' => $attr->id,
-            'value_float'  => null,
-            'created_at'   => now(),
-            'updated_at'   => now(),
+            'value_float' => null,
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $results = Product::whereAttribute('weight', null, 'null')->get();

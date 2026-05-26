@@ -24,9 +24,9 @@ abstract class TestCase extends OrchestraTestCase
     {
         $app['config']->set('database.default', 'testing');
         $app['config']->set('database.connections.testing', [
-            'driver'   => 'sqlite',
+            'driver' => 'sqlite',
             'database' => ':memory:',
-            'prefix'   => '',
+            'prefix' => '',
         ]);
         $app['config']->set('app.locale', 'en');
     }
@@ -46,10 +46,6 @@ abstract class TestCase extends OrchestraTestCase
             /** @var string[] */
             protected $modifiers = ['Increment', 'Nullable', 'Default', 'VirtualAs', 'StoredAs'];
 
-            /**
-             * @param  \Illuminate\Database\Schema\Blueprint  $blueprint
-             * @param  \Illuminate\Support\Fluent  $column
-             */
             protected function modifyCollate(Blueprint $blueprint, Fluent $column): string
             {
                 return '';
