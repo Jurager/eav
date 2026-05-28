@@ -5,7 +5,6 @@ namespace Jurager\Eav\Concerns;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\CircularDependencyException;
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Collection;
@@ -260,15 +259,6 @@ trait HasAttributes
     }
 
     /**
-     * Relation that provides available attributes for other entities scoped by this model.
-     * Override in models that act as attribute scope providers (e.g. Category for Product).
-     */
-    public function attributes(): ?BelongsToMany
-    {
-        return null;
-    }
-
-    /**
      * Raw Eloquent relation to Attribute through entity_attribute pivot (with value columns).
      */
     public function assignedAttributes(): MorphToMany
@@ -372,6 +362,10 @@ trait HasAttributes
             : collect($allEntities)->pluck('id');
 
         if ($entityIds->isEmpty()) {
+            return null;
+        }
+
+        if (! method_exists($instance, 'attributes')) {
             return null;
         }
 

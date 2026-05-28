@@ -3,7 +3,6 @@
 namespace Jurager\Eav\Contracts;
 
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 interface Attributable
 {
@@ -30,10 +29,4 @@ interface Attributable
      * Called by AttributeManager to load the attribute schema.
      */
     public function availableAttributesQuery(array $params = []): ?Builder;
-
-    /**
-     * Relation that provides available attributes for other entities scoped by this model.
-     * Return null if this model does not act as an attribute scope provider.
-     */
-    public function attributes(): ?BelongsToMany;
 }
