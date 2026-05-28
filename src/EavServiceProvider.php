@@ -2,12 +2,14 @@
 
 namespace Jurager\Eav;
 
+use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\ServiceProvider;
-use Jurager\Eav\Console\SyncIndexSettingsCommand;
+use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Observers\AttributeEnumObserver;
@@ -20,6 +22,7 @@ use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Search\FilterCompiler;
 use Jurager\Eav\Search\Search;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
+use Jurager\Eav\Support\EavModels;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -36,11 +39,8 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(TranslationManager::class);
         $this->app->singleton(SchemaManager::class);
         $this->app->singleton(FilterCompiler::class);
-        $this->app->bind(Search::class);
 
-        if (class_exists(\Laravel\Scout\Console\SyncIndexSettingsCommand::class)) {
-            $this->app->bind(\Laravel\Scout\Console\SyncIndexSettingsCommand::class, SyncIndexSettingsCommand::class);
-        }
+        $this->app->bind(Search::class);
     }
 
     public function boot(): void
@@ -59,6 +59,7 @@ class EavServiceProvider extends ServiceProvider
 
         $this->registerObservers();
         $this->registerCitextSupport();
+        $this->registerScoutHook();
     }
 
     /**
@@ -79,6 +80,27 @@ class EavServiceProvider extends ServiceProvider
             }
 
             return $this->addColumn('text', $column);
+        });
+    }
+
+    private function registerScoutHook(): void
+    {
+        Event::listen(CommandFinished::class, static function (CommandFinished $event) {
+
+            if ($event->command !== 'scout:sync-index-settings' || $event->exitCode !== 0) {
+                return;
+            }
+
+            if (! EavModels::has('attribute')) {
+                return;
+            }
+
+            EavModels::query('attribute')
+                ->withoutGlobalScopes()
+                ->where('filterable', true)
+                ->distinct()
+                ->pluck('entity_type')
+                ->each(fn (string $entityType) => SyncFilterable::dispatchSync($entityType));
         });
     }
 

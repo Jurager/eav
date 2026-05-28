@@ -19,9 +19,7 @@ use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Adds EAV attribute support to Eloquent models.
- *
- * Requires the model to implement Attributable.
+ * Add attribute support to Eloquent models.
  *
  * @property Collection $attribute_relation
  *

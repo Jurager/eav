@@ -14,16 +14,12 @@ use Laravel\Scout\Engines\MeilisearchEngine;
 use Meilisearch\Client;
 
 /**
- * Synchronises filterableAttributes on the Meilisearch index for the given entity type.
+ * Sync Meilisearch filterableAttributes for the given entity type.
  *
- * Dispatched by AttributeObserver whenever an attribute's filterable flag changes,
- * or when an attribute is deleted/restored. Reads the current index settings from
- * Meilisearch, strips out all "attributes.*" paths that are EAV-managed, and replaces
- * them with the current set of filterable attribute paths. Non-EAV paths (e.g. "id",
- * "is_active") are preserved unchanged.
+ * Dispatched by AttributeObserver when an attribute's filterable flag changes
+ * or when an attribute is deleted or restored.
  *
- * Is a no-op when Scout is not installed or when the active driver is not Meilisearch.
- * Implements ShouldBeUnique so redundant dispatches for the same entity type collapse.
+ * No-op when Scout is not installed or the driver is not Meilisearch.
  */
 class SyncFilterable implements ShouldBeUnique, ShouldQueue
 {

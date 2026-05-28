@@ -48,10 +48,14 @@ class AttributeObserver
     }
 
     /**
-     * Re-index entities when an attribute is soft-deleted, then schedule pruning.
+     * Re-index and clean up values when an attribute is deleted.
      */
     public function deleted(Attribute $attribute): void
     {
+        if ($attribute->isForceDeleting()) {
+            return;
+        }
+
         $this->schema->forget($attribute->entity_type);
 
         if ($attribute->searchable) {
@@ -68,12 +72,16 @@ class AttributeObserver
     }
 
     /**
-     * Permanently remove the attribute and its data after re-indexing completes.
+     * Flush caches, update indexes, and prune stored values on permanent deletion.
      */
     public function forceDeleted(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
         $this->enums->forget($attribute->id);
+
+        if ($attribute->searchable) {
+            $this->syncSearchable($attribute);
+        }
 
         if ($attribute->filterable) {
             $this->syncFilterable($attribute);

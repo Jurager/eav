@@ -8,9 +8,6 @@ use Jurager\Eav\Models\Attribute;
 
 /**
  * Maps attribute type codes to Field classes.
- *
- * Registered as a singleton in EavServiceProvider.
- * Pre-populated from config/eav.php, extensible via register().
  */
 class FieldTypeRegistry
 {
