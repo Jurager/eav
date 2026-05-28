@@ -41,11 +41,11 @@ To avoid repeating the relation list across projects, `HasAttributes` exposes th
 ```php
 Product::attributeRelations();
 // [
-//   'attribute_values.attribute.type',
-//   'attribute_values.attribute.group.translations',
-//   'attribute_values.attribute.translations',
-//   'attribute_values.attribute.enums.translations',
-//   'attribute_values.translations',
+//   'attributeValues.attribute.type',
+//   'attributeValues.attribute.group.translations',
+//   'attributeValues.attribute.translations',
+//   'attributeValues.attribute.enums.translations',
+//   'attributeValues.translations',
 // ]
 ```
 
