@@ -259,6 +259,15 @@ trait HasAttributes
     }
 
     /**
+     * Attribute definitions assigned to this entity via the EAV pivot.
+     * Override in scope-provider models (e.g. Category) to return a BelongsToMany instead.
+     */
+    public function attributes(): MorphToMany
+    {
+        return $this->assignedAttributes();
+    }
+
+    /**
      * Raw Eloquent relation to Attribute through entity_attribute pivot (with value columns).
      */
     public function assignedAttributes(): MorphToMany
