@@ -5,7 +5,7 @@ weight: 20
 
 ## Making a Model Attributable
 
-To attach EAV attributes to an Eloquent model, you should implement the `Attributable` contract and use the `HasAttributes` trait. Only the `attributeEntityType()` method is required — it returns a short string that identifies the entity type in the schema:
+Implement `Attributable` and use `HasAttributes`. Only `attributeEntityType()` is required:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
@@ -22,19 +22,18 @@ class Product extends Model implements Attributable
 }
 ```
 
-You should also register the entity type in the morph map so the package can resolve models back to their type string:
+Register the entity type in the morph map:
 
 ```php
-// AppServiceProvider::boot()
 Relation::morphMap([
     'product'  => Product::class,
     'category' => Category::class,
 ]);
 ```
 
-## Integrating With Scout Search
+## Scout Search
 
-If your model uses [Laravel Scout](https://laravel.com/docs/scout), you may add the `HasSearchableAttributes` trait to automatically include EAV values in the search index. The Searchable trait shares two methods with `HasSearchableAttributes`, so you need to resolve the conflict explicitly:
+Add `HasSearchableAttributes` to include EAV values in the search index. Resolve the trait conflict explicitly:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
@@ -48,19 +47,15 @@ class Product extends Model implements Attributable
         HasSearchableAttributes::toSearchableArray insteadof Searchable;
         HasSearchableAttributes::shouldBeSearchable insteadof Searchable;
     }
-
-    public function attributeEntityType(): string
-    {
-        return 'product';
-    }
+    // ...
 }
 ```
 
-See the [Advanced documentation](advanced.md#search-indexing) for the full search indexing workflow.
+See [Advanced](advanced.md#search-indexing) for the full indexing workflow.
 
 ## Scoping Attributes Via a Related Model
 
-By default, all entities of a given type share a single attribute schema (global scope). When the schema needs to be managed per related model — for example, each product category exposes its own set of attributes — you may override two methods on the entity:
+To give each product its own attribute schema based on its categories, override two methods:
 
 ```php
 protected static function attributeScopeModel(): string
@@ -76,15 +71,15 @@ public function attributeParameters(): array
 }
 ```
 
-The relation model must also implement `Attributable` and expose an `available_attributes()` relation pointing at the `attributes` table:
+The scope-provider model (`Category`) must override `attributes()` with a `BelongsToMany`:
 
 ```php
 // Category.php
-public function available_attributes(): BelongsToMany
+public function attributes(): BelongsToMany
 {
     return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id')
         ->withPivot(['id', 'created_at']);
 }
 ```
 
-The `available_attributes()` method is declared in the `Attributable` contract and defaults to `null` in `HasAttributes`. You should override it only on models that act as scope providers — for instance, the `Category` model — not on the entities that consume the schema.
+`HasAttributes` provides a default `attributes()` returning a `MorphToMany` via `entity_attribute` — available on every Attributable model. Scope providers override it with a `BelongsToMany` so the package can resolve the schema through that relation.

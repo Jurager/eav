@@ -191,7 +191,7 @@ This means you never need to manually call `scout:sync-index-settings` when attr
 
 ### Custom Field Types and filterableKeys
 
-When building a custom field type, you may override `filterableKeys()` to control which index paths are registered as filterable in Meilisearch. The default returns `['{code}']`; `SelectField` returns `['{code}', '{code}_code']` so that faceting on the string enum code is available alongside the integer ID:
+When building a custom field type, you may override `filterableKeys()` to control which index paths are registered as filterable in Meilisearch. The default returns `['{code}']`; `Select` returns `['{code}', '{code}_code']` so that faceting on the string enum code is available alongside the integer ID:
 
 ```php
 public function filterableKeys(): array
@@ -204,7 +204,7 @@ public function filterableKeys(): array
 
 ### Cleanup on Permanent Deletion
 
-When an attribute is force-deleted, `PruneAttribute` is dispatched. It permanently removes every `entity_attribute` row for that attribute and flushes the `SelectField` enum cache.
+When an attribute is force-deleted, `PruneAttribute` is dispatched. It permanently removes every `entity_attribute` row for that attribute and flushes the `Select` enum cache.
 
 This two-step process — soft-delete → re-index → force-delete → prune — gives you a window to restore an attribute before its data is permanently removed.
 

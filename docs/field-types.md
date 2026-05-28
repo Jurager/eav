@@ -63,12 +63,12 @@ These map to Laravel's standard validation rules at runtime:
 
 ## Working With Select Fields
 
-When a field has type `select`, you may cast it to `SelectField` to access the resolved enum model and its localized labels:
+When a field has type `select`, you may cast it to `Select` to access the resolved enum model and its localized labels:
 
 ```php
-use Jurager\Eav\Fields\SelectField;
+use Jurager\Eav\Fields\Select;
 
-/** @var SelectField $field */
+/** @var Select $field */
 $field = $product->eav()->field('color');
 
 $field->enum();             // ?AttributeEnum — single-select resolved model
@@ -79,7 +79,7 @@ $field->label(localeId: 2); // label for a specific locale
 
 ## Working With File and Image Fields
 
-`FileField` and `ImageField` expose `HasFileStorage` helpers for URL resolution and existence checks on Laravel's storage disks:
+`File` and `Image` expose `HasFileStorage` helpers for URL resolution and existence checks on Laravel's storage disks:
 
 ```php
 $field = $product->eav()->field('photo');
@@ -168,14 +168,14 @@ You may register the type through the configuration file:
 ],
 ```
 
-Or at runtime through the `FieldTypeRegistry`:
+Or at runtime through the `FieldFactory`:
 
 ```php
-use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Fields\FieldFactory;
 
 public function boot(): void
 {
-    $this->app->make(FieldTypeRegistry::class)
+    $this->app->make(FieldFactory::class)
         ->register('measurement', \App\Fields\MeasurementField::class);
 }
 ```
