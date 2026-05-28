@@ -88,15 +88,15 @@ class Select extends Field
             return [];
         }
 
-        $codeValue = $this->isMultiple()
-            ? array_map(static fn (AttributeEnum $e) => $e->code, $this->enums())
+        $enumCode = $this->isMultiple()
+            ? array_map(static fn (AttributeEnum $enum) => $enum->code, $this->enums())
             : $this->enum()?->code;
 
-        if ($codeValue === null || $codeValue === []) {
+        if ($enumCode === null || $enumCode === []) {
             return [];
         }
 
-        $result = [$code => $codeValue];
+        $result = [$code => $enumCode];
 
         $labels = array_values(array_unique(array_filter(
             array_merge(...array_map(

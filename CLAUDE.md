@@ -53,7 +53,7 @@ Writes to two tables: `entity_attribute` (typed value columns) and `entity_trans
 
 ### Database Schema
 
-Seven migrations create: `locales`, `attribute_types`, `attribute_groups`, `attributes` (schema definitions with flags: `mandatory`, `localizable`, `multiple`, `unique`, `filterable`, `searchable`), `entity_translations`, `entity_attribute` (six typed columns: `value_text`, `value_integer`, `value_float`, `value_boolean`, `value_date`, `value_datetime`), and `attribute_enums`.
+Seven migrations create: `locales`, `attribute_types`, `attribute_groups`, `attributes` (schema definitions with flags: `required`, `localizable`, `multiple`, `unique`, `filterable`, `searchable`), `entity_translations`, `entity_attribute` (six typed columns: `value_text`, `value_integer`, `value_float`, `value_boolean`, `value_date`, `value_datetime`), and `attribute_enums`.
 
 ### Query Scopes (`Concerns/HasAttributes`)
 

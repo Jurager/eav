@@ -18,7 +18,7 @@ use Jurager\Eav\Support\EavModels;
  * @property int|null $attribute_group_id
  * @property string $code
  * @property int $sort
- * @property bool $mandatory
+ * @property bool $required
  * @property bool $localizable
  * @property bool $multiple
  * @property bool $unique
@@ -35,7 +35,7 @@ class Attribute extends Model
 
     protected $fillable = [
         'entity_type', 'attribute_type_id', 'attribute_group_id',
-        'code', 'sort', 'mandatory', 'localizable', 'multiple', 'unique',
+        'code', 'sort', 'required', 'localizable', 'multiple', 'unique',
         'filterable', 'searchable', 'validations', 'meta',
     ];
 
@@ -44,7 +44,7 @@ class Attribute extends Model
         return [
             'validations' => 'array',
             'meta' => 'array',
-            'mandatory' => 'boolean',
+            'required' => 'boolean',
             'localizable' => 'boolean',
             'multiple' => 'boolean',
             'unique' => 'boolean',

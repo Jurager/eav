@@ -35,5 +35,5 @@ interface Attributable
      * Relation that provides available attributes for other entities scoped by this model.
      * Return null if this model does not act as an attribute scope provider.
      */
-    public function available_attributes(): ?BelongsToMany;
+    public function attributes(): ?BelongsToMany;
 }

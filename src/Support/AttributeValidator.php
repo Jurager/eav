@@ -118,7 +118,7 @@ class AttributeValidator
 
             if ($field->hasErrors()) {
                 $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $field->errors());
-            } elseif ($field->isMandatory() && ! $field->isFilled()) {
+            } elseif ($field->isRequired() && ! $field->isFilled()) {
                 $errors[$attributeCode][] = __('eav::attributes.validation.required');
             }
 

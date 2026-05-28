@@ -114,9 +114,9 @@ class SchemaManagerTest extends FeatureTestCase
             'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'old',
         ]);
 
-        $this->schema->attribute()->update($attr, ['mandatory' => true]);
+        $this->schema->attribute()->update($attr, ['required' => true]);
 
-        $this->assertDatabaseHas('attributes', ['id' => $attr->id, 'mandatory' => true]);
+        $this->assertDatabaseHas('attributes', ['id' => $attr->id, 'required' => true]);
     }
 
     public function test_attribute_update_dispatches_updated_event(): void
@@ -127,7 +127,7 @@ class SchemaManagerTest extends FeatureTestCase
         ]);
 
         Event::fake(); // Reset — only capture the update event
-        $this->schema->attribute()->update($attr, ['mandatory' => true]);
+        $this->schema->attribute()->update($attr, ['required' => true]);
 
         Event::assertDispatched(AttributeUpdated::class);
     }
@@ -174,16 +174,16 @@ class SchemaManagerTest extends FeatureTestCase
     public function test_attribute_find_or_create_returns_existing_without_overwriting(): void
     {
         $type = $this->createAttributeType('text');
-        $existing = $this->createAttribute($type, ['code' => 'existing', 'mandatory' => false]);
+        $existing = $this->createAttribute($type, ['code' => 'existing', 'required' => false]);
 
         $this->schema->attribute()->findOrCreate('product', 'existing', [
             'entity_type' => 'product',
             'attribute_type_id' => $type->id,
             'code' => 'existing',
-            'mandatory' => true,  // should NOT overwrite
+            'required' => true,  // should NOT overwrite
         ]);
 
-        $this->assertDatabaseHas('attributes', ['id' => $existing->id, 'mandatory' => false]);
+        $this->assertDatabaseHas('attributes', ['id' => $existing->id, 'required' => false]);
     }
 
     public function test_attribute_sort_reorders_siblings(): void

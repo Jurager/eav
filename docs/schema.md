@@ -27,7 +27,7 @@ $attribute = $schema->attribute()->create([
     'attribute_type_id'  => 1,
     'attribute_group_id' => 2,
     'code'               => 'color',
-    'mandatory'          => false,
+    'required'           => false,
     'localizable'        => true,
     'translations'       => [
         ['locale_id' => 1, 'label' => 'Color'],

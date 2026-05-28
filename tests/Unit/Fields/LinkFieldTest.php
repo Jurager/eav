@@ -35,7 +35,7 @@ class LinkFieldTest extends TestCase
             'code' => 'website',
             'localizable' => false,
             'multiple' => false,
-            'mandatory' => false,
+            'required' => false,
             'unique' => false,
             'filterable' => false,
             'searchable' => false,

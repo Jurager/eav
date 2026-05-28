@@ -412,7 +412,7 @@ class AttributeManager
     public function values(?array $codes = null, ?int $paginated = null): Collection|LengthAwarePaginator
     {
         $transform = fn (Model $model): Model => tap($model, function ($model) {
-            $model->value = $this->makeField($model->attribute)->from($model);
+            $model->value = $this->makeField($model->attribute)->read($model);
         });
 
         // Use pre-loaded relation to avoid N+1 when the caller eager-loads attribute_values.

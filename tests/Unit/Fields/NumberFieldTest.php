@@ -35,7 +35,7 @@ class NumberFieldTest extends TestCase
             'code' => 'price',
             'localizable' => false,
             'multiple' => false,
-            'mandatory' => false,
+            'required' => false,
             'unique' => false,
             'filterable' => false,
             'searchable' => false,

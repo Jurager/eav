@@ -27,7 +27,7 @@ Flags are set per attribute definition and control how values are stored and val
 |---|---|
 | `localizable` | Value is stored per locale |
 | `multiple` | Allows storing multiple values for the same attribute |
-| `mandatory` | Value is required on fill |
+| `required` | Value is required on fill |
 | `unique` | Value must be unique across all entity instances |
 | `filterable` | Value is included in the Scout index and registered as a Meilisearch `filterableAttribute`; also available for Eloquent query scopes |
 | `searchable` | Value is included in the Scout search index and available for full-text search |

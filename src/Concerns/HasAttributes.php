@@ -21,7 +21,7 @@ use Jurager\Eav\Support\EavModels;
 /**
  * Add attribute support to Eloquent models.
  *
- * @property Collection $attribute_relation
+ * @property Collection $assignedAttributes
  *
  * @phpstan-require-implements Attributable
  */
@@ -263,7 +263,7 @@ trait HasAttributes
      * Relation that provides available attributes for other entities scoped by this model.
      * Override in models that act as attribute scope providers (e.g. Category for Product).
      */
-    public function available_attributes(): ?BelongsToMany
+    public function attributes(): ?BelongsToMany
     {
         return null;
     }
@@ -271,7 +271,7 @@ trait HasAttributes
     /**
      * Raw Eloquent relation to Attribute through entity_attribute pivot (with value columns).
      */
-    public function attribute_relation(): MorphToMany
+    public function assignedAttributes(): MorphToMany
     {
         return $this->morphToMany(EavModels::class('attribute'), 'entity', 'entity_attribute')
             ->withTimestamps()
@@ -281,7 +281,7 @@ trait HasAttributes
     /**
      * Raw Eloquent relation to entity_attribute rows for this entity.
      */
-    public function attribute_values(): MorphMany
+    public function attributeValues(): MorphMany
     {
         return $this->morphMany(EavModels::class('entity_attribute'), 'entity');
     }
@@ -375,7 +375,7 @@ trait HasAttributes
             return null;
         }
 
-        $relation = $instance->available_attributes();
+        $relation = $instance->attributes();
 
         if ($relation === null) {
             return null;

@@ -114,7 +114,7 @@ abstract class Field
         }
 
         if (! $this->isLocalizable()) {
-            $values = $models->map(fn ($model) => $this->from($model))->all();
+            $values = $models->map(fn ($model) => $this->read($model))->all();
 
             $this->values = [[
                 'locale_id' => null,
@@ -263,9 +263,9 @@ abstract class Field
         return $this->attribute->multiple;
     }
 
-    public function isMandatory(): bool
+    public function isRequired(): bool
     {
-        return $this->attribute->mandatory;
+        return $this->attribute->required;
     }
 
     public function isUnique(): bool
@@ -291,14 +291,14 @@ abstract class Field
             'type'       => $this->attribute->type->code ?? null,
             'localizable' => $this->isLocalizable(),
             'multiple'   => $this->isMultiple(),
-            'mandatory'  => $this->isMandatory(),
+            'required'   => $this->isRequired(),
             'unique'     => $this->isUnique(),
             'filterable' => $this->isFilterable(),
             'searchable' => $this->isSearchable(),
         ];
     }
 
-    public function from(object $model): mixed
+    public function read(object $model): mixed
     {
         return $model->{$this->column()};
     }

@@ -36,7 +36,7 @@ class BooleanFieldTest extends TestCase
             'code' => 'active',
             'localizable' => false,
             'multiple' => false,
-            'mandatory' => false,
+            'required' => false,
             'unique' => false,
             'filterable' => false,
             'searchable' => false,

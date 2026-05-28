@@ -68,7 +68,7 @@ abstract class FeatureTestCase extends TestCase
             'attribute_type_id' => $type->id,
             'code' => 'name',
             'sort' => 0,
-            'mandatory' => false,
+            'required' => false,
             'localizable' => false,
             'multiple' => false,
             'unique' => false,

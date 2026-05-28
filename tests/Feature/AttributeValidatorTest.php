@@ -74,14 +74,14 @@ class AttributeValidatorTest extends FeatureTestCase
     }
 
     // -----------------------------------------------------------------------
-    // Mandatory field validation
+    // Required field validation
     // -----------------------------------------------------------------------
 
-    public function test_validate_throws_for_mandatory_field_with_null_value(): void
+    public function test_validate_throws_for_required_field_with_null_value(): void
     {
         $this->createAttribute($this->textType, [
             'code' => 'title',
-            'mandatory' => true,
+            'required' => true,
         ]);
 
         $product = $this->createProduct();
@@ -93,11 +93,11 @@ class AttributeValidatorTest extends FeatureTestCase
         ]);
     }
 
-    public function test_validate_throws_for_mandatory_field_not_included_in_input(): void
+    public function test_validate_throws_for_required_field_not_included_in_input(): void
     {
         $this->createAttribute($this->textType, [
             'code' => 'title',
-            'mandatory' => true,
+            'required' => true,
         ]);
 
         $product = $this->createProduct();
@@ -107,11 +107,11 @@ class AttributeValidatorTest extends FeatureTestCase
         $product->validate([]);
     }
 
-    public function test_validate_passes_when_mandatory_field_has_value(): void
+    public function test_validate_passes_when_required_field_has_value(): void
     {
         $this->createAttribute($this->textType, [
             'code' => 'title',
-            'mandatory' => true,
+            'required' => true,
         ]);
 
         $product = $this->createProduct();

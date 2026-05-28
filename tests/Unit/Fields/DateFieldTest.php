@@ -36,7 +36,7 @@ class DateFieldTest extends TestCase
             'code' => 'released_at',
             'localizable' => false,
             'multiple' => false,
-            'mandatory' => false,
+            'required' => false,
             'unique' => false,
             'filterable' => false,
             'searchable' => false,

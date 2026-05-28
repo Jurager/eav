@@ -15,7 +15,7 @@ return new class () extends Migration {
             $table->string('code', 100);
             $table->integer('sort')->default(0);
 
-            $table->boolean('mandatory')->default(false);
+            $table->boolean('required')->default(false);
             $table->json('validations')->nullable();
 
             $table->boolean('system')->default(false);

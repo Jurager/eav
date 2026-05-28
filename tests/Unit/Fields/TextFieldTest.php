@@ -40,7 +40,7 @@ class TextFieldTest extends TestCase
             'code' => 'name',
             'localizable' => false,
             'multiple' => false,
-            'mandatory' => false,
+            'required' => false,
             'unique' => false,
             'filterable' => false,
             'searchable' => false,
@@ -252,7 +252,7 @@ class TextFieldTest extends TestCase
         $this->assertSame('title', $metadata['code']);
         $this->assertFalse($metadata['localizable']);
         $this->assertFalse($metadata['multiple']);
-        $this->assertFalse($metadata['mandatory']);
+        $this->assertFalse($metadata['required']);
         $this->assertTrue($metadata['searchable']);
     }
 

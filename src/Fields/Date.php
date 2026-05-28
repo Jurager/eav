@@ -30,10 +30,10 @@ class Date extends Field
 
         try {
             if (is_array($raw)) {
-                return array_filter(array_map(fn (mixed $value) => $this->parseDate($value), $raw));
+                return array_filter(array_map(fn (mixed $value) => $this->parse($value), $raw));
             }
 
-            return $this->parseDate($raw);
+            return $this->parse($raw);
         } catch (Exception) {
             return null;
         }
@@ -70,7 +70,7 @@ class Date extends Field
         }
 
         $values = array_values(array_filter(
-            array_map(fn (array $item) => $this->toTimestamp($this->parseDate($item['value'])), $this->values),
+            array_map(fn (array $item) => $this->toTimestamp($this->parse($item['value'])), $this->values),
             static fn ($v) => $v !== null
         ));
 
@@ -108,10 +108,10 @@ class Date extends Field
             return $value->toDateTimeString();
         }
 
-        return $this->parseDate($value)?->toDateTimeString();
+        return $this->parse($value)?->toDateTimeString();
     }
 
-    protected function parseDate(mixed $value): ?Carbon
+    protected function parse(mixed $value): ?Carbon
     {
         if ($value === null || $value === '') {
             return null;
