@@ -89,8 +89,10 @@ trait HasAttributes
     /**
      * Return available attribute definitions for this entity.
      *
-     * @param  array<string, mixed>  $params
+     * @param array<string, mixed> $params
      * @return Collection<int, mixed>
+     * @throws BindingResolutionException
+     * @throws CircularDependencyException
      */
     public function availableAttributes(array $params = []): Collection
     {
@@ -100,7 +102,10 @@ trait HasAttributes
     /**
      * Return a query builder for available attributes (global or by relation).
      *
-     * @param  array<string, mixed>  $params
+     * @param array<string, mixed> $params
+     * @return Builder|null
+     * @throws BindingResolutionException
+     * @throws CircularDependencyException
      */
     public function availableAttributesQuery(array $params = []): ?Builder
     {
