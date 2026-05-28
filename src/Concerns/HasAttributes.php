@@ -31,6 +31,11 @@ trait HasAttributes
      */
     protected ?AttributeManager $attributeManager = null;
 
+    public static function bootHasAttributes(): void
+    {
+        static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
+    }
+
     /**
      * Override in models to declare scoped uniqueness for specific EAV attributes.
      *
