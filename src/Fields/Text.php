@@ -5,9 +5,9 @@ namespace Jurager\Eav\Fields;
 use Jurager\Eav\Contracts\Attributable;
 
 /**
- * URL field limited to absolute HTTP/HTTPS links.
+ * Short text field with max length guard.
  */
-class LinkField extends Field
+class Text extends Field
 {
     public function column(): string
     {
@@ -24,14 +24,8 @@ class LinkField extends Field
             return $this->addError(__('eav::attributes.validation.invalid_value'));
         }
 
-        $parsed = parse_url($value);
-
-        if ($parsed === false || ! isset($parsed['scheme'], $parsed['host'])) {
-            return $this->addError(__('eav::attributes.validation.invalid_url'));
-        }
-
-        if (! in_array(strtolower($parsed['scheme']), ['http', 'https'], true)) {
-            return $this->addError(__('eav::attributes.validation.invalid_url'));
+        if (mb_strlen($value) > 255) {
+            return $this->addError(__('eav::attributes.validation.text_too_long'));
         }
 
         return true;

@@ -29,11 +29,11 @@ trait ValidatesPayload
     /**
      * Validate the full incoming payload, handling cardinality and localization.
      *
-     * Override in subclasses that have a non-standard payload shape (e.g. SelectField).
+     * Override in subclasses that have a non-standard payload shape (e.g. Select).
      * Default:
-     *   - non-localizable, single   → validate() + laravelRules()
-     *   - non-localizable, multiple → iterate values, validate() + laravelRules() per item
-     *   - localizable               → iterate locale translations, validate() + laravelRules() per item
+     *   - non-localizable, single   → validate() + rules()
+     *   - non-localizable, multiple → iterate values, validate() + rules() per item
+     *   - localizable               → iterate locale translations, validate() + rules() per item
      */
     protected function validatePayload(mixed $values): bool
     {
@@ -131,7 +131,7 @@ trait ValidatesPayload
             return false;
         }
 
-        $rules = $this->laravelRules();
+        $rules = $this->rules();
 
         if (empty($rules) || $value === null) {
             return true;
@@ -153,7 +153,7 @@ trait ValidatesPayload
     /**
      * Convert configurable validation rules stored on the attribute to Laravel rule strings.
      */
-    private function laravelRules(): array
+    private function rules(): array
     {
         $rules = [];
 

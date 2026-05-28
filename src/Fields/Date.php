@@ -10,7 +10,7 @@ use Jurager\Eav\Contracts\Attributable;
 /**
  * Date/time field stored as datetime and exposed as Carbon instances.
  */
-class DateField extends Field
+class Date extends Field
 {
     public function column(): string
     {

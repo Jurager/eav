@@ -7,7 +7,7 @@ use Jurager\Eav\Contracts\Attributable;
 /**
  * Free-form long text field.
  */
-class TextAreaField extends Field
+class Textarea extends Field
 {
     public function column(): string
     {

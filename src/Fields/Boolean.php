@@ -7,7 +7,7 @@ use Jurager\Eav\Contracts\Attributable;
 /**
  * Boolean attribute field with tolerant input parsing.
  */
-class BooleanField extends Field
+class Boolean extends Field
 {
     public function column(): string
     {

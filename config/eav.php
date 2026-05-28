@@ -1,14 +1,14 @@
 <?php
 
-use Jurager\Eav\Fields\BooleanField;
-use Jurager\Eav\Fields\DateField;
-use Jurager\Eav\Fields\FileField;
-use Jurager\Eav\Fields\ImageField;
-use Jurager\Eav\Fields\LinkField;
-use Jurager\Eav\Fields\NumberField;
-use Jurager\Eav\Fields\SelectField;
-use Jurager\Eav\Fields\TextAreaField;
-use Jurager\Eav\Fields\TextField;
+use Jurager\Eav\Fields\Boolean;
+use Jurager\Eav\Fields\Date;
+use Jurager\Eav\Fields\File;
+use Jurager\Eav\Fields\Image;
+use Jurager\Eav\Fields\Link;
+use Jurager\Eav\Fields\Number;
+use Jurager\Eav\Fields\Select;
+use Jurager\Eav\Fields\Text;
+use Jurager\Eav\Fields\Textarea;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeGroup;
@@ -65,15 +65,15 @@ return [
     |   ],
     */
     'types' => [
-        'text' => TextField::class,
-        'textarea' => TextAreaField::class,
-        'number' => NumberField::class,
-        'date' => DateField::class,
-        'boolean' => BooleanField::class,
-        'select' => SelectField::class,
-        'image' => ImageField::class,
-        'file' => FileField::class,
-        'link' => LinkField::class,
+        'text'     => Text::class,
+        'textarea' => Textarea::class,
+        'number'   => Number::class,
+        'date'     => Date::class,
+        'boolean'  => Boolean::class,
+        'select'   => Select::class,
+        'image'    => Image::class,
+        'file'     => File::class,
+        'link'     => Link::class,
     ],
 
 ];

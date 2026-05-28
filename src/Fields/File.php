@@ -12,7 +12,7 @@ use Jurager\Eav\Contracts\Attributable;
  * other infrastructure concerns are the responsibility of the consuming
  * application (e.g. via a subclass that overrides resolve()).
  */
-class FileField extends Field
+class File extends Field
 {
     public function column(): string
     {
@@ -29,17 +29,6 @@ class FileField extends Field
     }
 
     protected function normalize(mixed $value): mixed
-    {
-        return $this->processFileValue($value);
-    }
-
-    /**
-     * Normalize raw input to the stored representation.
-     *
-     * Generic: accepts any scalar or array of scalars (string paths, integer IDs, etc.)
-     * and filters out null/empty entries.
-     */
-    protected function processFileValue(mixed $value): mixed
     {
         if ($value === null) {
             return [];

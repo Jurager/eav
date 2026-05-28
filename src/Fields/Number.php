@@ -7,7 +7,7 @@ use Jurager\Eav\Contracts\Attributable;
 /**
  * Numeric field with integer/float normalization.
  */
-class NumberField extends Field
+class Number extends Field
 {
     public function column(): string
     {

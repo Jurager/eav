@@ -8,7 +8,7 @@ use Jurager\Eav\Models\AttributeEnum;
 /**
  * Enum-backed select field storing selected enum IDs in integer column.
  */
-class SelectField extends Field
+class Select extends Field
 {
     public function column(): string
     {
