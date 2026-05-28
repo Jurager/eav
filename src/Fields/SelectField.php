@@ -3,21 +3,13 @@
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
  * Enum-backed select field storing selected enum IDs in integer column.
  */
 class SelectField extends Field
 {
-    public function __construct(Attribute $attribute, LocaleRegistry $localeRegistry, EnumRegistry $enumRegistry)
-    {
-        parent::__construct($attribute, $localeRegistry, $enumRegistry);
-    }
-
     public function column(): string
     {
         return self::STORAGE_INTEGER;
@@ -58,7 +50,7 @@ class SelectField extends Field
         return $this->enumRegistry->find($this->attribute->id, $enumId);
     }
 
-    /** @return AttributeEnum[] */
+    /** @return array<int, AttributeEnum> */
     public function enums(?int $localeId = null): array
     {
         $value = $this->value($localeId);
@@ -85,11 +77,6 @@ class SelectField extends Field
         }
 
         return $this->enum()?->label($localeId);
-    }
-
-    public function filterableKeys(): array
-    {
-        return [$this->code()];
     }
 
     public function indexData(): array

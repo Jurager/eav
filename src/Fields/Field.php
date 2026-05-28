@@ -3,44 +3,34 @@
 namespace Jurager\Eav\Fields;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Validator;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Fields\Concerns\Indexable;
+use Jurager\Eav\Fields\Concerns\ValidatesPayload;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
- * Base attribute field abstraction for validation, localization and storage mapping.
+ * Base attribute field: validation, localization, storage mapping, and search indexing.
  */
 abstract class Field
 {
-    /**
-     * Bound entity context, set by AttributeManager when the field is attached
-     * to a concrete entity. Null in schema-only managers.
-     */
-    protected ?Attributable $entity = null;
+    use ValidatesPayload, Indexable;
 
     public const string STORAGE_TEXT = 'value_text';
-
     public const string STORAGE_INTEGER = 'value_integer';
-
     public const string STORAGE_FLOAT = 'value_float';
-
     public const string STORAGE_BOOLEAN = 'value_boolean';
-
     public const string STORAGE_DATE = 'value_date';
-
     public const string STORAGE_DATETIME = 'value_datetime';
 
-    /**
-     * @var array<int, array{locale_id: int|null, value: mixed}>
-     */
+    /** @var array<int, array{locale_id: int|null, value: mixed}> */
     protected array $values = [];
 
     /**
-     * @var array<string>
+     * Bound entity context — set by AttributeManager, null in schema-only managers.
      */
-    protected array $validationErrors = [];
+    protected ?Attributable $entity = null;
 
     public function __construct(
         protected Attribute $attribute,
@@ -48,19 +38,14 @@ abstract class Field
         protected EnumRegistry $enumRegistry,
     ) {}
 
-    /**
-     * Return the storage column name for this field type.
-     */
     abstract public function column(): string;
 
     /**
-     * Whether this field's values are backed by enum records.
-     * Override in enum-backed fields (e.g. SelectField).
+     * Validate a single typed value. Return false and call addError() to report failures.
      */
-    public function isEnum(): bool
-    {
-        return false;
-    }
+    abstract protected function validate(mixed $value, ?Attributable $entity = null): bool;
+
+    abstract protected function normalize(mixed $value): mixed;
 
     public function cast(mixed $value): mixed
     {
@@ -68,34 +53,19 @@ abstract class Field
     }
 
     /**
-     * Validate a single typed value. Implemented by each concrete field type.
-     * Return false and call $this->addError() to report failures.
-     *
-     * The optional $entity argument carries the bound entity context when validation
-     * needs to assert relations against the owning record (e.g. ownership checks).
-     */
-    abstract protected function validate(mixed $value, ?Attributable $entity = null): bool;
-
-    /**
-     * Normalize raw input to the stored type. Implemented by each concrete field type.
-     */
-    abstract protected function normalize(mixed $value): mixed;
-
-    /**
      * Transform a raw stored value into its high-level representation.
-     *
-     * Default identity — subclasses override to convert raw scalars (IDs, paths, etc.)
-     * into domain objects without losing access to the entity context.
+     * Default: identity. Override to convert raw scalars into domain objects.
      */
     public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
     {
         return $rawValue;
     }
 
-    /**
-     * Bind the field to a concrete entity. AttributeManager calls this after
-     * instantiating fields to make the entity available to resolve()/validate().
-     */
+    public function isEnum(): bool
+    {
+        return false;
+    }
+
     public function forEntity(?Attributable $entity): static
     {
         $this->entity = $entity;
@@ -103,9 +73,6 @@ abstract class Field
         return $this;
     }
 
-    /**
-     * Return the bound entity, if any.
-     */
     public function entity(): ?Attributable
     {
         return $this->entity;
@@ -160,7 +127,6 @@ abstract class Field
         $models->loadMissing('translations');
 
         $byLocale = [];
-
         foreach ($models as $model) {
             foreach ($model->translations as $translation) {
                 $byLocale[$translation->id][] = $translation->pivot->label;
@@ -174,8 +140,6 @@ abstract class Field
     }
 
     /**
-     * Return the storage representation of the current values.
-     *
      * @return array<int, array{value: mixed, translations: array}>
      */
     public function toStorage(): array
@@ -201,10 +165,7 @@ abstract class Field
                 $values = is_array($item['value']) ? $item['value'] : [$item['value']];
 
                 if (isset($values[$i])) {
-                    $translations[] = [
-                        'locale_id' => $item['locale_id'],
-                        'value' => $values[$i],
-                    ];
+                    $translations[] = ['locale_id' => $item['locale_id'], 'value' => $values[$i]];
                 }
             }
 
@@ -216,9 +177,7 @@ abstract class Field
 
     /**
      * Return the typed value for a specific locale.
-     *
-     * The raw stored value is passed through resolve() so subclasses can rehydrate
-     * domain objects (e.g. resolve a media ID into a Media model).
+     * Passed through resolve() so subclasses can rehydrate domain objects.
      */
     public function value(?int $localeId = null): mixed
     {
@@ -227,38 +186,13 @@ abstract class Field
         }
 
         if (! $this->isLocalizable()) {
-            $raw = $this->values[0]['value'] ?? null;
-
-            return $this->resolveValue($raw);
+            return $this->resolveValue($this->values[0]['value'] ?? null);
         }
 
         $localeId ??= $this->localeRegistry->default();
+        $key = array_search($localeId, array_column($this->values, 'locale_id'), true);
 
-        $localeIds = array_column($this->values, 'locale_id');
-        $key = array_search($localeId, $localeIds, true);
-
-        if ($key === false) {
-            return null;
-        }
-
-        return $this->resolveValue($this->values[$key]['value']);
-    }
-
-    /**
-     * Apply resolve() to a single raw value or to each element if it is an array
-     * (multi-value fields). Null short-circuits to null.
-     */
-    protected function resolveValue(mixed $raw): mixed
-    {
-        if ($raw === null) {
-            return null;
-        }
-
-        if (is_array($raw)) {
-            return array_map(fn ($v) => $this->resolve($v, $this->entity), $raw);
-        }
-
-        return $this->resolve($raw, $this->entity);
+        return $key !== false ? $this->resolveValue($this->values[$key]['value']) : null;
     }
 
     /**
@@ -271,8 +205,7 @@ abstract class Field
             ? ($localeId ?? $this->localeRegistry->default())
             : null;
 
-        $localeIds = array_column($this->values, 'locale_id');
-        $key = array_search($localeId, $localeIds, true);
+        $key = array_search($localeId, array_column($this->values, 'locale_id'), true);
 
         if ($key !== false) {
             $this->values[$key]['value'] = $normalized;
@@ -300,9 +233,6 @@ abstract class Field
         ));
     }
 
-    /**
-     * Determine if the field has a non-null value for the given locale.
-     */
     public function has(?int $localeId = null): bool
     {
         return $this->value($localeId) !== null;
@@ -313,30 +243,11 @@ abstract class Field
         return ! empty($this->values);
     }
 
-    public function hasErrors(): bool
-    {
-        return ! empty($this->validationErrors);
-    }
-
-    /**
-     * @return array<string>
-     */
-    public function errors(): array
-    {
-        return $this->validationErrors;
-    }
-
-    /**
-     * Return the Attribute definition model for this field.
-     */
     public function attribute(): Attribute
     {
         return $this->attribute;
     }
 
-    /**
-     * Return the attribute code.
-     */
     public function code(): string
     {
         return $this->attribute->code;
@@ -372,241 +283,39 @@ abstract class Field
         return $this->attribute->searchable ?? false;
     }
 
-    /**
-     * Return the attribute-level keys this field type contributes to filterableAttributes.
-     * Used by SyncIndexSettings to register paths with Meilisearch (prefixed with "attributes.").
-     *
-     * @return array<string>
-     */
-    public function filterableKeys(): array
-    {
-        return [$this->code()];
-    }
-
-    /**
-     * Enrich a raw Meilisearch facet distribution with display labels.
-     * Default: pass through unchanged (value IS the display key).
-     * Override in enum-backed fields to add translated labels.
-     *
-     * @param  array<string, int>  $distribution
-     * @return array<string, array{count: int, label: string}>|array<string, int>
-     */
-    public function enrichFacetDistribution(array $distribution, ?int $localeId = null): array
-    {
-        return $distribution;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     public function toMetadata(): array
     {
         return [
-            'code' => $this->code(),
-            'type' => $this->attribute->type->code ?? null,
+            'code'       => $this->code(),
+            'type'       => $this->attribute->type->code ?? null,
             'localizable' => $this->isLocalizable(),
-            'multiple' => $this->isMultiple(),
-            'mandatory' => $this->isMandatory(),
-            'unique' => $this->isUnique(),
+            'multiple'   => $this->isMultiple(),
+            'mandatory'  => $this->isMandatory(),
+            'unique'     => $this->isUnique(),
             'filterable' => $this->isFilterable(),
             'searchable' => $this->isSearchable(),
         ];
     }
 
-    /**
-     * @return array<string, mixed>
-     */
-    public function indexData(): array
-    {
-        $code = $this->code();
-
-        if (! $this->isLocalizable()) {
-            $value = $this->value();
-
-            return $value !== null ? [$code => $value] : [];
-        }
-
-        $values = array_values(array_filter(
-            array_column($this->values, 'value'),
-            static fn ($v) => $v !== null && $v !== ''
-        ));
-
-        return $values ? [$code => $values] : [];
-    }
-
-    /**
-     * Read the typed value directly from a model using the storage column.
-     */
     public function from(object $model): mixed
     {
         return $model->{$this->column()};
     }
 
     /**
-     * Validate the full incoming payload, handling cardinality and localization.
-     *
-     * Override in subclasses that have a non-standard payload shape
-     * (e.g. SelectField, MeasurementField). The default implementation:
-     *   - non-localizable, single  → calls validate() + laravelRules()
-     *   - non-localizable, multiple → iterates values, calls validate() + laravelRules() per item
-     *   - localizable              → iterates locale translations, calls validate() + laravelRules() per item
+     * Apply resolve() to a raw value or each element of an array (multi-value fields).
      */
-    protected function validatePayload(mixed $values): bool
+    protected function resolveValue(mixed $raw): mixed
     {
-        if (! $this->isLocalizable()) {
-            if (! $this->isMultiple()) {
-                if (is_array($values)) {
-                    return $this->addError(__('eav::attributes.validation.multiple_not_allowed'));
-                }
-
-                return $this->applyRules($values);
-            }
-
-            if (! is_array($values)) {
-                return $this->addError(__('eav::attributes.validation.array_expected'));
-            }
-
-            foreach ($values as $value) {
-                if (is_array($value)) {
-                    return $this->addError(__('eav::attributes.validation.invalid_format'));
-                }
-
-                if (! $this->applyRules($value)) {
-                    return false;
-                }
-            }
-
-            return true;
+        if ($raw === null) {
+            return null;
         }
 
-        if (! is_array($values)) {
-            return $this->addError(__('eav::attributes.validation.translations_required'));
+        if (is_array($raw)) {
+            return array_map(fn ($v) => $this->resolve($v, $this->entity), $raw);
         }
 
-        $groups = $this->isMultiple() ? $values : [$values];
-
-        foreach ($groups as $group) {
-            if (! is_array($group)) {
-                return $this->addError(__('eav::attributes.validation.invalid_format'));
-            }
-
-            foreach ($group as $translation) {
-                if (! isset($translation['locale_id'])) {
-                    return $this->addError(__('eav::attributes.validation.locale_required'));
-                }
-
-                if (! $this->localeRegistry->has($translation['locale_id'])) {
-                    return $this->addError(__('eav::attributes.validation.invalid_locale'));
-                }
-
-                if (! $this->applyRules($translation['values'] ?? null)) {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * Append a validation error and return false for fluent guards.
-     */
-    protected function addError(string $message): bool
-    {
-        $this->validationErrors[] = $message;
-
-        return false;
-    }
-
-    /**
-     * @return array<int, array{locale_id: int|null, value: mixed}>
-     */
-    protected function normalizeValues(array|string $values): array
-    {
-        if (! $this->isLocalizable()) {
-            $normalized = is_array($values)
-                ? array_map(fn ($v) => $this->normalize($v), $values)
-                : $this->normalize($values);
-
-            return [['locale_id' => null, 'value' => $normalized]];
-        }
-
-        $groups = $this->isMultiple() ? $values : [$values];
-
-        $byLocale = [];
-        foreach ($groups as $group) {
-            foreach ($group as $translation) {
-                $byLocale[$translation['locale_id']][] = $this->normalize($translation['values']);
-            }
-        }
-
-        return collect($byLocale)->map(fn ($values, $localeId) => [
-            'locale_id' => $localeId,
-            'value' => $this->isMultiple() ? $values : $values[0],
-        ])->values()->all();
-    }
-
-    /**
-     * Run validate() then apply any configurable Laravel rules stored on the attribute.
-     * Private — not part of the subclass extension API.
-     */
-    private function applyRules(mixed $value): bool
-    {
-        if (! $this->validate($value, $this->entity)) {
-            return false;
-        }
-
-        $rules = $this->laravelRules();
-
-        if (empty($rules) || $value === null) {
-            return true;
-        }
-
-        $validator = Validator::make(['value' => $value], ['value' => $rules]);
-
-        if ($validator->fails()) {
-            foreach ($validator->errors()->get('value') as $error) {
-                $this->addError($error);
-            }
-
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Convert configurable validation rules stored on the attribute to Laravel rule strings.
-     *
-     * @return array<string>
-     */
-    private function laravelRules(): array
-    {
-        $rules = [];
-
-        foreach ($this->attribute->validations ?? [] as $validation) {
-            $type = $validation['type'] ?? null;
-            $param = $validation['value'] ?? null;
-
-            $rule = match ($type) {
-                'min_length' => "min:$param",
-                'max_length' => "max:$param",
-                'min' => "min:$param",
-                'max' => "max:$param",
-                'regex' => "regex:$param",
-                'email' => 'email',
-                'url' => 'url',
-                'date_format' => "date_format:$param",
-                'after' => "after:$param",
-                'before' => "before:$param",
-                default => null,
-            };
-
-            if ($rule !== null) {
-                $rules[] = $rule;
-            }
-        }
-
-        return $rules;
+        return $this->resolve($raw, $this->entity);
     }
 }
