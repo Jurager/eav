@@ -296,23 +296,6 @@ trait HasAttributes
     }
 
     /**
-     * Relations required to fully hydrate attribute values without N+1.
-     *
-     * Use this to batch-load before iterating a collection and calling values(),
-     * so values() can use the in-memory relation instead of querying per model.
-     */
-    public static function attributeRelations(): array
-    {
-        return [
-            'attributeValues.attribute.type',
-            'attributeValues.attribute.group.translations',
-            'attributeValues.attribute.translations',
-            'attributeValues.attribute.enums.translations',
-            'attributeValues.translations',
-        ];
-    }
-
-    /**
      * Return the FQCN of the model used to resolve relation-scoped attributes.
      * Override in models that scope attributes by a related model (e.g. Category for Product).
      *

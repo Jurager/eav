@@ -5,11 +5,9 @@ weight: 80
 
 ## Eager Loading Attribute Values
 
-The `HasAttributes` trait exposes the `attribute_values` relation (a `MorphMany` to `entity_attribute`) along with a static helper that declares every sub-relation required to fully hydrate attribute values without N+1 queries.
+The `HasAttributes` trait exposes the `attribute_values` relation (a `MorphMany` to `entity_attribute`).
 
 ### Accessing Raw Rows
-
-You may use the relation directly anywhere you need raw access to the EAV rows:
 
 ```php
 $product->load('attribute_values');
@@ -18,9 +16,9 @@ $product->attribute_values; // Collection<EntityAttribute>
 
 ### Hydrating Typed Field Instances
 
-`AttributeManager::values()` transforms the raw rows into typed `Field` instances, resolving text, select, boolean, and so on. The manager checks whether `attribute_values` is already loaded on the model and uses the in-memory collection when available, avoiding a new query.
+`AttributeManager::values()` transforms the raw rows into typed `Field` instances. The manager checks whether `attribute_values` is already loaded on the model and uses the in-memory collection when available, avoiding a new query.
 
-For this pre-loaded path to work without lazy-loading `attribute->type`, `attribute->enums`, and translations, those sub-relations must be present on the already-loaded `attribute_values`. You should load them in one batch before serialization:
+For this to work without N+1 on sub-relations, load them in one batch before serialization:
 
 ```php
 $products->load([
@@ -32,36 +30,6 @@ $products->load([
         'translations',
     ]),
 ]);
-```
-
-### Reusing the Canonical Relation List
-
-To avoid repeating the relation list across projects, `HasAttributes` exposes the canonical set as a static method:
-
-```php
-Product::attributeRelations();
-// [
-//   'attributeValues.attribute.type',
-//   'attributeValues.attribute.group.translations',
-//   'attributeValues.attribute.translations',
-//   'attributeValues.attribute.enums.translations',
-//   'attributeValues.translations',
-// ]
-```
-
-The list is intentionally structured as top-level-prefixed paths so you may pass it to `load()` or `with()` directly on the entity collection:
-
-```php
-$products->load(Product::attributeRelations());
-
-// or on a query:
-Product::query()->with(Product::attributeRelations())->get();
-```
-
-When serializing a collection of entities and calling `values()` on each, batch-load with `attributeRelations()` beforehand. This ensures `values()` uses the in-memory collection and never triggers per-model queries:
-
-```php
-$products->load(Product::attributeRelations());
 
 foreach ($products as $product) {
     $values = $product->eav()->values(); // no DB queries

@@ -415,9 +415,9 @@ class AttributeManager
             $model->value = $this->makeField($model->attribute)->read($model);
         });
 
-        // Use pre-loaded relation to avoid N+1 when the caller eager-loads attributeValues.
-        if ($this->entity instanceof Model && $this->entity->relationLoaded('attributeValues')) {
-            $collection = $this->entity->attributeValues;
+        // Use pre-loaded relation to avoid N+1 when the caller eager-loads attribute_values.
+        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
+            $collection = $this->entity->attribute_values;
 
             if ($codes !== null) {
                 $collection = $collection->filter(
