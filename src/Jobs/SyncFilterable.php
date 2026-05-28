@@ -7,7 +7,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
-use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Support\EavModels;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\MeilisearchEngine;
@@ -35,7 +35,7 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         return $this->entityType;
     }
 
-    public function handle(FieldTypeRegistry $fieldRegistry): void
+    public function handle(FieldFactory $fieldFactory): void
     {
         if (! class_exists(EngineManager::class) || ! class_exists(Client::class)) {
             return;
@@ -64,8 +64,8 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
             ->where('filterable', true)
             ->with('type')
             ->get()
-            ->flatMap(function ($attribute) use ($fieldRegistry) {
-                $field = $fieldRegistry->make($attribute);
+            ->flatMap(function ($attribute) use ($fieldFactory) {
+                $field = $fieldFactory->make($attribute);
 
                 return collect($field->filterableKeys())->map(fn ($key) => "attributes.$key");
             })

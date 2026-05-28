@@ -5,7 +5,7 @@ namespace Jurager\Eav\Search;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\EavModels;
 use Meilisearch\Client;
@@ -50,7 +50,7 @@ class Search
 
     public function __construct(
         private readonly FilterCompiler $compiler,
-        private readonly FieldTypeRegistry $fieldRegistry,
+        private readonly FieldFactory $fieldFactory,
         private readonly LocaleRegistry $localeRegistry,
         private readonly Client $meilisearch,
     ) {
@@ -228,7 +228,7 @@ class Search
             ->flatMap(function (string $code) use ($byCode): array {
                 $attr = $byCode->get($code);
 
-                return $attr ? $this->fieldRegistry->make($attr)->filterableKeys() : [];
+                return $attr ? $this->fieldFactory->make($attr)->filterableKeys() : [];
             })
             ->map(fn (string $key) => self::ATTRIBUTES_PREFIX.$key)
             ->unique()
@@ -246,7 +246,7 @@ class Search
         foreach ($facets as $facetKey => $distribution) {
             $code = substr($facetKey, strlen(self::ATTRIBUTES_PREFIX));
             $attr = $byCode->get($code);
-            $field = $attr ? $this->fieldRegistry->make($attr) : null;
+            $field = $attr ? $this->fieldFactory->make($attr) : null;
 
             $result[$facetKey] = $field
                 ? $field->enrichFacetDistribution($distribution, $localeId)

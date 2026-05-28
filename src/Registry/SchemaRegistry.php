@@ -5,7 +5,7 @@ namespace Jurager\Eav\Registry;
 use Illuminate\Support\Collection;
 
 /**
- * Process-level cache of attribute schema collections, keyed by entity type and parameters.
+ * In-memory cache of attribute schema collections, keyed by entity type and parameters.
  */
 class SchemaRegistry
 {

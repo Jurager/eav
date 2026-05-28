@@ -7,7 +7,7 @@ use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * In-memory cache for AttributeEnum models keyed by attribute ID.
+ * In-memory cache of AttributeEnum models keyed by attribute ID.
  */
 class EnumRegistry
 {
@@ -36,7 +36,7 @@ class EnumRegistry
     }
 
     /**
-     * Coerce a single filter value to a stored integer ID.
+     * Coerce a filter value to a stored integer ID.
      *
      * Numeric values and null/empty pass through unchanged.
      * Non-numeric strings are resolved by code; unknown codes return null.

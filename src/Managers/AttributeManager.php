@@ -13,7 +13,7 @@ use Jurager\Eav\Exceptions\MissingEntityException;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributePersister;
 use Jurager\Eav\Support\AttributeQueryBuilder;
@@ -43,7 +43,7 @@ class AttributeManager
     /** @var array<string, mixed>|null */
     private ?array $indexData = null;
 
-    private ?FieldTypeRegistry $fieldRegistry = null;
+    private ?FieldFactory $fieldFactory = null;
 
     private ?EnumRegistry $enumRegistry = null;
 
@@ -142,7 +142,7 @@ class AttributeManager
      */
     private function makeField(Attribute $attribute): Field
     {
-        return $this->fieldRegistry()->make($attribute)->forEntity($this->entity);
+        return $this->fieldFactory()->make($attribute)->forEntity($this->entity);
     }
 
     /**
@@ -572,9 +572,9 @@ class AttributeManager
         return empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
     }
 
-    private function fieldRegistry(): FieldTypeRegistry
+    private function fieldFactory(): FieldFactory
     {
-        return $this->fieldRegistry ??= app(FieldTypeRegistry::class);
+        return $this->fieldFactory ??= app(FieldFactory::class);
     }
 
     private function enumRegistry(): EnumRegistry

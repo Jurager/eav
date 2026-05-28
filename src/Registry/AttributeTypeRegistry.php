@@ -7,28 +7,20 @@ use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * In-memory cache for attribute type data.
+ * In-memory cache of attribute types keyed by code.
  */
 class AttributeTypeRegistry
 {
-    /** @var Collection<string, AttributeType>|null  code → model */
+    /** @var Collection<string, AttributeType>|null */
     private ?Collection $types = null;
 
-    /**
-     * All attribute types keyed by code.
-     *
-     * @return Collection<string, AttributeType>
-     */
+    /** @return Collection<string, AttributeType> */
     public function all(): Collection
     {
         return $this->types ??= EavModels::query('attribute_type')->get()->keyBy('code');
     }
 
-    /**
-     * All type codes.
-     *
-     * @return array<string>
-     */
+    /** @return array<string> */
     public function codes(): array
     {
         return $this->all()->keys()->all();
@@ -39,17 +31,11 @@ class AttributeTypeRegistry
         return $this->all()->has($code);
     }
 
-    /**
-     * Find an attribute type by code, or null if not found.
-     */
     public function find(string $code): ?AttributeType
     {
         return $this->all()->get($code);
     }
 
-    /**
-     * Forget all cached data.
-     */
     public function forget(): void
     {
         $this->types = null;

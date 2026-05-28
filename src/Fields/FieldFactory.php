@@ -1,15 +1,17 @@
 <?php
 
-namespace Jurager\Eav\Registry;
+namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
-use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
- * Maps attribute type codes to Field classes.
+ * Creates Field instances from Attribute models.
+ * Supports registration of custom field types at runtime.
  */
-class FieldTypeRegistry
+class FieldFactory
 {
     /** @var array<string, class-string<Field>> */
     protected array $types;
@@ -26,7 +28,7 @@ class FieldTypeRegistry
      *
      * @param  class-string<Field>  $class
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidFieldTypeException
      */
     public function register(string $type, string $class): void
     {
@@ -45,7 +47,7 @@ class FieldTypeRegistry
     /**
      * @return class-string<Field>
      *
-     * @throws InvalidArgumentException
+     * @throws InvalidFieldTypeException
      */
     public function resolve(string $type): string
     {
@@ -57,9 +59,7 @@ class FieldTypeRegistry
     }
 
     /**
-     * Create a Field instance from an Attribute model.
-     *
-     * @throws InvalidArgumentException
+     * @throws InvalidFieldTypeException
      */
     public function make(Attribute $attribute): Field
     {

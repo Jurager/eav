@@ -7,7 +7,7 @@ use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * In-memory cache for locale data.
+ * In-memory cache of locales with per-request active locale state.
  */
 class LocaleRegistry
 {
@@ -16,24 +16,16 @@ class LocaleRegistry
 
     private ?int $defaultId = null;
 
-    /** @var array<string>|null Active locales for the current request context. */
+    /** @var array<string>|null Active locales for the current request, set by middleware. */
     private ?array $active = null;
 
-    /**
-     * All locales keyed by ID, values are codes.
-     *
-     * @return Collection<int, string>
-     */
+    /** @return Collection<int, string> */
     public function all(): Collection
     {
         return $this->locales ??= EavModels::query('locale')->pluck('code', 'id');
     }
 
-    /**
-     * All locale IDs.
-     *
-     * @return array<int>
-     */
+    /** @return array<int> */
     public function ids(): array
     {
         return $this->all()->keys()->all();
@@ -44,17 +36,11 @@ class LocaleRegistry
         return $this->all()->has($id);
     }
 
-    /**
-     * Get the locale code for a given ID, or null if not found.
-     */
     public function code(int $id): ?string
     {
         return $this->all()->get($id);
     }
 
-    /**
-     * Find the locale ID for a given code, or null if not found.
-     */
     public function find(string $code): ?int
     {
         $id = $this->all()->search($code);
@@ -62,18 +48,14 @@ class LocaleRegistry
         return $id !== false ? $id : null;
     }
 
-    /**
-     * Resolve a locale ID from a code string, falling back to the application default.
-     */
     public function resolve(?string $code = null): int
     {
         return ($code !== null ? $this->find($code) : null) ?? $this->default();
     }
 
     /**
-     * Return the locale ID for the current request context.
-     * Uses the first active locale set by the request (e.g. Accept-Language middleware),
-     * falling back to the application default.
+     * Returns the first active locale that exists in the database, falling back to the default.
+     * Active locales are set from the request context (e.g. Accept-Language middleware).
      */
     public function current(): int
     {
@@ -89,8 +71,6 @@ class LocaleRegistry
     }
 
     /**
-     * The default locale ID from application configuration.
-     *
      * @throws InvalidConfigurationException
      */
     public function default(): int
@@ -105,29 +85,18 @@ class LocaleRegistry
             ?? throw InvalidConfigurationException::localeNotFound($code);
     }
 
-    /**
-     * Set the active locales for the current request context.
-     *
-     * @param  array<string>  $codes
-     */
+    /** @param array<string> $codes */
     public function set(array $codes): void
     {
         $this->active = $codes;
     }
 
-    /**
-     * Get the active locales, or null if not set.
-     *
-     * @return array<string>|null
-     */
+    /** @return array<string>|null */
     public function get(): ?array
     {
         return $this->active;
     }
 
-    /**
-     * Forget all cached data.
-     */
     public function forget(): void
     {
         $this->locales = null;
