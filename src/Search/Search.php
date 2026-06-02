@@ -2,36 +2,38 @@
 
 namespace Jurager\Eav\Search;
 
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Search\Facets\Facet;
+use Jurager\Eav\Search\Facets\FacetContext;
 use Jurager\Eav\Support\EavModels;
 use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Search\SearchResult as MeilisearchResult;
 
 /**
  * Fluent builder for faceted search over an indexed entity.
  *
- * Translates JSON:API `filter[...]` into a search filter expression, runs the
- * search with facets, and applies disjunctive-faceting (extra search per active
- * multi-select facet to keep counts accurate regardless of that facet's own filter).
+ * Translates a JSON:API `filter[...]` array into a Meilisearch filter expression
+ * and delegates aggregation to {@see Facet} value objects. Each facet pulls its own
+ * distribution from the response; this class only runs the queries (including the
+ * disjunctive facet-only searches) and groups the results by their dotted prefix.
  *
  * Usage:
  *   Search::for('product')
  *       ->query($q)
  *       ->filter($filter)
  *       ->fieldMap(['categories.category_id' => 'category_ids'])
- *       ->facets($facetCodes)
- *       ->disjunctive($facetCodes)
- *       ->search($perPage, $page)
- *       ->paginate(Product::class, $perPage, $page);
+ *       ->facets([
+ *           Facet::terms($attributeCodes)->disjunctive(),
+ *           Facet::range($priceFields),
+ *       ])
+ *       ->search($perPage, $page);
  */
 class Search
 {
-    private const string ATTRIBUTES_PREFIX = 'attributes.';
-
     private string $entityType = '';
 
     private ?string $query = null;
@@ -42,14 +44,10 @@ class Search
     /** @var array<string, string> */
     private array $fieldMap = [];
 
-    /** @var string[] */
-    private array $facetCodes = [];
+    /** @var Facet[] */
+    private array $facets = [];
 
-    /** @var string[] */
-    private array $disjunctiveCodes = [];
-
-    /** @var string[] */
-    private array $rangeFacetFields = [];
+    private ?Indexes $index = null;
 
     public function __construct(
         private readonly FilterCompiler $compiler,
@@ -90,32 +88,10 @@ class Search
         return $this;
     }
 
-    /** @param string[] $codes  EAV attribute codes to compute facet distribution for. */
-    public function facets(array $codes): static
+    /** @param Facet[] $facets */
+    public function facets(array $facets): static
     {
-        $this->facetCodes = $codes;
-
-        return $this;
-    }
-
-    /** @param string[] $codes  Codes whose counts must stay unaffected by their own active filter. */
-    public function disjunctive(array $codes): static
-    {
-        $this->disjunctiveCodes = $codes;
-
-        return $this;
-    }
-
-    /**
-     * Numeric index fields to compute min/max range facets for (via Meilisearch facetStats).
-     * Unlike facets(), these are raw indexed field names (e.g. "prices.1") and are not
-     * EAV attribute codes — no "attributes." prefix is applied and no label enrichment runs.
-     *
-     * @param string[] $fields
-     */
-    public function rangeFacets(array $fields): static
-    {
-        $this->rangeFacetFields = $fields;
+        $this->facets = $facets;
 
         return $this;
     }
@@ -129,169 +105,109 @@ class Search
             return new SearchResult([], 0, []);
         }
 
-        $eavAttrs = EavModels::query('attribute')
+        $ctx = $this->context();
+        $this->index = $this->meilisearch->index((new $modelClass())->searchableAs());
+
+        $facetFields = collect($this->facets)
+            ->flatMap(fn (Facet $facet) => $facet->facetFields($ctx))
+            ->unique()
+            ->values()
+            ->all();
+
+        $main = $this->index->search($this->query, array_filter([
+            'filter' => $this->compiler->compile($this->filter, $this->resolver($ctx)),
+            'facets' => $facetFields ?: null,
+            'limit' => $perPage,
+            'offset' => ($page - 1) * $perPage,
+        ]));
+
+        $facets = [];
+
+        foreach ($this->facets as $facet) {
+            $facets += $facet->collect($this, $main, $ctx);
+        }
+
+        return new SearchResult(
+            ids: array_column($main->getHits(), 'id'),
+            total: $main->getEstimatedTotalHits() ?? 0,
+            facets: $this->group($facets),
+        );
+    }
+
+    /** Whether a filter is active for the given key. */
+    public function hasFilter(string $key): bool
+    {
+        return array_key_exists($key, $this->filter);
+    }
+
+    /**
+     * Facet-only search with $excludeKey's own filter dropped — the building block
+     * for disjunctive facets. Returns no hits, only the requested facet aggregations.
+     *
+     * @param  string[]  $fields
+     */
+    public function facetOnlySearch(string $excludeKey, array $fields, FacetContext $ctx): MeilisearchResult
+    {
+        return $this->index->search($this->query, array_filter([
+            'filter' => $this->compiler->compile($this->filter, $this->resolver($ctx, exclude: $excludeKey)),
+            'facets' => $fields,
+            'limit' => 0,
+        ]));
+    }
+
+    /** Loads filterable attributes for the entity and wraps them with their field dependencies. */
+    private function context(): FacetContext
+    {
+        $attributes = EavModels::query('attribute')
             ->forEntity($this->entityType)
             ->where('filterable', true)
             ->with('type')
             ->get();
 
-        $eavCodes = $eavAttrs->pluck('code')->all();
-        $indexName = (new $modelClass())->searchableAs();
-        $index = $this->meilisearch->index($indexName);
-
-        $mainFilter = $this->compiler->compile($this->filter, $this->fieldResolver($eavCodes));
-        $attrFacetKeys = $this->resolveFacetKeys($this->facetCodes, $eavAttrs);
-        $facetKeys = array_values(array_unique([...$attrFacetKeys, ...$this->rangeFacetFields]));
-
-        $main = $index->search($this->query, array_filter([
-            'filter' => $mainFilter,
-            'facets' => $facetKeys ?: null,
-            'limit' => $perPage,
-            'offset' => ($page - 1) * $perPage,
-        ]));
-
-        $distribution = $this->applyDisjunctiveCorrections(
-            $index,
-            $eavAttrs,
-            $eavCodes,
-            // Keep only attribute distributions; range fields are reported via facetStats below.
-            array_intersect_key($main->getFacetDistribution() ?? [], array_flip($attrFacetKeys)),
-        );
-
-        return new SearchResult(
-            ids: array_column($main->getHits(), 'id'),
-            total: $main->getEstimatedTotalHits() ?? 0,
-            facets: $this->enrichFacets($distribution, $eavAttrs) + $this->rangeFacetsFromStats($main->getFacetStats()),
-        );
+        return new FacetContext($attributes, $this->fieldFactory, $this->localeRegistry->current());
     }
 
     /**
-     * Map Meilisearch facetStats to {min, max} entries for the requested range fields.
+     * Resolves a filter key to its Meilisearch field: facets get first say, then fieldMap().
+     * Returns null for unknown keys (dropped) or the excluded key (disjunctive pass).
      *
-     * @param  array<string, array{min: int|float, max: int|float}>  $stats
-     * @return array<string, array{min: int|float, max: int|float}>
-     */
-    private function rangeFacetsFromStats(array $stats): array
-    {
-        $result = [];
-
-        foreach ($this->rangeFacetFields as $field) {
-            if (isset($stats[$field])) {
-                $result[$field] = [
-                    'min' => $stats[$field]['min'] ?? null,
-                    'max' => $stats[$field]['max'] ?? null,
-                ];
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Runs a facet-only search for each active disjunctive facet, dropping that
-     * facet's own filter so its distribution reflects the full candidate set.
-     *
-     * @param  Indexes  $index
-     * @param  Collection<int, Model>  $eavAttrs
-     * @param  string[]  $eavCodes
-     * @param  array<string, array<string, int>>  $facets
-     * @return array<string, array<string, int>>
-     */
-    private function applyDisjunctiveCorrections(
-        mixed $index,
-        Collection $eavAttrs,
-        array $eavCodes,
-        array $facets,
-    ): array {
-        foreach ($this->disjunctiveCodes as $code) {
-            if (! array_key_exists($code, $this->filter)) {
-                continue;
-            }
-
-            $facetKeys = $this->resolveFacetKeys([$code], $eavAttrs);
-
-            if (! $facetKeys) {
-                continue;
-            }
-
-            $altFilter = $this->compiler->compile(
-                $this->filter,
-                $this->fieldResolver($eavCodes, exclude: $code),
-            );
-
-            $alt = $index->search($this->query, array_filter([
-                'filter' => $altFilter,
-                'facets' => $facetKeys,
-                'limit' => 0,
-            ]));
-            $altDist = $alt->getFacetDistribution() ?? [];
-
-            foreach ($facetKeys as $key) {
-                if (isset($altDist[$key])) {
-                    $facets[$key] = $altDist[$key];
-                }
-            }
-        }
-
-        return $facets;
-    }
-
-    /**
-     * Returns a closure that maps a filter key to its Meilisearch field name.
-     * EAV attribute codes resolve to `attributes.{code}`; other keys use fieldMap().
-     *
-     * @param  string[]  $eavCodes
      * @return \Closure(string): ?string
      */
-    private function fieldResolver(array $eavCodes, ?string $exclude = null): \Closure
+    private function resolver(FacetContext $ctx, ?string $exclude = null): \Closure
     {
-        return function (string $key) use ($eavCodes, $exclude): ?string {
+        return function (string $key) use ($ctx, $exclude): ?string {
             if ($exclude !== null && $key === $exclude) {
                 return null;
             }
 
-            return in_array($key, $eavCodes, true)
-                ? self::ATTRIBUTES_PREFIX.$key
-                : ($this->fieldMap[$key] ?? null);
+            foreach ($this->facets as $facet) {
+                if (($field = $facet->field($key, $ctx)) !== null) {
+                    return $field;
+                }
+            }
+
+            return $this->fieldMap[$key] ?? null;
         };
     }
 
     /**
-     * @param  string[]  $codes
-     * @param  Collection<int, Model>  $eavAttrs
-     * @return string[]
+     * Nests dotted keys under their prefix: "attributes.color" and "prices.retail"
+     * become ["attributes" => ["color" => …], "prices" => ["retail" => …]].
+     *
+     * @param  array<string, mixed>  $flat
+     * @return array<string, mixed>
      */
-    private function resolveFacetKeys(array $codes, Collection $eavAttrs): array
+    private function group(array $flat): array
     {
-        $byCode = $eavAttrs->keyBy('code');
-
-        return collect($codes)
-            ->flatMap(function (string $code) use ($byCode): array {
-                $attr = $byCode->get($code);
-
-                return $attr ? $this->fieldFactory->make($attr)->filterableKeys() : [];
-            })
-            ->map(fn (string $key) => self::ATTRIBUTES_PREFIX.$key)
-            ->unique()
-            ->values()
-            ->all();
-    }
-
-    /** @param Collection<int, Model> $eavAttrs */
-    private function enrichFacets(array $facets, Collection $eavAttrs): array
-    {
-        $localeId = $this->localeRegistry->current();
-        $byCode = $eavAttrs->keyBy('code');
         $result = [];
 
-        foreach ($facets as $facetKey => $distribution) {
-            $code = substr($facetKey, strlen(self::ATTRIBUTES_PREFIX));
-            $attr = $byCode->get($code);
-            $field = $attr ? $this->fieldFactory->make($attr) : null;
-
-            $result[$facetKey] = $field
-                ? $field->enrichFacetDistribution($distribution, $localeId)
-                : $distribution;
+        foreach ($flat as $key => $value) {
+            if (str_contains($key, '.')) {
+                [$group, $sub] = explode('.', $key, 2);
+                $result[$group][$sub] = $value;
+            } else {
+                $result[$key] = $value;
+            }
         }
 
         return $result;
