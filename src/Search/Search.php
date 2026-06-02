@@ -48,6 +48,9 @@ class Search
     /** @var string[] */
     private array $disjunctiveCodes = [];
 
+    /** @var string[] */
+    private array $rangeFacetFields = [];
+
     public function __construct(
         private readonly FilterCompiler $compiler,
         private readonly FieldFactory $fieldFactory,
@@ -103,6 +106,20 @@ class Search
         return $this;
     }
 
+    /**
+     * Numeric index fields to compute min/max range facets for (via Meilisearch facetStats).
+     * Unlike facets(), these are raw indexed field names (e.g. "prices.1") and are not
+     * EAV attribute codes — no "attributes." prefix is applied and no label enrichment runs.
+     *
+     * @param string[] $fields
+     */
+    public function rangeFacets(array $fields): static
+    {
+        $this->rangeFacetFields = $fields;
+
+        return $this;
+    }
+
     /** @return SearchResult<Model> */
     public function search(int $perPage = 15, int $page = 1): SearchResult
     {
@@ -123,7 +140,8 @@ class Search
         $index = $this->meilisearch->index($indexName);
 
         $mainFilter = $this->compiler->compile($this->filter, $this->fieldResolver($eavCodes));
-        $facetKeys = $this->resolveFacetKeys($this->facetCodes, $eavAttrs);
+        $attrFacetKeys = $this->resolveFacetKeys($this->facetCodes, $eavAttrs);
+        $facetKeys = array_values(array_unique([...$attrFacetKeys, ...$this->rangeFacetFields]));
 
         $main = $index->search($this->query, array_filter([
             'filter' => $mainFilter,
@@ -132,18 +150,41 @@ class Search
             'offset' => ($page - 1) * $perPage,
         ]));
 
-        $facets = $this->applyDisjunctiveCorrections(
+        $distribution = $this->applyDisjunctiveCorrections(
             $index,
             $eavAttrs,
             $eavCodes,
-            $main->getFacetDistribution() ?? [],
+            // Keep only attribute distributions; range fields are reported via facetStats below.
+            array_intersect_key($main->getFacetDistribution() ?? [], array_flip($attrFacetKeys)),
         );
 
         return new SearchResult(
             ids: array_column($main->getHits(), 'id'),
             total: $main->getEstimatedTotalHits() ?? 0,
-            facets: $this->enrichFacets($facets, $eavAttrs),
+            facets: $this->enrichFacets($distribution, $eavAttrs) + $this->rangeFacetsFromStats($main->getFacetStats()),
         );
+    }
+
+    /**
+     * Map Meilisearch facetStats to {min, max} entries for the requested range fields.
+     *
+     * @param  array<string, array{min: int|float, max: int|float}>  $stats
+     * @return array<string, array{min: int|float, max: int|float}>
+     */
+    private function rangeFacetsFromStats(array $stats): array
+    {
+        $result = [];
+
+        foreach ($this->rangeFacetFields as $field) {
+            if (isset($stats[$field])) {
+                $result[$field] = [
+                    'min' => $stats[$field]['min'] ?? null,
+                    'max' => $stats[$field]['max'] ?? null,
+                ];
+            }
+        }
+
+        return $result;
     }
 
     /**
