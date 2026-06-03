@@ -75,19 +75,25 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
 
         $index = app(Client::class)->index($indexName);
 
-        try {
-            $existing = $index->getFilterableAttributes();
-        } catch (\Throwable) {
-            $existing = [];
-        }
-
-        $preserved = array_values(array_filter(
-            $existing,
-            fn ($attr) => ! str_starts_with($attr, 'attributes.'),
-        ));
-
         $index->updateFilterableAttributes(
-            array_values(array_unique(array_merge($preserved, $paths))),
+            array_values(array_unique(array_merge($this->configuredFilterableAttributes($modelClass), $paths))),
         );
+    }
+
+    /**
+     * Non-EAV filterable attributes declared for the model in scout config.
+     *
+     * Read from configuration rather than the live index so the result is
+     * deterministic and independent of the order in which this job and
+     * `scout:sync-index-settings` apply their (asynchronous) Meilisearch tasks.
+     *
+     * @param  class-string  $modelClass
+     * @return array<int, string>
+     */
+    private function configuredFilterableAttributes(string $modelClass): array
+    {
+        $indexSettings = config('scout.meilisearch.index-settings', []);
+
+        return $indexSettings[$modelClass]['filterableAttributes'] ?? [];
     }
 }
