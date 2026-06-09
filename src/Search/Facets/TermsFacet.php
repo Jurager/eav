@@ -61,7 +61,15 @@ class TermsFacet extends Facet
             $distribution = $response->getFacetDistribution() ?? [];
 
             foreach ($fields as $indexField) {
-                $result[$indexField] = $field->enrichFacetDistribution($distribution[$indexField] ?? [], $ctx->localeId);
+                $raw = $distribution[$indexField] ?? [];
+
+                // Skip attributes with no values in the result set — an empty
+                // distribution carries nothing to display.
+                if ($raw === []) {
+                    continue;
+                }
+
+                $result[$indexField] = $field->enrichFacetDistribution($raw, $ctx->localeId);
             }
         }
 
