@@ -3,6 +3,8 @@
 namespace Jurager\Eav\Support;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
+use Jurager\Eav\Contracts\Hierarchical;
 
 /**
  * Resolves attribute inheritance chains for nested entity hierarchies.
@@ -30,7 +32,7 @@ class AttributeInheritanceResolver
 
         $first = $toInherit->first();
 
-        return method_exists($first, 'ancestors')
+        return $first instanceof Hierarchical && Schema::hasColumn($first->getTable(), '_lft')
             ? $this->resolveWithNestedSet($toInherit, $base, $model)
             : $this->resolveWithParentId($toInherit, $base, $model);
     }

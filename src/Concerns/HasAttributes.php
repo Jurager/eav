@@ -10,11 +10,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Relations\AvailableAttributes;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Contracts\Hierarchical;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
@@ -416,7 +418,7 @@ trait HasAttributes
         // Defining the necessary columns
         $columns = ['id', 'parent_id', 'is_inherits_properties'];
 
-        if (method_exists($instance, 'ancestors')) {
+        if ($instance instanceof Hierarchical && Schema::hasColumn($instance->getTable(), '_lft')) {
             $columns[] = '_lft';
             $columns[] = '_rgt';
         }
