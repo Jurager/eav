@@ -323,15 +323,6 @@ trait HasAttributes
     }
 
     /**
-     * Attribute definitions assigned to this entity via the EAV pivot (its values).
-     * Scope-provider models declare their applicability pivot via {@see attributeScopeRelation()}.
-     */
-    public function attributes(): MorphToMany
-    {
-        return $this->assignedAttributes();
-    }
-
-    /**
      * Raw Eloquent relation to Attribute through entity_attribute pivot (with value columns).
      */
     public function assignedAttributes(): MorphToMany
@@ -361,12 +352,12 @@ trait HasAttributes
     }
 
     /**
-     * Pivot relation used to resolve scoped attributes; defaults to {@see attributes()}.
+     * Pivot relation used to resolve scoped attributes; defaults to {@see assignedAttributes()}.
      * Override only to decouple the scope pivot from it.
      */
     public function attributeScopeRelation(): ?BelongsToMany
     {
-        return $this->attributes();
+        return $this->assignedAttributes();
     }
 
     /**
