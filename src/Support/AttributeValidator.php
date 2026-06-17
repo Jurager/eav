@@ -3,7 +3,6 @@
 namespace Jurager\Eav\Support;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
@@ -17,9 +16,6 @@ use Jurager\Eav\Managers\AttributeManager;
  */
 class AttributeValidator
 {
-    /** @var array<string, callable(Builder, Attributable): void> */
-    private static array $uniqueScopes = [];
-
     private AttributeManager $manager;
 
     private Attributable $entity;
@@ -30,23 +26,8 @@ class AttributeValidator
 
     private bool $usesSoftDeletes;
 
-    /**
-     * Register a scope callback for uniqueness validation of a specific entity type + attribute code.
-     *
-     * The callback receives the entity_attribute Builder and the Attributable entity instance,
-     * and should apply additional WHERE conditions to restrict the uniqueness scope.
-     *
-     * Example: limit uniqueness to the same category tree:
-     *   AttributeValidator::registerUniqueScope('category', 'code', function ($query, $entity) {
-     *       $query->whereIn('entity_id', $treeIds);
-     *   });
-     *
-     * @param  callable(Builder, Attributable): void  $callback
-     */
-    public static function registerUniqueScope(string $entityType, string $attributeCode, callable $callback): void
-    {
-        self::$uniqueScopes["{$entityType}.{$attributeCode}"] = $callback;
-    }
+    /** @var array<string, callable> */
+    private array $uniqueScopes;
 
     /**
      * Pass an existing AttributeManager to reuse its schema cache.
@@ -66,6 +47,10 @@ class AttributeValidator
         $modelClass = Relation::getMorphedModel($this->entityType);
 
         $this->usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
+
+        $this->uniqueScopes = $modelClass && method_exists($modelClass, 'attributeUniqueScopes')
+            ? $modelClass::attributeUniqueScopes()
+            : [];
     }
 
     /**
@@ -142,8 +127,7 @@ class AttributeValidator
      */
     private function validateUniqueness(Field $field): array
     {
-        $scopeKey = "{$this->entityType}.{$field->attribute()->code}";
-        $scopeCallback = self::$uniqueScopes[$scopeKey] ?? null;
+        $scopeCallback = $this->uniqueScopes[$field->attribute()->code] ?? null;
 
         $base = EavModels::query('entity_attribute')
             ->where('entity_type', $this->entityType)

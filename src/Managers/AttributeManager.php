@@ -420,7 +420,7 @@ class AttributeManager
     /**
      * Return available attributes Builder for the current entity.
      *
-     * @param  array<string, mixed>  $params
+     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
      */
     public function query(array $params = []): ?Builder
     {

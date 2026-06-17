@@ -59,7 +59,7 @@ trait HasAttributes
      *
      * @return array<string, callable>
      */
-    protected static function attributeUniqueScopes(): array
+    public static function attributeUniqueScopes(): array
     {
         return [];
     }
@@ -87,21 +87,9 @@ trait HasAttributes
 
     /**
      * Return an AttributeValidator for this entity.
-     * Unique scopes are registered once per model class (process lifetime).
      */
     protected function validator(): AttributeValidator
     {
-        static $booted = [];
-
-        if (! isset($booted[static::class])) {
-
-            foreach (static::attributeUniqueScopes() as $code => $callback) {
-                AttributeValidator::registerUniqueScope($this->attributeEntityType(), $code, $callback);
-            }
-
-            $booted[static::class] = true;
-        }
-
         return new AttributeValidator($this, $this->attributeManager);
     }
 
@@ -392,7 +380,7 @@ trait HasAttributes
     /**
      * Return a query for attributes scoped through related entities (e.g. categories for products).
      *
-     * @param  array<string, mixed>  $params
+     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
      * @param  class-string<Attributable>  $model
      *
      * @throws BindingResolutionException

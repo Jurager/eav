@@ -44,8 +44,12 @@ class BatchAttributePersister
     /**
      * Write all pending entities to the database.
      *
-     * If $onError is provided, a failing entity group's exception is passed to the
-     * callback and processing continues; without it the exception is re-thrown.
+     * Without $onError: all entities of the same type are persisted in one batch
+     * (fast path). Any exception is re-thrown and stops processing.
+     *
+     * With $onError: each entity is persisted individually so a single failure is
+     * isolated to that entity. The callback receives the exception and the entity;
+     * processing continues with the remaining entities.
      *
      * @param  callable(\Throwable, Attributable): void|null  $onError
      */
@@ -53,15 +57,15 @@ class BatchAttributePersister
     {
         $this->withinTimestamp(function () use ($onError): void {
             foreach ($this->pending as $type => $grouped) {
-                try {
+                if ($onError === null) {
                     $this->persistGroup($type, $grouped);
-                } catch (\Throwable $e) {
-                    if ($onError !== null) {
-                        foreach (array_keys($grouped) as $entityId) {
+                } else {
+                    foreach ($grouped as $entityId => $fields) {
+                        try {
+                            $this->persistGroup($type, [$entityId => $fields]);
+                        } catch (\Throwable $e) {
                             $onError($e, $this->entities[$entityId]);
                         }
-                    } else {
-                        throw $e;
                     }
                 }
             }
