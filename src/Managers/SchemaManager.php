@@ -48,46 +48,30 @@ class SchemaManager
         return EavModels::query('attribute_type')->findOrFail($id);
     }
 
-    /** @param  callable(Builder): mixed|null  $modifier */
-    public function attributes(?callable $modifier = null): mixed
+    public function attributesQuery(): Builder
     {
-        $query = EavModels::query('attribute');
-
-        return $modifier ? $modifier($query) : $query->get();
+        return EavModels::query('attribute');
     }
 
-    /** @param  callable(Builder): mixed|null  $modifier */
-    public function enums(Attribute $attribute, ?callable $modifier = null): mixed
+    public function enumsQuery(Attribute $attribute): Builder
     {
-        $query = $attribute->enums()->getQuery();
-
-        return $modifier ? $modifier($query) : $query->get();
+        return $attribute->enums()->getQuery();
     }
 
-    /** @param  callable(Builder): mixed|null  $modifier */
-    public function types(?callable $modifier = null): mixed
+    public function typesQuery(): Builder
     {
-        $query = EavModels::query('attribute_type');
-
-        return $modifier ? $modifier($query) : $query->get();
+        return EavModels::query('attribute_type');
     }
 
-    /** @param  callable(Builder): mixed|null  $modifier */
-    public function groups(?callable $modifier = null): mixed
+    public function groupsQuery(): Builder
     {
-        $query = EavModels::query('attribute_group');
-
-        return $modifier ? $modifier($query) : $query->get();
+        return EavModels::query('attribute_group');
     }
 
     /**
-     * Initiate a full-text search on attributes via Laravel Scout.
-     *
-     * @param  callable(mixed): mixed|null  $modifier
-     *
      * @throws SearchNotAvailableException
      */
-    public function search(string $query, ?callable $modifier = null): mixed
+    public function search(string $query): mixed
     {
         $modelClass = EavModels::class('attribute');
 
@@ -95,8 +79,6 @@ class SchemaManager
             throw SearchNotAvailableException::scoutNotInstalled();
         }
 
-        $builder = $modelClass::search($query);
-
-        return $modifier ? $modifier($builder) : $builder;
+        return $modelClass::search($query);
     }
 }
