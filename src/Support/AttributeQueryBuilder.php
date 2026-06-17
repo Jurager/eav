@@ -169,11 +169,7 @@ class AttributeQueryBuilder
 
     private function applyLike(Builder $query, string $column, mixed $value): void
     {
-        if (! is_string($value)) {
-            return;
-        }
-
-        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $value);
+        $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value);
 
         $query->whereRaw($column.' LIKE ?', ['%'.$escaped.'%']);
     }

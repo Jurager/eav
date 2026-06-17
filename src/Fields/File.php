@@ -31,7 +31,7 @@ class File extends Field
     protected function normalize(mixed $value): mixed
     {
         if ($value === null) {
-            return [];
+            return null;
         }
 
         if (is_array($value)) {

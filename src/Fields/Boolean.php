@@ -16,7 +16,7 @@ class Boolean extends Field
 
     public function cast(mixed $value): mixed
     {
-        return filter_var($value, FILTER_VALIDATE_BOOLEAN) ? 1 : 0;
+        return $this->normalize($value);
     }
 
     public function value(?int $localeId = null): ?bool
