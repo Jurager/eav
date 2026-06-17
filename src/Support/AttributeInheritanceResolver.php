@@ -3,7 +3,6 @@
 namespace Jurager\Eav\Support;
 
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Contracts\Hierarchical;
 
 /**
@@ -29,7 +28,7 @@ class AttributeInheritanceResolver
 
         $first = $toInherit->first();
 
-        return $first instanceof Hierarchical && Schema::hasColumn($first->getTable(), '_lft')
+        return $first instanceof Hierarchical
             ? $this->resolveWithNestedSet($toInherit, $base, $model)
             : $this->resolveWithParentId($toInherit, $base, $model);
     }
@@ -43,6 +42,9 @@ class AttributeInheritanceResolver
             return $base;
         }
 
+        $instance = new $model();
+        $columns = array_unique(array_merge($instance->inheritanceScopeColumns(), ['_lft', '_rgt']));
+
         $ancestors = $model::query()
             ->where(function ($query) use ($valid) {
                 foreach ($valid as $entity) {
@@ -53,7 +55,7 @@ class AttributeInheritanceResolver
                     );
                 }
             })
-            ->select(['id', '_lft', '_rgt', 'parent_id', 'is_inherits_properties'])
+            ->select($columns)
             ->get()
             ->keyBy('id');
 
@@ -84,7 +86,7 @@ class AttributeInheritanceResolver
         while ($currentIds->isNotEmpty() && $maxDepth-- > 0) {
             $parents = $model::query()
                 ->whereIn('id', $currentIds)
-                ->select(['id', 'parent_id', 'is_inherits_properties'])
+                ->select((new $model)->inheritanceScopeColumns())
                 ->get()
                 ->keyBy('id');
 

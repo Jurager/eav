@@ -25,6 +25,14 @@ interface Attributable
     public function shouldInheritAttributes(): bool;
 
     /**
+     * Columns that must be selected when loading this entity for inheritance resolution.
+     * Override to include any column that shouldInheritAttributes() reads from.
+     *
+     * @return array<string>
+     */
+    public function inheritanceScopeColumns(): array;
+
+    /**
      * Builder that returns Attribute records available for this entity.
      * Called by AttributeManager to load the attribute schema.
      */

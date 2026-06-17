@@ -10,7 +10,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Relations\AvailableAttributes;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
@@ -314,6 +313,17 @@ trait HasAttributes
     }
 
     /**
+     * Columns needed when loading this entity for inheritance resolution.
+     * Override to add any column that shouldInheritAttributes() reads from.
+     *
+     * @return array<string>
+     */
+    public function inheritanceScopeColumns(): array
+    {
+        return ['id', 'parent_id'];
+    }
+
+    /**
      * Default filter parameters passed to availableAttributesQuery().
      * Override in models that use byRelation scope (e.g. return category IDs for Product).
      */
@@ -387,17 +397,15 @@ trait HasAttributes
 
         $instance = new $model();
 
-        // Defining the necessary columns
-        $columns = ['id', 'parent_id', 'is_inherits_properties'];
+        $columns = $instance->inheritanceScopeColumns();
 
-        if ($instance instanceof Hierarchical && Schema::hasColumn($instance->getTable(), '_lft')) {
-            $columns[] = '_lft';
-            $columns[] = '_rgt';
+        if ($instance instanceof Hierarchical) {
+            $columns = array_merge($columns, ['_lft', '_rgt']);
         }
 
         $entities = $model::query()
             ->whereIn('id', $params)
-            ->select($columns)
+            ->select(array_unique($columns))
             ->get()
             ->keyBy('id');
 
