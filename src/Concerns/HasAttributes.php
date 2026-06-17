@@ -65,6 +65,17 @@ trait HasAttributes
     }
 
     /**
+     * Return the FQCN of the model used to resolve relation-scoped attributes.
+     * Override in models that scope attributes by a related model (e.g. Category for Product).
+     *
+     * @return class-string<Attributable>|null
+     */
+    protected static function attributeScopeModel(): ?string
+    {
+        return null;
+    }
+
+    /**
      * Return the AttributeManager for this entity (lazy-loaded, cached).
      */
     public function eav(): AttributeManager
@@ -83,14 +94,6 @@ trait HasAttributes
     public function validate(array $input): array
     {
         return $this->validator()->validate($input);
-    }
-
-    /**
-     * Return an AttributeValidator for this entity.
-     */
-    protected function validator(): AttributeValidator
-    {
-        return new AttributeValidator($this, $this->attributeManager);
     }
 
     /**
@@ -348,23 +351,20 @@ trait HasAttributes
     }
 
     /**
-     * Return the FQCN of the model used to resolve relation-scoped attributes.
-     * Override in models that scope attributes by a related model (e.g. Category for Product).
-     *
-     * @return class-string<Attributable>|null
-     */
-    protected static function attributeScopeModel(): ?string
-    {
-        return null;
-    }
-
-    /**
      * Pivot relation used to resolve scoped attributes; defaults to {@see assignedAttributes()}.
      * Override only to decouple the scope pivot from it.
      */
     public function attributeScopeRelation(): ?BelongsToMany
     {
         return $this->assignedAttributes();
+    }
+
+    /**
+     * Return an AttributeValidator for this entity.
+     */
+    protected function validator(): AttributeValidator
+    {
+        return new AttributeValidator($this, $this->attributeManager);
     }
 
     /**

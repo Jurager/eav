@@ -21,17 +21,6 @@ class AttributeType extends Model
 
     protected $fillable = ['code', 'localizable', 'multiple', 'unique', 'filterable', 'searchable'];
 
-    protected function casts(): array
-    {
-        return [
-            'localizable' => 'boolean',
-            'multiple' => 'boolean',
-            'unique' => 'boolean',
-            'filterable' => 'boolean',
-            'searchable' => 'boolean',
-        ];
-    }
-
     /**
      * Force any flags in $data to false for capabilities this type does not support.
      *
@@ -52,5 +41,16 @@ class AttributeType extends Model
     public function attributes(): HasMany
     {
         return $this->hasMany(EavModels::class('attribute'), 'attribute_type_id');
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'localizable' => 'boolean',
+            'multiple' => 'boolean',
+            'unique' => 'boolean',
+            'filterable' => 'boolean',
+            'searchable' => 'boolean',
+        ];
     }
 }

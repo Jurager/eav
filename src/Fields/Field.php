@@ -15,7 +15,8 @@ use Jurager\Eav\Registry\LocaleRegistry;
  */
 abstract class Field
 {
-    use ValidatesPayload, Indexable;
+    use ValidatesPayload;
+    use Indexable;
 
     public const string STORAGE_TEXT = 'value_text';
     public const string STORAGE_INTEGER = 'value_integer';
@@ -36,7 +37,8 @@ abstract class Field
         protected Attribute $attribute,
         protected LocaleRegistry $localeRegistry,
         protected EnumRegistry $enumRegistry,
-    ) {}
+    ) {
+    }
 
     abstract public function column(): string;
 

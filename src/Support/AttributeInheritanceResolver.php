@@ -86,7 +86,7 @@ class AttributeInheritanceResolver
         while ($currentIds->isNotEmpty() && $maxDepth-- > 0) {
             $parents = $model::query()
                 ->whereIn('id', $currentIds)
-                ->select((new $model)->inheritanceScopeColumns())
+                ->select((new $model())->inheritanceScopeColumns())
                 ->get()
                 ->keyBy('id');
 

@@ -24,15 +24,15 @@ class EntityTranslation extends MorphPivot
         'entity_id', 'entity_type', 'locale_id', 'label', 'params',
     ];
 
+    public function locale(): BelongsTo
+    {
+        return $this->belongsTo(EavModels::class('locale'), 'locale_id');
+    }
+
     protected function casts(): array
     {
         return [
             'params' => 'array',
         ];
-    }
-
-    public function locale(): BelongsTo
-    {
-        return $this->belongsTo(EavModels::class('locale'), 'locale_id');
     }
 }

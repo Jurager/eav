@@ -25,17 +25,6 @@ class FilterCompiler
     ];
 
     /**
-     * @param  array<string, mixed>  $filter
-     * @param  callable(string): ?string  $resolve  Maps filter key → Meilisearch field (null skips).
-     */
-    public function compile(array $filter, callable $resolve): ?string
-    {
-        $parts = $this->compileBlock($filter, $resolve);
-
-        return $parts ? implode(' AND ', $parts) : null;
-    }
-
-    /**
      * Reads a scalar value from a JSON:API filter by key, unwrapping the operator form
      * so `filter[key]=v` and `filter[key][eq]=v` both yield `v`. Returns null when absent.
      *
@@ -46,6 +35,17 @@ class FilterCompiler
         $value = $filter[$key] ?? null;
 
         return is_array($value) ? ($value[$operator] ?? null) : $value;
+    }
+
+    /**
+     * @param  array<string, mixed>  $filter
+     * @param  callable(string): ?string  $resolve  Maps filter key → Meilisearch field (null skips).
+     */
+    public function compile(array $filter, callable $resolve): ?string
+    {
+        $parts = $this->compileBlock($filter, $resolve);
+
+        return $parts ? implode(' AND ', $parts) : null;
     }
 
     /**

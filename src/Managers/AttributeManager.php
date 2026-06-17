@@ -46,7 +46,8 @@ class AttributeManager
 
     public function __construct(
         protected ?Attributable $entity = null,
-    ) {}
+    ) {
+    }
 
     /**
      * Create a manager for an entity instance, FQCN, or morph-map key.
@@ -102,61 +103,6 @@ class AttributeManager
     }
 
     /**
-     * Build a schema-only manager from a pre-loaded attribute collection.
-     *
-     * @param  Collection<int, Attribute>  $attributes
-     */
-    private static function buildFromCollection(Collection $attributes): static
-    {
-        $attributes->loadMissing('type');
-
-        $instance = new static(null);
-
-        foreach ($attributes as $attribute) {
-            $instance->fields[$attribute->code] = $instance->makeField($attribute);
-        }
-
-        $instance->schemaLoaded = true;
-
-        return $instance;
-    }
-
-    /**
-     * Build a Field for the given Attribute and bind the entity context when present.
-     */
-    private function makeField(Attribute $attribute): Field
-    {
-        return $this->fieldFactory()->make($attribute)->forEntity($this->entity);
-    }
-
-    /**
-     * Build a schema-only manager for an entity, using the SchemaRegistry to avoid
-     * repeated DB queries across multiple calls within the same process.
-     *
-     * @throws JsonException
-     */
-    private static function buildFromAttributable(Attributable $entity, SchemaRegistry $registry): static
-    {
-        $parameters = $entity->attributeParameters();
-
-        $entityType = $entity->attributeEntityType();
-
-        $parametersKey = empty($parameters) ? 'default' : md5(json_encode($parameters, JSON_THROW_ON_ERROR));
-
-        $registryKey = $entityType.':'.$parametersKey;
-
-        // Resolve from cache or query the DB and cache for the process lifetime.
-        // Call availableAttributesQuery() directly on the entity rather than
-        // constructing a throwaway AttributeManager just to call query() on it.
-        $attributes = $registry->resolve(
-            $registryKey,
-            fn () => $entity->availableAttributesQuery($parameters)?->get() ?? collect()
-        );
-
-        return static::buildFromCollection($attributes);
-    }
-
-    /**
      * Persist attribute values for multiple entities in chunked batches.
      *
      * Each entity is persisted in its own transaction. If $onError is provided,
@@ -189,6 +135,53 @@ class AttributeManager
 
             $persister->flush($onError);
         }
+    }
+
+    /**
+     * Build a schema-only manager from a pre-loaded attribute collection.
+     *
+     * @param  Collection<int, Attribute>  $attributes
+     */
+    private static function buildFromCollection(Collection $attributes): static
+    {
+        $attributes->loadMissing('type');
+
+        $instance = new static(null);
+
+        foreach ($attributes as $attribute) {
+            $instance->fields[$attribute->code] = $instance->makeField($attribute);
+        }
+
+        $instance->schemaLoaded = true;
+
+        return $instance;
+    }
+
+    /**
+     * Build a schema-only manager for an entity, using the SchemaRegistry to avoid
+     * repeated DB queries across multiple calls within the same process.
+     *
+     * @throws JsonException
+     */
+    private static function buildFromAttributable(Attributable $entity, SchemaRegistry $registry): static
+    {
+        $parameters = $entity->attributeParameters();
+
+        $entityType = $entity->attributeEntityType();
+
+        $parametersKey = empty($parameters) ? 'default' : md5(json_encode($parameters, JSON_THROW_ON_ERROR));
+
+        $registryKey = $entityType.':'.$parametersKey;
+
+        // Resolve from cache or query the DB and cache for the process lifetime.
+        // Call availableAttributesQuery() directly on the entity rather than
+        // constructing a throwaway AttributeManager just to call query() on it.
+        $attributes = $registry->resolve(
+            $registryKey,
+            fn () => $entity->availableAttributesQuery($parameters)?->get() ?? collect()
+        );
+
+        return static::buildFromCollection($attributes);
     }
 
     /**
@@ -427,6 +420,16 @@ class AttributeManager
         return $this->resolveEntity()->availableAttributesQuery($params);
     }
 
+    public function builder(): AttributeQueryBuilder
+    {
+        return $this->builder ??= new AttributeQueryBuilder(
+            $this->enumRegistry(),
+            fn (string $code) => $this->field($code),
+            fn (string $code) => $this->entity?->attributeEntityType()
+                ?? $this->fields[$code]?->attribute()->entity_type,
+        );
+    }
+
     /**
      * Returns the entity instance, or a transient instance from the stored class for schema-only managers.
      * Do NOT use when you need entity->id (write operations).
@@ -474,6 +477,14 @@ class AttributeManager
             ->where('entity_id', $this->entity->id);
     }
 
+    /**
+     * Build a Field for the given Attribute and bind the entity context when present.
+     */
+    private function makeField(Attribute $attribute): Field
+    {
+        return $this->fieldFactory()->make($attribute)->forEntity($this->entity);
+    }
+
     private function persister(): AttributePersister
     {
         if ($this->entity === null) {
@@ -513,15 +524,5 @@ class AttributeManager
     private function enumRegistry(): EnumRegistry
     {
         return $this->enumRegistry ??= app(EnumRegistry::class);
-    }
-
-    public function builder(): AttributeQueryBuilder
-    {
-        return $this->builder ??= new AttributeQueryBuilder(
-            $this->enumRegistry(),
-            fn (string $code) => $this->field($code),
-            fn (string $code) => $this->entity?->attributeEntityType()
-                ?? $this->fields[$code]?->attribute()->entity_type,
-        );
     }
 }

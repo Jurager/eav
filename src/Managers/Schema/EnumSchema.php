@@ -11,11 +11,6 @@ use Jurager\Eav\Models\AttributeEnum;
 
 class EnumSchema extends BaseSchema
 {
-    protected function modelKey(): string
-    {
-        return 'attribute_enum';
-    }
-
     public function find(int $id): AttributeEnum
     {
         /** @var AttributeEnum */
@@ -49,5 +44,10 @@ class EnumSchema extends BaseSchema
     public function delete(AttributeEnum $enum): void
     {
         Event::dispatch(new AttributeEnumDeleted($this->deleteRecord($enum)));
+    }
+
+    protected function modelKey(): string
+    {
+        return 'attribute_enum';
     }
 }

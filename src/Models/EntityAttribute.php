@@ -30,15 +30,6 @@ class EntityAttribute extends Model
         'value_boolean', 'value_date', 'value_datetime',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'value_boolean' => 'boolean',
-            'value_date' => 'date',
-            'value_datetime' => 'datetime',
-        ];
-    }
-
     protected static function booted(): void
     {
         static::deleting(static function (EntityAttribute $entityAttribute) {
@@ -57,5 +48,14 @@ class EntityAttribute extends Model
             ->using(EavModels::class('entity_translation'))
             ->withPivot(['id', 'label', 'created_at', 'updated_at'])
             ->when(app(LocaleRegistry::class)->get(), fn ($q, $codes) => $q->whereIn('code', $codes));
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'value_boolean' => 'boolean',
+            'value_date' => 'date',
+            'value_datetime' => 'datetime',
+        ];
     }
 }

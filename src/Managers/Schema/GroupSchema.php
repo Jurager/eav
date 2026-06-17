@@ -12,11 +12,6 @@ use Jurager\Eav\Support\EavModels;
 
 class GroupSchema extends BaseSchema
 {
-    protected function modelKey(): string
-    {
-        return 'attribute_group';
-    }
-
     public function find(int $id): AttributeGroup
     {
         /** @var AttributeGroup */
@@ -82,5 +77,10 @@ class GroupSchema extends BaseSchema
         EavModels::query('attribute')
             ->whereIn('id', $attributeIds)
             ->update(['attribute_group_id' => $group->id]);
+    }
+
+    protected function modelKey(): string
+    {
+        return 'attribute_group';
     }
 }

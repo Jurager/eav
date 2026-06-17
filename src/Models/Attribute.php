@@ -39,20 +39,6 @@ class Attribute extends Model
         'filterable', 'searchable', 'validations', 'meta',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'validations' => 'array',
-            'meta' => 'array',
-            'required' => 'boolean',
-            'localizable' => 'boolean',
-            'multiple' => 'boolean',
-            'unique' => 'boolean',
-            'filterable' => 'boolean',
-            'searchable' => 'boolean',
-        ];
-    }
-
     protected static function booted(): void
     {
         static::forceDeleting(static function (Attribute $attribute) {
@@ -128,5 +114,19 @@ class Attribute extends Model
             'group.translations',
             'translations',
         ]);
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'validations' => 'array',
+            'meta' => 'array',
+            'required' => 'boolean',
+            'localizable' => 'boolean',
+            'multiple' => 'boolean',
+            'unique' => 'boolean',
+            'filterable' => 'boolean',
+            'searchable' => 'boolean',
+        ];
     }
 }

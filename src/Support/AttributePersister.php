@@ -16,7 +16,9 @@ class AttributePersister
 {
     use ExecutesPersistence;
 
-    public function __construct(private readonly Attributable $entity) {}
+    public function __construct(private readonly Attributable $entity)
+    {
+    }
 
     /** @param  Collection<int, Field>  $fields */
     public function persist(Collection $fields): void

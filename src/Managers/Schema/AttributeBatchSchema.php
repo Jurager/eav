@@ -19,7 +19,8 @@ class AttributeBatchSchema
 {
     public function __construct(
         private TranslationManager $translations,
-    ) {}
+    ) {
+    }
 
     /**
      * @param  array<int, array<string, mixed>>  $attributesData

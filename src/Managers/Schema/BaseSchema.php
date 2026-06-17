@@ -13,7 +13,8 @@ abstract class BaseSchema
 {
     public function __construct(
         protected TranslationManager $translations,
-    ) {}
+    ) {
+    }
 
     abstract protected function modelKey(): string;
 

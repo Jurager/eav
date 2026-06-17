@@ -2,7 +2,6 @@
 
 namespace Jurager\Eav\Managers\Schema;
 
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Event;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted;
@@ -16,11 +15,6 @@ class AttributeSchema extends BaseSchema
     public function __construct(TranslationManager $translations, private AttributeBatchSchema $batchSchema)
     {
         parent::__construct($translations);
-    }
-
-    protected function modelKey(): string
-    {
-        return 'attribute';
     }
 
     public function find(int $id): Attribute
@@ -105,6 +99,11 @@ class AttributeSchema extends BaseSchema
     public function batch(): AttributeBatchSchema
     {
         return $this->batchSchema;
+    }
+
+    protected function modelKey(): string
+    {
+        return 'attribute';
     }
 
     /** Return the next sort value for a new attribute in the given group. */

@@ -3,7 +3,6 @@
 namespace Jurager\Eav\Fields\Concerns;
 
 use Illuminate\Support\Facades\Validator;
-use Jurager\Eav\Contracts\Attributable;
 
 /**
  * Payload validation, normalization, and Laravel rule application for Field.

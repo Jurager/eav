@@ -21,7 +21,8 @@ class SchemaManager
         private AttributeSchema $attributeSchema,
         private GroupSchema $groupSchema,
         private EnumSchema $enumSchema,
-    ) {}
+    ) {
+    }
 
     public function translations(): TranslationManager
     {

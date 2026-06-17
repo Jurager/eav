@@ -19,7 +19,8 @@ class AttributeQueryBuilder
         private readonly EnumRegistry $enumRegistry,
         private readonly \Closure $fieldResolver,
         private readonly \Closure $entityTypeResolver,
-    ) {}
+    ) {
+    }
 
     /**
      * Build a subquery on entity_attribute selecting entity_id rows matching the given condition.
