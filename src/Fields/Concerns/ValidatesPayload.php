@@ -155,29 +155,19 @@ trait ValidatesPayload
      */
     private function rules(): array
     {
+        $map = config('eav.validations', []);
         $rules = [];
 
         foreach ($this->attribute->validations ?? [] as $validation) {
             $type = $validation['type'] ?? null;
             $param = $validation['value'] ?? null;
 
-            $rule = match ($type) {
-                'min_length' => "min:$param",
-                'max_length' => "max:$param",
-                'min'        => "min:$param",
-                'max'        => "max:$param",
-                'regex'      => "regex:$param",
-                'email'      => 'email',
-                'url'        => 'url',
-                'date_format' => "date_format:$param",
-                'after'      => "after:$param",
-                'before'     => "before:$param",
-                default      => null,
-            };
-
-            if ($rule !== null) {
-                $rules[] = $rule;
+            if ($type === null || ! isset($map[$type])) {
+                continue;
             }
+
+            $prefix = $map[$type];
+            $rules[] = $param !== null ? "$prefix:$param" : $prefix;
         }
 
         return $rules;

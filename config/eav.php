@@ -51,6 +51,30 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Validation Rule Map
+    |--------------------------------------------------------------------------
+    | Maps validation type codes stored on attributes to Laravel rule prefixes.
+    | Add or override entries here to support additional validation types
+    | without modifying the package.
+    |
+    | For rules that take a parameter (min, max, regex, …) the package appends
+    | ":<value>" automatically. Parameterless rules (email, url) are used as-is.
+    */
+    'validations' => [
+        'min_length'  => 'min',
+        'max_length'  => 'max',
+        'min'         => 'min',
+        'max'         => 'max',
+        'regex'       => 'regex',
+        'email'       => 'email',
+        'url'         => 'url',
+        'date_format' => 'date_format',
+        'after'       => 'after',
+        'before'      => 'before',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Field Types
     |--------------------------------------------------------------------------
     | Maps attribute type codes (attribute_types.code) to Field implementations.
