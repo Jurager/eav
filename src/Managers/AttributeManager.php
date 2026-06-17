@@ -225,7 +225,7 @@ class AttributeManager
         }
 
         $params = $this->entity?->attributeParameters() ?? [];
-        $attributes = ($this->query($params)?->get() ?? collect())->whereIn('code', $codes);
+        $attributes = $this->query($params)?->whereIn('code', $codes)->get() ?? collect();
 
         if ($attributes->isEmpty()) {
             return;
@@ -246,25 +246,13 @@ class AttributeManager
 
     /**
      * Return a hydrated Field by code, loading it on demand if needed.
+     * Returns null if the attribute does not exist in this entity's available schema.
      */
     public function field(string $code): ?Field
     {
-        if (isset($this->fields[$code])) {
-            return $this->fields[$code];
+        if (! isset($this->fields[$code])) {
+            $this->ensureFields([$code]);
         }
-
-        $attribute = $this->entity
-            ? EavModels::query('attribute')
-                ->forEntity($this->entity->attributeEntityType())
-                ->withRelations()
-                ->firstWhere('code', $code)
-            : null;
-
-        if (! $attribute) {
-            return null;
-        }
-
-        $this->hydrate(collect([$attribute]));
 
         return $this->fields[$code] ?? null;
     }
