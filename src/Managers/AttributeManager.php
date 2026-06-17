@@ -58,31 +58,30 @@ class AttributeManager
             return new static($entity);
         }
 
+        $registry = app(SchemaRegistry::class);
+
         if (class_exists($entity)) {
             if (! is_subclass_of($entity, Attributable::class)) {
                 throw InvalidConfigurationException::missingAttributableContract($entity);
             }
 
-            // Schema-only: resolve entity type from a transient instance but do not
-            // store the instance - this prevents accidentally persisting values with
-            // entity_id = null when the returned manager is used for writes.
+            // Schema-only: use a transient instance only to resolve entity type and
+            // available attributes. Do not store the instance — prevents accidental
+            // writes with entity_id = null.
             $instance = new $entity();
-
-            $manager = static::buildFromCollection(EavModels::query('attribute')
-                ->forEntity($instance->attributeEntityType())
-                ->withRelations()
-                ->get());
-
+            $manager = static::buildFromAttributable($instance, $registry);
             $manager->entityClass = $entity;
 
             return $manager;
         }
 
-        // Morph-map key (e.g. 'product') - schema-only, no entity instance.
-        return static::buildFromCollection(EavModels::query('attribute')
-            ->forEntity($entity)
-            ->withRelations()
-            ->get());
+        // Morph-map key (e.g. 'product') — schema-only, no entity instance.
+        $attributes = $registry->resolve(
+            $entity.':default',
+            fn () => EavModels::query('attribute')->forEntity($entity)->withRelations()->get(),
+        );
+
+        return static::buildFromCollection($attributes);
     }
 
     /**
