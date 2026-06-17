@@ -172,7 +172,7 @@ class AttributeManager
         $sorted = $parameters;
 
         sort($sorted);
-        
+
         $parametersKey = empty($parameters) ? 'default' : md5(json_encode($sorted, JSON_THROW_ON_ERROR));
 
         $registryKey = $entityType.':'.$parametersKey;
