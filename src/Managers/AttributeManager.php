@@ -27,11 +27,7 @@ class AttributeManager
     /** @var array<string, Field> */
     protected array $fields = [];
 
-    /** @var array<string, Collection<int, mixed>> */
-    protected array $cachedAttributes = [];
-
-    /** @var array<string, bool> Tracks which schema param keys are fully loaded into. */
-    private array $schemaLoaded = [];
+    private bool $schemaLoaded = false;
 
     private ?AttributePersister $persister = null;
 
@@ -47,17 +43,9 @@ class AttributeManager
     /** FQCN stored for schema-only managers created from a class string. */
     protected ?string $entityClass = null;
 
-    /**
-     * @param  Collection<int, mixed>|null  $preloadedAttributes
-     */
     public function __construct(
         protected ?Attributable $entity = null,
-        ?Collection $preloadedAttributes = null,
-    ) {
-        if ($preloadedAttributes !== null) {
-            $this->cachedAttributes['default'] = $preloadedAttributes;
-        }
-    }
+    ) {}
 
     /**
      * Create a manager for an entity instance, FQCN, or morph-map key.
@@ -80,7 +68,7 @@ class AttributeManager
             // entity_id = null when the returned manager is used for writes.
             $instance = new $entity();
 
-            $manager = new static(null, EavModels::query('attribute')
+            $manager = static::buildFromCollection(EavModels::query('attribute')
                 ->forEntity($instance->attributeEntityType())
                 ->withRelations()
                 ->get());
@@ -91,7 +79,7 @@ class AttributeManager
         }
 
         // Morph-map key (e.g. 'product') - schema-only, no entity instance.
-        return new static(null, EavModels::query('attribute')
+        return static::buildFromCollection(EavModels::query('attribute')
             ->forEntity($entity)
             ->withRelations()
             ->get());
@@ -117,17 +105,18 @@ class AttributeManager
      * Build a schema-only manager from a pre-loaded attribute collection.
      *
      * @param  Collection<int, Attribute>  $attributes
-     *
      */
     private static function buildFromCollection(Collection $attributes): static
     {
         $attributes->loadMissing('type');
 
-        $instance = new static(null, $attributes);
+        $instance = new static(null);
 
         foreach ($attributes as $attribute) {
             $instance->fields[$attribute->code] = $instance->makeField($attribute);
         }
+
+        $instance->schemaLoaded = true;
 
         return $instance;
     }
@@ -204,25 +193,20 @@ class AttributeManager
 
     /**
      * Load all attribute schemas into $this->fields. Safe to call multiple times.
-     *
-     * @throws JsonException
      */
     public function ensureSchema(): static
     {
-        $params = $this->entity?->attributeParameters() ?? [];
-        $key = $this->schemaParamsKey($params);
-
-        if (isset($this->schemaLoaded[$key])) {
+        if ($this->schemaLoaded) {
             return $this;
         }
 
-        $attributes = $this->resolveAttributes($params);
+        $params = $this->entity?->attributeParameters() ?? [];
 
-        $attributes
+        ($this->query($params)?->get() ?? collect())
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
             ->each(fn ($attr) => $this->fields[$attr->code] = $this->makeField($attr));
 
-        $this->schemaLoaded[$key] = true;
+        $this->schemaLoaded = true;
 
         return $this;
     }
@@ -231,18 +215,17 @@ class AttributeManager
      * Batch-load and hydrate specific fields by code; already-loaded codes are skipped.
      *
      * @param  array<string>  $codes
-     *
-     * @throws JsonException
      */
     public function ensureFields(array $codes): void
     {
         $codes = array_diff($codes, array_keys($this->fields));
 
-        if (empty($codes)) {
+        if (empty($codes) || $this->schemaLoaded) {
             return;
         }
 
-        $attributes = $this->resolveAttributes()->whereIn('code', $codes);
+        $params = $this->entity?->attributeParameters() ?? [];
+        $attributes = ($this->query($params)?->get() ?? collect())->whereIn('code', $codes);
 
         if ($attributes->isEmpty()) {
             return;
@@ -263,8 +246,6 @@ class AttributeManager
 
     /**
      * Return a hydrated Field by code, loading it on demand if needed.
-     *
-     * @throws JsonException
      */
     public function field(string $code): ?Field
     {
@@ -272,13 +253,12 @@ class AttributeManager
             return $this->fields[$code];
         }
 
-        $attribute = $this->resolveAttributes()->firstWhere('code', $code)
-            ?? ($this->entity
-                ? EavModels::query('attribute')
-                    ->forEntity($this->entity->attributeEntityType())
-                    ->withRelations()
-                    ->firstWhere('code', $code)
-                : null);
+        $attribute = $this->entity
+            ? EavModels::query('attribute')
+                ->forEntity($this->entity->attributeEntityType())
+                ->withRelations()
+                ->firstWhere('code', $code)
+            : null;
 
         if (! $attribute) {
             return null;
@@ -289,11 +269,6 @@ class AttributeManager
         return $this->fields[$code] ?? null;
     }
 
-    /**
-     * Return the typed value for an attribute.
-     *
-     * @throws JsonException
-     */
     public function value(string $code, ?int $localeId = null): mixed
     {
         return $this->field($code)?->value($localeId);
@@ -301,8 +276,6 @@ class AttributeManager
 
     /**
      * Set a value in memory without persisting.
-     *
-     * @throws JsonException
      */
     public function set(string $code, mixed $value, ?int $localeId = null): static
     {
@@ -313,8 +286,6 @@ class AttributeManager
 
     /**
      * Persist a single attribute value.
-     *
-     * @throws JsonException
      */
     public function save(string $code): void
     {
@@ -372,8 +343,6 @@ class AttributeManager
      *
      * @param  array<string, mixed>  $data
      * @return Collection<int, Field>
-     *
-     * @throws JsonException
      */
     public function fill(array $data): Collection
     {
@@ -482,19 +451,6 @@ class AttributeManager
     }
 
     /**
-     * @param  array<string, mixed>  $params
-     * @return Collection<int, mixed>
-     *
-     * @throws JsonException
-     */
-    protected function resolveAttributes(array $params = []): Collection
-    {
-        $key = $this->schemaParamsKey($params);
-
-        return $this->cachedAttributes[$key] ??= $this->query($params)?->get() ?? collect();
-    }
-
-    /**
      * Create and hydrate Field instances from the given attribute records.
      *
      * @param  Collection<int, mixed>  $attributes
@@ -561,12 +517,6 @@ class AttributeManager
         return $attributes ? ['attributes' => $attributes] : [];
     }
 
-    /** @throws JsonException */
-    private function schemaParamsKey(array $params): string
-    {
-        return empty($params) ? 'default' : md5(json_encode($params, JSON_THROW_ON_ERROR));
-    }
-
     private function fieldFactory(): FieldFactory
     {
         return $this->fieldFactory ??= app(FieldFactory::class);
@@ -583,7 +533,7 @@ class AttributeManager
             $this->enumRegistry(),
             fn (string $code) => $this->field($code),
             fn (string $code) => $this->entity?->attributeEntityType()
-                ?? $this->resolveAttributes()->firstWhere('code', $code)?->entity_type,
+                ?? $this->fields[$code]?->attribute()->entity_type,
         );
     }
 }
