@@ -64,25 +64,18 @@ class TranslationManager
      */
     public function save(Model $model, array $translations, bool $partial = false): void
     {
-        /** @var array<int, array<string, mixed>> $indexed */
         $indexed = array_filter(
             array_column($translations, null, 'locale_id'),
             static fn ($t) => ! is_null($t['label'] ?? null),
         );
 
-        $morphType = $model->getMorphClass();
-        $entityId = $model->getKey();
         $localeIds = array_keys($indexed);
 
         if (! $partial) {
-            // Remove translations for locales that are no longer in the incoming set.
             EavModels::query('entity_translation')
-                ->where('entity_type', $morphType)
-                ->where('entity_id', $entityId)
-                ->when(
-                    $localeIds,
-                    fn ($q) => $q->whereNotIn('locale_id', $localeIds),
-                )
+                ->where('entity_type', $model->getMorphClass())
+                ->where('entity_id', $model->getKey())
+                ->when($localeIds, fn ($q) => $q->whereNotIn('locale_id', $localeIds))
                 ->delete();
         }
 
@@ -94,21 +87,7 @@ class TranslationManager
         $rows = [];
 
         foreach ($indexed as $localeId => $translation) {
-            $params = array_filter([
-                'short_name' => $translation['short_name'] ?? null,
-                'hint' => $translation['hint'] ?? null,
-                'placeholder' => $translation['placeholder'] ?? null,
-            ], static fn ($value) => $value !== null);
-
-            $rows[] = [
-                'entity_type' => $morphType,
-                'entity_id' => $entityId,
-                'locale_id' => $localeId,
-                'label' => $translation['label'],
-                'params' => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
+            $rows[] = $this->buildTranslationRow($model, $localeId, $translation, $now);
         }
 
         EavModels::query('entity_translation')
@@ -134,21 +113,7 @@ class TranslationManager
             );
 
             foreach ($indexed as $localeId => $translation) {
-                $params = array_filter([
-                    'short_name' => $translation['short_name'] ?? null,
-                    'hint' => $translation['hint'] ?? null,
-                    'placeholder' => $translation['placeholder'] ?? null,
-                ], static fn ($value) => $value !== null);
-
-                $rows[] = [
-                    'entity_type' => $model->getMorphClass(),
-                    'entity_id' => $model->getKey(),
-                    'locale_id' => $localeId,
-                    'label' => $translation['label'],
-                    'params' => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
-                    'created_at' => $timestamp,
-                    'updated_at' => $timestamp,
-                ];
+                $rows[] = $this->buildTranslationRow($model, $localeId, $translation, $timestamp);
             }
         }
 
@@ -160,5 +125,29 @@ class TranslationManager
             EavModels::query('entity_translation')
                 ->upsert($chunk, ['entity_type', 'entity_id', 'locale_id'], ['label', 'params', 'updated_at']);
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $translation
+     *
+     * @throws \JsonException
+     */
+    private function buildTranslationRow(Model $model, int $localeId, array $translation, Carbon $timestamp): array
+    {
+        $params = array_filter([
+            'short_name'  => $translation['short_name'] ?? null,
+            'hint'        => $translation['hint'] ?? null,
+            'placeholder' => $translation['placeholder'] ?? null,
+        ], static fn ($value) => $value !== null);
+
+        return [
+            'entity_type' => $model->getMorphClass(),
+            'entity_id'   => $model->getKey(),
+            'locale_id'   => $localeId,
+            'label'       => $translation['label'],
+            'params'      => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
+            'created_at'  => $timestamp,
+            'updated_at'  => $timestamp,
+        ];
     }
 }
