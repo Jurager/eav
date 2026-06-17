@@ -101,7 +101,7 @@ trait HasAttributes
     /**
      * Return available attribute definitions for this entity.
      *
-     * @param array<string, mixed> $params
+     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
      * @return Collection<int, mixed>
      * @throws BindingResolutionException
      * @throws CircularDependencyException
@@ -114,7 +114,7 @@ trait HasAttributes
     /**
      * Return a query builder for available attributes (global or by relation).
      *
-     * @param array<string, mixed> $params
+     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
      * @return Builder|null
      * @throws BindingResolutionException
      * @throws CircularDependencyException
@@ -326,6 +326,8 @@ trait HasAttributes
     /**
      * Default filter parameters passed to availableAttributesQuery().
      * Override in models that use byRelation scope (e.g. return category IDs for Product).
+     *
+     * @return array<int>
      */
     public function attributeParameters(): array
     {

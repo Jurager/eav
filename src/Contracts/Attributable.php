@@ -13,8 +13,11 @@ interface Attributable
     public function attributeEntityType(): string;
 
     /**
-     * Parameters passed to availableAttributesQuery() to scope the attribute set.
-     * Return [] for global scope. Return e.g. category IDs for relation-scoped entities.
+     * IDs of the scope-model records that determine which attributes are available for this entity.
+     * Return [] for a global (unscoped) attribute set.
+     * Example: a Product returns its category IDs; a Category returns [].
+     *
+     * @return array<int>
      */
     public function attributeParameters(): array;
 
@@ -35,6 +38,8 @@ interface Attributable
     /**
      * Builder that returns Attribute records available for this entity.
      * Called by AttributeManager to load the attribute schema.
+     *
+     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
      */
     public function availableAttributesQuery(array $params = []): ?Builder;
 }
