@@ -3,6 +3,7 @@
 namespace Jurager\Eav\Support;
 
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Support\Concerns\ExecutesPersistence;
@@ -44,12 +45,14 @@ class BatchAttributePersister
     /**
      * Write all pending entities to the database.
      *
-     * Without $onError: all entities of the same type are persisted in one batch
-     * (fast path). Any exception is re-thrown and stops processing.
+     * Without $onError (fast path): all entities of the same type are persisted in
+     * one batch. Any exception is re-thrown and stops processing.
      *
-     * With $onError: each entity is persisted individually so a single failure is
-     * isolated to that entity. The callback receives the exception and the entity;
-     * processing continues with the remaining entities.
+     * With $onError (fault-tolerant path): the batch is attempted first inside a
+     * transaction. On success, no overhead beyond the transaction boundary.
+     * On failure, the transaction rolls back and each entity is retried individually
+     * so that only the truly failing entities are passed to $onError.
+     * This is optimal when failures are rare (import bad-data scenarios).
      *
      * @param  callable(\Throwable, Attributable): void|null  $onError
      */
@@ -60,11 +63,15 @@ class BatchAttributePersister
                 if ($onError === null) {
                     $this->persistGroup($type, $grouped);
                 } else {
-                    foreach ($grouped as $entityId => $fields) {
-                        try {
-                            $this->persistGroup($type, [$entityId => $fields]);
-                        } catch (\Throwable $e) {
-                            $onError($e, $this->entities[$entityId]);
+                    try {
+                        DB::transaction(fn () => $this->persistGroup($type, $grouped));
+                    } catch (\Throwable) {
+                        foreach ($grouped as $entityId => $fields) {
+                            try {
+                                $this->persistGroup($type, [$entityId => $fields]);
+                            } catch (\Throwable $e) {
+                                $onError($e, $this->entities[$entityId]);
+                            }
                         }
                     }
                 }
