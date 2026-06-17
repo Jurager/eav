@@ -35,7 +35,7 @@ class EavServiceProvider extends ServiceProvider
         $this->app->scoped(LocaleRegistry::class);
         $this->app->singleton(FieldFactory::class);
         $this->app->singleton(SchemaRegistry::class);
-        $this->app->singleton(EnumRegistry::class);
+        $this->app->scoped(EnumRegistry::class);
         $this->app->singleton(AttributeInheritanceResolver::class);
         $this->app->singleton(TranslationManager::class);
         $this->app->singleton(SchemaManager::class);

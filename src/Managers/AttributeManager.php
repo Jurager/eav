@@ -169,7 +169,11 @@ class AttributeManager
 
         $entityType = $entity->attributeEntityType();
 
-        $parametersKey = empty($parameters) ? 'default' : md5(json_encode($parameters, JSON_THROW_ON_ERROR));
+        $sorted = $parameters;
+
+        sort($sorted);
+        
+        $parametersKey = empty($parameters) ? 'default' : md5(json_encode($sorted, JSON_THROW_ON_ERROR));
 
         $registryKey = $entityType.':'.$parametersKey;
 
@@ -370,6 +374,8 @@ class AttributeManager
                         && in_array($ea->attribute->code ?? null, $codes, true)
                 );
             }
+
+            $collection->loadMissing(['attribute.type', 'translations']);
 
             return $collection->map($transform)->values();
         }

@@ -5,7 +5,6 @@ namespace Jurager\Eav\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -47,7 +46,7 @@ class EntityAttribute extends Model
         return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
             ->using(EavModels::class('entity_translation'))
             ->withPivot(['id', 'label', 'created_at', 'updated_at'])
-            ->when(app(LocaleRegistry::class)->get(), fn ($q, $codes) => $q->whereIn('code', $codes));
+            ->active();
     }
 
     protected function casts(): array

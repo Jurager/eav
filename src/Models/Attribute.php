@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -77,7 +76,7 @@ class Attribute extends Model
             ->using(EavModels::class('entity_translation'))
             ->withPivot(['id', 'label', 'params'])
             ->withTimestamps()
-            ->when(app(LocaleRegistry::class)->get(), fn ($q, $codes) => $q->whereIn('code', $codes));
+            ->active();
     }
 
     /**
