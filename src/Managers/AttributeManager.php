@@ -20,12 +20,7 @@ use Jurager\Eav\Support\AttributeQueryBuilder;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Coordinates attribute schema loading, in-memory value changes, and persistence.
- *
- * Three usage modes:
- *   Entity instance: AttributeManager::for($product)        values + schema
- *   Entity class:    AttributeManager::for(Product::class)  schema only
- *   Entity type:     AttributeManager::for('product')       schema only
+ * Coordinates attribute schema loading, value access, and persistence.
  */
 class AttributeManager
 {

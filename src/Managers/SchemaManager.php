@@ -12,10 +12,7 @@ use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Manages the EAV attribute schema: attributes, groups, and enums.
- *
- * Responsible for create/read/update/delete/sort operations on attribute definitions.
- * For reading and writing attribute *values* on entities, use AttributeManager.
+ * Manages EAV attribute schema definitions.
  */
 class SchemaManager
 {

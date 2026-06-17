@@ -7,18 +7,15 @@ use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Contracts\Hierarchical;
 
 /**
- * Resolves attribute inheritance chains for nested entity hierarchies.
- *
- * Walks the ancestor tree (using nested-set bounds or parent_id) and collects
- * all ancestor entities from which the given entities should inherit attributes.
+ * Resolves attribute inheritance through entity hierarchies.
  */
 class AttributeInheritanceResolver
 {
     /**
-     * Expand a collection of entities by appending their attribute-inheriting ancestors.
+     * Expand entities with their attribute-inheriting ancestors.
      *
-     * @param  Collection<int, mixed>  $entities  Preloaded entities (must have shouldInheritAttributes()).
-     * @param  string  $model  Fully-qualified model class to query ancestors from.
+     * @param  Collection<int, mixed>  $entities
+     * @param  string  $model
      * @return Collection<int, mixed>
      */
     public function resolve(Collection $entities, string $model): Collection
@@ -37,12 +34,7 @@ class AttributeInheritanceResolver
             : $this->resolveWithParentId($toInherit, $base, $model);
     }
 
-    /**
-     * Collect ancestors using nested-set _lft / _rgt bounds (single query).
-     *
-     * @param  Collection<int, mixed>  $toInherit
-     * @param  Collection<int, mixed>  $base
-     */
+    /** Collect ancestors via nested-set bounds in a single query. */
     protected function resolveWithNestedSet(Collection $toInherit, Collection $base, string $model): Collection
     {
         $valid = $toInherit->filter(fn ($e) => isset($e->_lft, $e->_rgt));
@@ -82,12 +74,7 @@ class AttributeInheritanceResolver
         return $base->merge($filtered)->unique('id');
     }
 
-    /**
-     * Collect ancestors by walking the parent_id chain level-by-level (batched queries).
-     *
-     * @param  Collection<int, mixed>  $toInherit
-     * @param  Collection<int, mixed>  $base
-     */
+    /** Walk parent_id chain level-by-level in batched queries. */
     protected function resolveWithParentId(Collection $toInherit, Collection $base, string $model): Collection
     {
         $currentIds = $toInherit->pluck('parent_id')->filter()->unique();
@@ -117,13 +104,7 @@ class AttributeInheritanceResolver
         return $base->merge($allParents)->unique('id');
     }
 
-    /**
-     * Walk the parent_id chain through a preloaded ancestor map,
-     * stopping when an ancestor does not inherit attributes.
-     *
-     * @param  Collection<int, mixed>  $ancestors  Keyed by id.
-     * @return Collection<int, mixed>
-     */
+    /** Walk parent_id chain through preloaded ancestor map, stopping at non-inheriting nodes. */
     protected function walkInheritanceChain(mixed $entity, Collection $ancestors): Collection
     {
         $result = collect();

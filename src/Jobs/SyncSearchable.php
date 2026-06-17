@@ -10,10 +10,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Re-index all entities that have a stored value for the given attribute.
- *
- * Dispatched by AttributeObserver when an attribute's searchable flag changes
- * or when an attribute is deleted or restored.
+ * Re-index all entities with a stored value for the given attribute.
  */
 class SyncSearchable implements ShouldBeUnique, ShouldQueue
 {

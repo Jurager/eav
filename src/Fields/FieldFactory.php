@@ -9,7 +9,6 @@ use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
  * Creates Field instances from Attribute models.
- * Supports registration of custom field types at runtime.
  */
 class FieldFactory
 {
@@ -24,8 +23,6 @@ class FieldFactory
     }
 
     /**
-     * Register a custom field type.
-     *
      * @param  class-string<Field>  $class
      *
      * @throws InvalidFieldTypeException

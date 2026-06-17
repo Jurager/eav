@@ -17,17 +17,12 @@ abstract class BaseSchema
 
     abstract protected function modelKey(): string;
 
-    /** Base query builder for this schema's primary model. */
     protected function query(): Builder
     {
         return EavModels::query($this->modelKey());
     }
 
-    /**
-     * Run $factory inside a transaction, then persist translations.
-     *
-     * @param  array<int, array<string, mixed>>  $translations
-     */
+    /** @param  array<int, array<string, mixed>>  $translations */
     protected function createRecord(callable $factory, array $translations): Model
     {
         return DB::transaction(function () use ($factory, $translations): Model {
@@ -38,12 +33,7 @@ abstract class BaseSchema
         });
     }
 
-    /**
-     * Update $model with $data inside a transaction, then persist translations.
-     *
-     * @param  array<string, mixed>  $data
-     * @param  array<int, array<string, mixed>>  $translations
-     */
+    /** @param  array<string, mixed>  $data @param  array<int, array<string, mixed>>  $translations */
     protected function updateRecord(Model $model, array $data, array $translations): Model
     {
         return DB::transaction(function () use ($model, $data, $translations): Model {
@@ -54,9 +44,7 @@ abstract class BaseSchema
         });
     }
 
-    /**
-     * Clone $model, delete it, and return the snapshot for event dispatching.
-     */
+    /** Clone, delete, and return snapshot for event dispatching. */
     protected function deleteRecord(Model $model): Model
     {
         $snapshot = clone $model;
@@ -66,11 +54,7 @@ abstract class BaseSchema
         return $snapshot;
     }
 
-    /**
-     * Persist zero-based sort positions for a reordered collection atomically.
-     *
-     * @param  Collection<int, Model>  $reordered
-     */
+    /** @param  Collection<int, Model>  $reordered */
     protected function applySort(Collection $reordered): void
     {
         DB::transaction(function () use ($reordered): void {
@@ -81,14 +65,7 @@ abstract class BaseSchema
         });
     }
 
-    /**
-     * Extract and unset translations from the input array.
-     *
-     * Mutates $data by removing the 'translations' key — this prevents mass-assignment
-     * errors when the remaining array is passed to Eloquent::create()/update().
-     *
-     * @return array<int, array<string, mixed>>
-     */
+    /** @return array<int, array<string, mixed>> */
     protected function extractTranslations(array &$data): array
     {
         $translations = $data['translations'] ?? [];
@@ -97,7 +74,6 @@ abstract class BaseSchema
         return $translations;
     }
 
-    /** @param  array<int, array<string, mixed>>  $translations */
     protected function saveTranslations(Model $model, array $translations): void
     {
         if (! empty($translations)) {

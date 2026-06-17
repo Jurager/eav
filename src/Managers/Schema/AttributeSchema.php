@@ -29,10 +29,7 @@ class AttributeSchema extends BaseSchema
         return $this->query()->findOrFail($id);
     }
 
-    /**
-     * Find an existing attribute by entity type and code, or create it.
-     * For existing attributes, only translations are updated — other fields are not overwritten.
-     */
+    /** Find by entity type and code, or create. Existing attributes only get translations updated. */
     public function findOrCreate(string $entityType, string $code, array $data): Attribute
     {
         $attribute = $this->query()
@@ -89,10 +86,7 @@ class AttributeSchema extends BaseSchema
         Event::dispatch(new AttributeDeleted($this->deleteRecord($attribute)));
     }
 
-    /**
-     * Move an attribute to a new zero-based position within its group.
-     * Renumbers all siblings' sort values atomically.
-     */
+    /** Move an attribute to a new zero-based position within its group. */
     public function sort(Attribute $attribute, int $position): Attribute
     {
         $siblings = $this->query()

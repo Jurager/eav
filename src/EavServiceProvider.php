@@ -62,12 +62,7 @@ class EavServiceProvider extends ServiceProvider
         $this->registerScoutHook();
     }
 
-    /**
-     * Register citext column type support for PostgreSQL.
-     *
-     * Teaches PostgresGrammar to emit "citext" DDL, and adds $table->citext()
-     * to Blueprint — resolves to citext on PostgreSQL, text on MySQL/MariaDB.
-     */
+    /** Register citext column type support for PostgreSQL. */
     private function registerCitextSupport(): void
     {
         PostgresGrammar::macro('typeCitext', function (Fluent $column) {

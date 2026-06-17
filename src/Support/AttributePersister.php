@@ -11,18 +11,12 @@ use Jurager\Eav\Exceptions\MissingEntityException;
 use Jurager\Eav\Fields\Field;
 
 /**
- * Handles persistence of EAV attribute values and their translations.
- *
- * Two modes:
- *   Single-entity — construct with $entity, call persist() / save() / replace().
- *   Batch         — construct without arguments, stage with add(), execute with flush().
+ * Persists EAV attribute values and their translations.
  */
 class AttributePersister
 {
-    /** PDO bind parameter limit — applies to both MySQL and PostgreSQL. */
     private const int BIND_LIMIT = 65535;
 
-    /** EAV model aliases used throughout the persister. */
     private const string MODEL_ATTRIBUTE = 'entity_attribute';
 
     private const string MODEL_TRANSLATION = 'entity_translation';
@@ -32,22 +26,14 @@ class AttributePersister
         'value_boolean', 'value_date', 'value_datetime',
     ];
 
-    /** Translation table columns eligible for upsert conflict resolution. */
     private const array TRANSLATION_VALUE_COLUMNS = ['label', 'updated_at'];
 
     /** @var array<string, array<int|string, Collection<int, Field>>> */
     private array $pending = [];
 
-    /** @var array<int|string, Attributable>  Entity ID → entity instance, kept for error callbacks. */
+    /** @var array<int|string, Attributable> */
     private array $entities = [];
 
-    /**
-     * Transaction-scoped timestamp.
-     *
-     * Set once at the beginning of each persist/flush cycle so every row
-     * in the batch shares the same created_at / updated_at value.
-     * Null outside of a withinTimestamp() call.
-     */
     private ?Carbon $timestamp = null;
 
     /** @param  Attributable|null  $entity  Omit for batch mode. */
@@ -56,11 +42,7 @@ class AttributePersister
     ) {
     }
 
-    /**
-     * Persist filled fields for the current entity.
-     *
-     * @param  Collection<int, Field>  $fields
-     */
+    /** @param  Collection<int, Field>  $fields */
     public function persist(Collection $fields): void
     {
         if (! $this->entity || $fields->isEmpty()) {
@@ -73,19 +55,12 @@ class AttributePersister
         ));
     }
 
-    /** Save a single field. */
     public function save(Field $field): void
     {
         $this->persist(collect([$field]));
     }
 
-    /**
-     * Persist fields and delete all existing rows not in this set.
-     *
-     * @param  Collection<int, Field>  $fields
-     *
-     * @throws \Throwable
-     */
+    /** @param  Collection<int, Field>  $fields */
     public function replace(Collection $fields): void
     {
         if (! $this->entity || $fields->isEmpty()) {
@@ -103,11 +78,7 @@ class AttributePersister
         }));
     }
 
-    /**
-     * Delete entity_attribute rows for the current entity not matching the given attribute IDs.
-     *
-     * @param  array<int>  $attributeIds  Attribute IDs to keep.
-     */
+    /** @param  array<int>  $attributeIds */
     public function deleteExcluding(array $attributeIds): void
     {
         $this->delete(
@@ -115,11 +86,7 @@ class AttributePersister
         );
     }
 
-    /**
-     * Delete entity_attribute rows for the current entity matching the given attribute IDs.
-     *
-     * @param  array<int>  $attributeIds
-     */
+    /** @param  array<int>  $attributeIds */
     public function detach(array $attributeIds): void
     {
         $this->delete(
@@ -127,11 +94,7 @@ class AttributePersister
         );
     }
 
-    /**
-     * Delete entity_attribute records and their translations by record IDs.
-     *
-     * @param  array<int>  $ids
-     */
+    /** @param  array<int>  $ids */
     public function delete(array $ids): void
     {
         if (empty($ids)) {
@@ -148,11 +111,7 @@ class AttributePersister
             ->delete();
     }
 
-    /**
-     * Stage fields for an entity. Call flush() when the batch is complete.
-     *
-     * @param  Collection<int, Field>  $fields
-     */
+    /** @param  Collection<int, Field>  $fields */
     public function add(Attributable $entity, Collection $fields): void
     {
         if ($fields->isEmpty()) {
@@ -170,16 +129,7 @@ class AttributePersister
         $this->entities[$entityId] = $entity;
     }
 
-    /**
-     * Persist all staged items and clear the queue.
-     *
-     * Each entity type group is flushed in a single batch. If $onEntityError is provided,
-     * a failing group's exception is passed to the callback for every entity in that group
-     * so callers can compensate (e.g. delete the created model); otherwise the exception
-     * is re-thrown.
-     *
-     * @param  callable(\Throwable, Attributable): void|null  $onEntityError
-     */
+    /** @param  callable(\Throwable, Attributable): void|null  $onEntityError */
     public function flush(?callable $onEntityError = null): void
     {
         $this->withinTimestamp(function () use ($onEntityError): void {
@@ -202,14 +152,7 @@ class AttributePersister
         $this->entities = [];
     }
 
-    /**
-     * Persist a group of fields sharing the same entity type.
-     *
-     * Loads all existing attribute rows in one query, then splits work
-     * into update / insert / delete buckets for efficient batch operations.
-     *
-     * @param  array<int|string, Collection<int, Field>>  $grouped  Entity ID → fields.
-     */
+    /** @param  array<int|string, Collection<int, Field>>  $grouped */
     private function persistGroup(string $type, array $grouped): void
     {
         if (empty($grouped)) {
@@ -244,11 +187,7 @@ class AttributePersister
         $this->applyInserts(collect($inserts), $type);
     }
 
-    /**
-     * Upsert changed rows and sync their translations.
-     *
-     * @param  Collection<int, array{row: array, translations: array|null}>  $updates
-     */
+    /** @param  Collection<int, array{row: array, translations: array|null}>  $updates */
     private function applyUpdates(Collection $updates): void
     {
         if ($updates->isEmpty()) {
@@ -264,14 +203,7 @@ class AttributePersister
         $this->syncTranslations($updates);
     }
 
-    /**
-     * Insert new rows and create their translations.
-     *
-     * Bulk insert() doesn't return IDs, so we re-fetch newly created records
-     * and align them with translation payloads by (entity_id, attribute_id) + position.
-     *
-     * @param  Collection<int, array{row: array, translations: array|null}>  $inserts
-     */
+    /** @param  Collection<int, array{row: array, translations: array|null}>  $inserts */
     private function applyInserts(Collection $inserts, string $type): void
     {
         if ($inserts->isEmpty()) {
@@ -307,20 +239,7 @@ class AttributePersister
         );
     }
 
-    /**
-     * Sync translations for a set of updated or inserted entries.
-     *
-     * Uses upsert on (entity_type, entity_id, locale_id) to atomically
-     * create or update translation rows in a single statement, avoiding
-     * the DELETE + INSERT pattern which is less efficient and non-atomic.
-     *
-     * Translation semantics in $entries:
-     *   null  → non-localizable field, skip entirely
-     *   []    → localizable but empty, deletes all existing translations for this record
-     *   array → localizable with data, upserts translations
-     *
-     * @param  Collection<int, array{row: array, translations: array|null}>  $entries
-     */
+    /** @param  Collection<int, array{row: array, translations: array|null}>  $entries */
     private function syncTranslations(Collection $entries): void
     {
         // Separate localizable entries (non-null translations) from non-localizable ones.
@@ -360,15 +279,7 @@ class AttributePersister
         );
     }
 
-    /**
-     * Delete translation rows for locales no longer present in the payload.
-     *
-     * When a record previously had translations for locales [en, fr, de] and
-     * the new payload only contains [en, fr], we need to remove the stale [de] row.
-     * Upsert alone can't handle removals, so we delete first.
-     *
-     * @param  Collection<int, array>  $withData  Record ID → translation entries with data.
-     */
+    /** @param  Collection<int, array>  $withData */
     private function pruneStaleTranslations(Collection $withData): void
     {
         // Build a map of record ID → locale IDs that should be kept.
@@ -397,19 +308,6 @@ class AttributePersister
     }
 
     /**
-     * Split fields into three buckets by comparing desired state against existing DB rows.
-     *
-     * For each field, storage items are matched positionally against existing records:
-     *   - Overlapping positions      → update
-     *   - Extra items beyond existing → insert
-     *   - Extra records beyond items  → delete
-     *
-     * Localizable fields store null in the typed value column;
-     * actual values are persisted to entity_translations instead.
-     *
-     * Plain for-loops are intentional here — Collection::each() with 8+ captured
-     * references would be harder to read and debug with no functional benefit.
-     *
      * @param  array<int|string, Collection<int, Field>>  $grouped
      * @return array{
      *     updates: array<int, array{row: array, translations: array|null}>,
@@ -455,14 +353,7 @@ class AttributePersister
         return compact('updates', 'inserts', 'deletes');
     }
 
-    /**
-     * Build a single partition entry (row + translations payload).
-     *
-     * Shared by both update and insert branches in partition() to avoid
-     * duplicating the localizable/non-localizable value assignment logic.
-     *
-     * @return array{row: array, translations: array|null}
-     */
+    /** @return array{row: array, translations: array|null} */
     private function buildEntry(
         string $type,
         int|string $entityId,
@@ -481,18 +372,9 @@ class AttributePersister
     }
 
     /**
-     * Re-fetch records that were just bulk-inserted (since insert() doesn't return IDs).
-     *
-     * Uses `id > $maxIdBefore` to isolate only rows created in this batch.
-     * This is more reliable than filtering by created_at, which suffers from
-     * DATETIME precision loss (microseconds are truncated to seconds in MySQL,
-     * causing `created_at >= Carbon::now()` to miss rows inserted in the same second).
-     *
-     * Ordering by (entity_id, attribute_id, id) guarantees positional alignment
-     * with the original insert array for correct translation mapping.
-     *
-     * @param  Collection<int, array>  $rows  Inserted row payloads.
-     * @param  int  $maxIdBefore  Highest entity_attribute.id captured before the bulk insert.
+     * Re-fetch rows just inserted via bulk insert(), using id > $maxIdBefore
+     * to identify them. Ordered by (entity_id, attribute_id, id) for positional
+     * alignment with the original insert payloads.
      */
     private function fetchCreatedRecords(string $type, Collection $rows, int $maxIdBefore): Collection
     {
@@ -508,14 +390,8 @@ class AttributePersister
     }
 
     /**
-     * Align newly created record IDs with their translation payloads.
-     *
-     * Both collections are grouped by the same composite key (entity_id:attribute_id),
-     * then matched by position within each group — this works because
-     * fetchCreatedRecords() preserves insertion order via ORDER BY id.
-     *
      * @param  Collection<int, array{row: array, translations: array|null}>  $inserts
-     * @return array<int, array> Record ID → translation entries.
+     * @return array<int, array>
      */
     private function mapTranslationsToRecords(Collection $inserts, Collection $created): array
     {
@@ -542,15 +418,7 @@ class AttributePersister
         return $mapped;
     }
 
-    /**
-     * Build flat entity_translation rows ready for bulk insert/upsert.
-     *
-     * Uses mapWithKeys to deduplicate by (record_id:locale_id) — last entry wins
-     * if the same locale appears twice for a single record.
-     *
-     * @param  Collection<int, array<int, array{locale_id: int, value: mixed}>>  $map  Record ID → translations.
-     * @return Collection<int, array>
-     */
+    /** @param  Collection<int, array<int, array{locale_id: int, value: mixed}>>  $map */
     private function buildTranslationRows(Collection $map): Collection
     {
         return $map
@@ -571,12 +439,7 @@ class AttributePersister
             ->values();
     }
 
-    /**
-     * Split a collection into bind-safe chunks and pass each to the callback.
-     *
-     * Chunk size = BIND_LIMIT / column count, ensuring neither MySQL
-     * nor PostgreSQL exceeds its prepared statement parameter limit.
-     */
+    /** Split rows into bind-safe chunks respecting PDO parameter limits. */
     private function inChunks(Collection $rows, callable $callback): void
     {
         if ($rows->isEmpty()) {
@@ -589,11 +452,7 @@ class AttributePersister
         $rows->chunk($size)->each($callback);
     }
 
-    /**
-     * Build a blank entity_attribute row with all typed value columns set to null.
-     *
-     * @return array<string, mixed>
-     */
+    /** @return array<string, mixed> */
     private function blankRow(string $type, int|string $entityId, int $attrId): array
     {
         $ts = $this->timestamp ?? throw new \LogicException('blankRow() called outside withinTimestamp().');
@@ -608,12 +467,6 @@ class AttributePersister
         ];
     }
 
-    /**
-     * Set the transaction-scoped timestamp and execute the callback.
-     *
-     * Ensures every row in the batch shares the same created_at / updated_at,
-     * eliminating the need to pass $now through every method call.
-     */
     private function withinTimestamp(callable $callback): void
     {
         $this->timestamp = Carbon::now();

@@ -24,8 +24,6 @@ use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
 
 /**
- * Add attribute support to Eloquent models.
- *
  * @property Collection $assignedAttributes
  *
  * @phpstan-require-implements Attributable

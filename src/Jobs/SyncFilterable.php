@@ -14,12 +14,7 @@ use Laravel\Scout\Engines\MeilisearchEngine;
 use Meilisearch\Client;
 
 /**
- * Sync Meilisearch filterableAttributes for the given entity type.
- *
- * Dispatched by AttributeObserver when an attribute's filterable flag changes
- * or when an attribute is deleted or restored.
- *
- * No-op when Scout is not installed or the driver is not Meilisearch.
+ * Sync filterable attributes for a given entity type.
  */
 class SyncFilterable implements ShouldBeUnique, ShouldQueue
 {

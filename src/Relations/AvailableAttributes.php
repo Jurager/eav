@@ -9,15 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 /**
- * Read-only relation exposing an entity's *available attributes* (its applicable
- * attribute schema, including nested-set scope and inheritance) as an eager-loadable
- * JSON:API relationship.
- *
- * Unlike a plain `belongsToMany`, the set is not a single pivot keyed to the parent:
- * it is computed per parent by a resolver — typically wrapping
- * {@see \Jurager\Eav\Concerns\HasAttributes::availableAttributesQuery()} — which can
- * span the nested-set subtree and inheritance. Because the query differs per parent,
- * eager loading is resolved per parent (one query per loaded model).
+ * Read-only relation exposing an entity's available attribute schema (including
+ * scope and inheritance) as an eager-loadable JSON:API relationship.
  */
 class AvailableAttributes extends Relation
 {
@@ -65,9 +58,6 @@ class AvailableAttributes extends Relation
             : $this->related->newCollection();
     }
 
-    /**
-     * Per-parent results are assigned in match(); there is no shared eager query.
-     */
     public function getEager(): Collection
     {
         return $this->related->newCollection();

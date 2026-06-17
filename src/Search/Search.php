@@ -14,23 +14,7 @@ use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
 
 /**
- * Fluent builder for faceted search over an indexed entity.
- *
- * Translates a JSON:API `filter[...]` array into a Meilisearch filter expression
- * and delegates aggregation to {@see Facet} value objects. Each facet pulls its own
- * distribution from the response; this class only runs the queries (including the
- * disjunctive facet-only searches) and groups the results by their dotted prefix.
- *
- * Usage:
- *   Search::for('product')
- *       ->query($q)
- *       ->filter($filter)
- *       ->fieldMap(['categories.category_id' => 'category_ids'])
- *       ->facets([
- *           Facet::terms($attributeCodes)->disjunctive(),
- *           Facet::range($priceFields),
- *       ])
- *       ->search($perPage, $page);
+ * Fluent builder for faceted search over indexed entities.
  */
 class Search
 {
@@ -140,12 +124,7 @@ class Search
         return array_key_exists($key, $this->filter);
     }
 
-    /**
-     * Facet-only search with $excludeKey's own filter dropped — the building block
-     * for disjunctive facets. Returns no hits, only the requested facet aggregations.
-     *
-     * @param  string[]  $fields
-     */
+    /** @param  string[]  $fields */
     public function facetOnlySearch(string $excludeKey, array $fields, FacetContext $ctx): MeilisearchResult
     {
         return $this->index->search($this->query, array_filter([
@@ -167,12 +146,7 @@ class Search
         return new FacetContext($attributes, $this->fieldFactory, $this->localeRegistry->current());
     }
 
-    /**
-     * Resolves a filter key to its Meilisearch field: facets get first say, then fieldMap().
-     * Returns null for unknown keys (dropped) or the excluded key (disjunctive pass).
-     *
-     * @return \Closure(string): ?string
-     */
+    /** @return \Closure(string): ?string */
     private function resolver(FacetContext $ctx, ?string $exclude = null): \Closure
     {
         return function (string $key) use ($ctx, $exclude): ?string {
@@ -190,13 +164,7 @@ class Search
         };
     }
 
-    /**
-     * Nests dotted keys under their prefix: "attributes.color" and "prices.retail"
-     * become ["attributes" => ["color" => …], "prices" => ["retail" => …]].
-     *
-     * @param  array<string, mixed>  $flat
-     * @return array<string, mixed>
-     */
+    /** @param  array<string, mixed>  $flat */
     private function group(array $flat): array
     {
         $result = [];

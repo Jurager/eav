@@ -58,19 +58,6 @@ class TranslationManager
     }
 
     /**
-     * Persist translations for any model with a translations() MorphToMany relation.
-     *
-     * Entries without a label are discarded. Optional params (hint, placeholder,
-     * short_name) are packed into the params column; absent values are omitted.
-     *
-     * Uses upsert + targeted delete instead of sync() to avoid the non-atomic
-     * "delete-all then re-insert" window where the model would briefly have no
-     * translations visible to concurrent readers.
-     *
-     * When $partial is false (default), locales not present in $translations are
-     * deleted. Set $partial to true to only upsert the given locales without removing
-     * existing translations for other locales.
-     *
      * @param  array<int, array<string, mixed>>  $translations
      *
      * @throws \JsonException

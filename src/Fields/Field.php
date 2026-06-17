@@ -11,7 +11,7 @@ use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
 /**
- * Base attribute field: validation, localization, storage mapping, and search indexing.
+ * Base attribute field.
  */
 abstract class Field
 {
@@ -40,9 +40,7 @@ abstract class Field
 
     abstract public function column(): string;
 
-    /**
-     * Validate a single typed value. Return false and call addError() to report failures.
-     */
+    /** Return false and call addError() to report failures. */
     abstract protected function validate(mixed $value, ?Attributable $entity = null): bool;
 
     abstract protected function normalize(mixed $value): mixed;
@@ -52,10 +50,7 @@ abstract class Field
         return $value;
     }
 
-    /**
-     * Transform a raw stored value into its high-level representation.
-     * Default: identity. Override to convert raw scalars into domain objects.
-     */
+    /** Override to convert raw stored values into domain objects. */
     public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
     {
         return $rawValue;
@@ -78,10 +73,7 @@ abstract class Field
         return $this->entity;
     }
 
-    /**
-     * Validate and normalize an incoming value payload.
-     * Returns false when validation fails; errors are available via errors().
-     */
+    /** Returns false when validation fails; errors are available via errors(). */
     public function fill(mixed $values): bool
     {
         $this->validationErrors = [];
@@ -100,11 +92,7 @@ abstract class Field
         return true;
     }
 
-    /**
-     * Hydrate field values from stored entity attribute records.
-     *
-     * @param  Collection<int, object>  $models
-     */
+    /** @param  Collection<int, object>  $models */
     public function hydrate(Collection $models): void
     {
         if ($models->isEmpty()) {
@@ -175,10 +163,6 @@ abstract class Field
         return $result;
     }
 
-    /**
-     * Return the typed value for a specific locale.
-     * Passed through resolve() so subclasses can rehydrate domain objects.
-     */
     public function value(?int $localeId = null): mixed
     {
         if (empty($this->values)) {
@@ -195,9 +179,6 @@ abstract class Field
         return $key !== false ? $this->resolveValue($this->values[$key]['value']) : null;
     }
 
-    /**
-     * Set the value for a specific locale without persisting.
-     */
     public function set(mixed $value, ?int $localeId = null): void
     {
         $normalized = $this->normalize($value);
@@ -216,9 +197,7 @@ abstract class Field
         $this->values[] = ['locale_id' => $localeId, 'value' => $normalized];
     }
 
-    /**
-     * Remove the value for a specific locale, or all values for non-localized fields.
-     */
+    /** Remove the value for a specific locale, or all values for non-localized fields. */
     public function forget(?int $localeId = null): void
     {
         if ($localeId === null || ! $this->isLocalizable()) {
