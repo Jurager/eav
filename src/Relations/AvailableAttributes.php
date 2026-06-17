@@ -25,12 +25,12 @@ class AvailableAttributes extends Relation
 
     public function addConstraints(): void
     {
-        // No shared constraints: the attribute set is resolved per parent.
+        //
     }
 
     public function addEagerConstraints(array $models): void
     {
-        // Resolved per parent in match(); nothing to constrain on the shared query.
+        //
     }
 
     public function initRelation(array $models, $relation): array
@@ -63,11 +63,7 @@ class AvailableAttributes extends Relation
         return $this->related->newCollection();
     }
 
-    /**
-     * Resolve the available-attributes query for a single parent and fetch the models.
-     *
-     * @return Collection<int, Model>
-     */
+    /** @return Collection<int, Model> */
     protected function resolveFor(Model $parent): Collection
     {
         $query = ($this->resolver)($parent);

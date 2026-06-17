@@ -39,7 +39,6 @@ trait HasAttributes
     {
         static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
 
-        // The entity attribute schema is implemented as an eager-loaded relationship (scope + inheritance).
         static::resolveRelationUsing('available_attributes', fn (Model $model) => $model->availableAttributesRelation(
             fn (Model $entity) => $entity->availableAttributesQuery($entity->attributeParameters()),
         ));
@@ -131,13 +130,7 @@ trait HasAttributes
     }
 
     /**
-     * Expose available attributes as an eager-loadable.
-     *
-     * The resolver receives the parent model and returns the attribute query for it
-     * (typically built from {@see availableAttributesQuery()}, optionally constrained,
-     * e.g. filterable/searchable). This makes the applicable attribute schema — with
-     * nested-set scope and inheritance — available via `include`, which a plain
-     * `belongsToMany` cannot express.
+     * Expose the model's available attributes as an eager-loadable relation.
      *
      * @param  Closure(Model): (Builder|null)  $resolver
      */
@@ -147,16 +140,11 @@ trait HasAttributes
     }
 
     /**
-     * Relation exposing another entity's available attributes, scoped to this model.
-     * For models that act as an attribute scope of $entityClass (e.g. a category for
-     * product attributes); optionally constrained (e.g. filterable).
-     *
-     * $scope resolves the scope entity ids for a given parent and defaults to the
-     * model's nested-set subtree ({@see attributeScopeSubtreeIds()}).
+     * Relation exposing another entity's available attributes scoped to this model.
      *
      * @param  class-string  $entityClass
-     * @param  Closure(static): array<int>|null  $scope  Scope entity ids for a given parent.
-     * @param  Closure(Builder): Builder|null  $constrain  Extra constraints on the attribute query.
+     * @param  Closure(static): array<int>|null  $scope  Scope entity ids; defaults to the nested-set subtree.
+     * @param  Closure(Builder): Builder|null  $constrain
      */
     public function scopedAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): AvailableAttributes
     {
@@ -170,10 +158,7 @@ trait HasAttributes
     }
 
     /**
-     * Ids of this model's nested-set subtree (including itself) — the default attribute
-     * scope when the model acts as a scope for another entity's attributes
-     * ({@see scopedAttributesRelation()}). Falls back to the model's own key when it is
-     * not a nested set. Override for a different scope policy.
+     * Nested-set subtree ids (including self) used as the default attribute scope.
      *
      * @return array<int>
      */
@@ -376,10 +361,8 @@ trait HasAttributes
     }
 
     /**
-     * Relation through which attributes are assigned to this model when it acts as an
-     * attribute scope for another entity (e.g. the category_attribute pivot for categories).
-     * Used by scoped resolution to discover the pivot table/keys; the relation is not executed.
-     * Defaults to {@see attributes()}; override only to decouple the scope pivot from it.
+     * Pivot relation used to resolve scoped attributes; defaults to {@see attributes()}.
+     * Override only to decouple the scope pivot from it.
      */
     public function attributeScopeRelation(): ?BelongsToMany
     {
