@@ -40,7 +40,6 @@ abstract class Field
 
     abstract public function column(): string;
 
-    /** Return false and call addError() to report failures. */
     abstract protected function validate(mixed $value, ?Attributable $entity = null): bool;
 
     abstract protected function normalize(mixed $value): mixed;
@@ -49,8 +48,6 @@ abstract class Field
     {
         return $value;
     }
-
-    /** Override to convert raw stored values into domain objects. */
     public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
     {
         return $rawValue;
@@ -92,7 +89,9 @@ abstract class Field
         return true;
     }
 
-    /** @param  Collection<int, object>  $models */
+    /**
+     * @param  Collection<int, object>  $models  entity_attribute rows.
+     */
     public function hydrate(Collection $models): void
     {
         if ($models->isEmpty()) {
@@ -111,8 +110,6 @@ abstract class Field
 
             return;
         }
-
-        $models->loadMissing('translations');
 
         $byLocale = [];
         foreach ($models as $model) {
@@ -281,10 +278,6 @@ abstract class Field
     {
         return $model->{$this->column()};
     }
-
-    /**
-     * Apply resolve() to a raw value or each element of an array (multi-value fields).
-     */
     protected function resolveValue(mixed $raw): mixed
     {
         if ($raw === null) {
