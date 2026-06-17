@@ -87,12 +87,19 @@ trait HasAttributes
 
     /**
      * Return an AttributeValidator for this entity.
-     * Registers any model-defined unique scopes before returning the instance.
+     * Unique scopes are registered once per model class (process lifetime).
      */
     protected function validator(): AttributeValidator
     {
-        foreach (static::attributeUniqueScopes() as $code => $callback) {
-            AttributeValidator::registerUniqueScope($this->attributeEntityType(), $code, $callback);
+        static $booted = [];
+
+        if (! isset($booted[static::class])) {
+
+            foreach (static::attributeUniqueScopes() as $code => $callback) {
+                AttributeValidator::registerUniqueScope($this->attributeEntityType(), $code, $callback);
+            }
+
+            $booted[static::class] = true;
         }
 
         return new AttributeValidator($this, $this->attributeManager);
