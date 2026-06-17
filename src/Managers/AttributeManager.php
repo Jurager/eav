@@ -16,6 +16,7 @@ use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributePersister;
+use Jurager\Eav\Support\BatchAttributePersister;
 use Jurager\Eav\Support\AttributeQueryBuilder;
 use Jurager\Eav\Support\EavModels;
 
@@ -175,7 +176,7 @@ class AttributeManager
         }
 
         foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
-            $persister = new AttributePersister();
+            $persister = new BatchAttributePersister();
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];

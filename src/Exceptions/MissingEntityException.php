@@ -12,8 +12,4 @@ class MissingEntityException extends EavException
         return new self('Entity is required. Use AttributeManager::for($entity).');
     }
 
-    public static function forPersister(): self
-    {
-        return new self('Entity is required. Use new AttributePersister($entity).');
-    }
 }
