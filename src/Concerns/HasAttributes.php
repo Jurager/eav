@@ -2,11 +2,15 @@
 
 namespace Jurager\Eav\Concerns;
 
+use Closure;
 use Illuminate\Contracts\Container\BindingResolutionException;
 use Illuminate\Contracts\Container\CircularDependencyException;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Jurager\Eav\Relations\AvailableAttributes;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use JsonException;
@@ -34,6 +38,11 @@ trait HasAttributes
     public static function bootHasAttributes(): void
     {
         static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
+
+        // The entity attribute schema is implemented as an eager-loaded relationship (scope + inheritance).
+        static::resolveRelationUsing('available_attributes', fn (Model $model) => $model->availableAttributesRelation(
+            fn (Model $entity) => $entity->availableAttributesQuery($entity->attributeParameters()),
+        ));
     }
 
     /**
@@ -119,6 +128,66 @@ trait HasAttributes
         }
 
         return $this->globalAttributesQuery();
+    }
+
+    /**
+     * Expose available attributes as an eager-loadable.
+     *
+     * The resolver receives the parent model and returns the attribute query for it
+     * (typically built from {@see availableAttributesQuery()}, optionally constrained,
+     * e.g. filterable/searchable). This makes the applicable attribute schema — with
+     * nested-set scope and inheritance — available via `include`, which a plain
+     * `belongsToMany` cannot express.
+     *
+     * @param  Closure(Model): (Builder|null)  $resolver
+     */
+    public function availableAttributesRelation(Closure $resolver): AvailableAttributes
+    {
+        return new AvailableAttributes(EavModels::query('attribute'), $this, $resolver);
+    }
+
+    /**
+     * Relation exposing another entity's available attributes, scoped to this model.
+     * For models that act as an attribute scope of $entityClass (e.g. a category for
+     * product attributes); optionally constrained (e.g. filterable).
+     *
+     * $scope resolves the scope entity ids for a given parent and defaults to the
+     * model's nested-set subtree ({@see attributeScopeSubtreeIds()}).
+     *
+     * @param  class-string  $entityClass
+     * @param  Closure(static): array<int>|null  $scope  Scope entity ids for a given parent.
+     * @param  Closure(Builder): Builder|null  $constrain  Extra constraints on the attribute query.
+     */
+    public function scopedAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): AvailableAttributes
+    {
+        $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
+
+        return $this->availableAttributesRelation(static function (Model $parent) use ($entityClass, $scope, $constrain): ?Builder {
+            $query = AttributeManager::for($entityClass)->query($scope($parent));
+
+            return $query !== null && $constrain !== null ? $constrain($query) : $query;
+        });
+    }
+
+    /**
+     * Ids of this model's nested-set subtree (including itself) — the default attribute
+     * scope when the model acts as a scope for another entity's attributes
+     * ({@see scopedAttributesRelation()}). Falls back to the model's own key when it is
+     * not a nested set. Override for a different scope policy.
+     *
+     * @return array<int>
+     */
+    public function attributeScopeSubtreeIds(): array
+    {
+        if (isset($this->_lft, $this->_rgt)) {
+            return static::query()
+                ->where('_lft', '>=', $this->_lft)
+                ->where('_rgt', '<=', $this->_rgt)
+                ->pluck($this->getKeyName())
+                ->all();
+        }
+
+        return [$this->getKey()];
     }
 
     /**
@@ -269,8 +338,8 @@ trait HasAttributes
     }
 
     /**
-     * Attribute definitions assigned to this entity via the EAV pivot.
-     * Override in scope-provider models (e.g. Category) to return a BelongsToMany instead.
+     * Attribute definitions assigned to this entity via the EAV pivot (its values).
+     * Scope-provider models declare their applicability pivot via {@see attributeScopeRelation()}.
      */
     public function attributes(): MorphToMany
     {
@@ -304,6 +373,17 @@ trait HasAttributes
     protected static function attributeScopeModel(): ?string
     {
         return null;
+    }
+
+    /**
+     * Relation through which attributes are assigned to this model when it acts as an
+     * attribute scope for another entity (e.g. the category_attribute pivot for categories).
+     * Used by scoped resolution to discover the pivot table/keys; the relation is not executed.
+     * Defaults to {@see attributes()}; override only to decouple the scope pivot from it.
+     */
+    public function attributeScopeRelation(): ?BelongsToMany
+    {
+        return $this->attributes();
     }
 
     /**
@@ -367,11 +447,7 @@ trait HasAttributes
             return null;
         }
 
-        if (! method_exists($instance, 'attributes')) {
-            return null;
-        }
-
-        $relation = $instance->attributes();
+        $relation = $instance->attributeScopeRelation();
 
         if ($relation === null) {
             return null;
