@@ -7,8 +7,8 @@ use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Managers\Schema\AttributeSchema;
 use Jurager\Eav\Managers\Schema\EnumSchema;
 use Jurager\Eav\Managers\Schema\GroupSchema;
-use Jurager\Eav\Managers\Schema\TypeSchema;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -21,7 +21,6 @@ class SchemaManager
         private AttributeSchema $attributeSchema,
         private GroupSchema $groupSchema,
         private EnumSchema $enumSchema,
-        private TypeSchema $typeSchema,
     ) {}
 
     public function translations(): TranslationManager
@@ -44,9 +43,9 @@ class SchemaManager
         return $this->enumSchema;
     }
 
-    public function type(): TypeSchema
+    public function findType(int $id): AttributeType
     {
-        return $this->typeSchema;
+        return EavModels::query('attribute_type')->findOrFail($id);
     }
 
     /** @param  callable(Builder): mixed|null  $modifier */
