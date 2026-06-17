@@ -14,13 +14,10 @@ use Illuminate\Database\Eloquent\Relations\Relation;
  */
 class AvailableAttributes extends Relation
 {
-    /**
-     * @param  Builder  $query  Base query of the related (attribute) model.
-     * @param  Closure(Model): (Builder|null)  $resolver  Per-parent available-attributes query.
-     */
+    /** @param  Closure(Model): (Builder|null)  $resolver */
     public function __construct(Builder $query, Model $parent, protected Closure $resolver)
     {
-        parent::__construct($query, $parent);
+        parent::__construct($resolver($parent) ?? $query->whereKey([]), $parent);
     }
 
     public function addConstraints(): void
@@ -53,9 +50,7 @@ class AvailableAttributes extends Relation
 
     public function getResults(): Collection
     {
-        return $this->parent->getKey() !== null
-            ? $this->resolveFor($this->parent)
-            : $this->related->newCollection();
+        return $this->query->get();
     }
 
     public function getEager(): Collection

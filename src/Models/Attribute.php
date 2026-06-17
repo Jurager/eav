@@ -119,14 +119,6 @@ class Attribute extends Model
     }
 
     /**
-     * Scope: filter offer attributes.
-     */
-    public function scopeWhereNotOffer(Builder $query): Builder
-    {
-        return $query->where('offer_attribute', false);
-    }
-
-    /**
      * Scope: eager load common relationships.
      */
     public function scopeWithRelations(Builder $query): Builder
