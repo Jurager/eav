@@ -2,6 +2,9 @@
 
 namespace Jurager\Eav\Observers;
 
+use Jurager\Eav\Events\AttributeCreated;
+use Jurager\Eav\Events\AttributeDeleted as AttributeDeletedEvent;
+use Jurager\Eav\Events\AttributeUpdated;
 use Jurager\Eav\Jobs\PruneAttribute;
 use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Jobs\SyncSearchable;
@@ -28,6 +31,8 @@ class AttributeObserver
         if ($attribute->filterable) {
             $this->syncFilterable($attribute);
         }
+
+        AttributeCreated::dispatch($attribute);
     }
 
     /**
@@ -45,6 +50,8 @@ class AttributeObserver
             $this->syncFilterable($attribute);
             $this->syncSearchable($attribute);
         }
+
+        AttributeUpdated::dispatch($attribute);
     }
 
     /**
@@ -69,6 +76,8 @@ class AttributeObserver
         EavModels::query('entity_attribute')
             ->where('attribute_id', $attribute->id)
             ->delete();
+
+        AttributeDeletedEvent::dispatch($attribute);
     }
 
     /**
@@ -88,6 +97,8 @@ class AttributeObserver
         }
 
         PruneAttribute::dispatch($attribute->id);
+
+        AttributeDeletedEvent::dispatch($attribute);
     }
 
     /**

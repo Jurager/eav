@@ -4,6 +4,7 @@ namespace Jurager\Eav\Support;
 
 use Illuminate\Support\Collection;
 use Jurager\Eav\Contracts\Hierarchical;
+use Jurager\Eav\Exceptions\CircularInheritanceException;
 
 /**
  * Resolves attribute inheritance through entity hierarchies.
@@ -76,14 +77,19 @@ class AttributeInheritanceResolver
         return $base->merge($filtered)->unique('id');
     }
 
-    /** Walk parent_id chain level-by-level in batched queries. */
+    /**
+     * Walk parent_id chain level-by-level in batched queries.
+     *
+     * @throws CircularInheritanceException
+     */
     protected function resolveWithParentId(Collection $toInherit, Collection $base, string $model): Collection
     {
         $currentIds = $toInherit->pluck('parent_id')->filter()->unique();
         $allParents = collect();
         $maxDepth = (int) config('eav.max_inheritance_depth', 10);
+        $remaining = $maxDepth;
 
-        while ($currentIds->isNotEmpty() && $maxDepth-- > 0) {
+        while ($currentIds->isNotEmpty() && $remaining-- > 0) {
             $parents = $model::query()
                 ->whereIn('id', $currentIds)
                 ->select((new $model())->inheritanceScopeColumns())
@@ -101,6 +107,10 @@ class AttributeInheritanceResolver
                 ->pluck('parent_id')
                 ->unique()
                 ->diff($allParents->keys());
+        }
+
+        if ($currentIds->isNotEmpty()) {
+            throw CircularInheritanceException::maxDepthExceeded($model, $currentIds->all(), $maxDepth);
         }
 
         return $base->merge($allParents)->unique('id');
