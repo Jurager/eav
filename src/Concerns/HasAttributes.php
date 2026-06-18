@@ -198,7 +198,7 @@ trait HasAttributes
 
         $sub = $this->attributeFilterBuilder()->subquery($code, $value, $operator);
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query->whereKey([]);
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -220,7 +220,7 @@ trait HasAttributes
     {
         $sub = $this->attributeFilterBuilder()->subquery($code, [$min, $max], 'between');
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query->whereKey([]);
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -232,7 +232,7 @@ trait HasAttributes
     {
         $sub = $this->attributeFilterBuilder()->subquery($code, $values, 'in');
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query->whereKey([]);
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -255,11 +255,9 @@ trait HasAttributes
                 $condition['operator'] ?? '=',
             );
 
-            if (! $sub) {
-                return $query->whereKey([]);
+            if ($sub) {
+                $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
             }
-
-            $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
         }
 
         return $query;
@@ -278,7 +276,7 @@ trait HasAttributes
         $sub = $this->attributeFilterBuilder()->subquery($code, $value, '=');
 
         if (! $sub) {
-            return $query->whereKey([]);
+            return $query;
         }
 
         $model = $query->getModel();
@@ -425,7 +423,6 @@ trait HasAttributes
             return null;
         }
 
-        // Resolve inheritance
         $allEntities = app(AttributeInheritanceResolver::class)
             ->resolve($entities, $model);
 
