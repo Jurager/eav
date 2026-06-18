@@ -433,7 +433,7 @@ class AttributeManager
             $this->enumRegistry(),
             fn (string $code) => $this->field($code),
             fn (string $code) => $this->entity?->attributeEntityType()
-                ?? $this->fields[$code]?->attribute()->entity_type,
+                ?? ($this->fields[$code] ?? null)?->attribute()->entity_type,
         );
     }
 

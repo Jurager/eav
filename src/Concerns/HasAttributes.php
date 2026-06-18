@@ -18,6 +18,7 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Contracts\Hierarchical;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Managers\AttributeManager;
+use Jurager\Eav\Support\AttributeQueryBuilder;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Support\AttributeValidator;
 use Jurager\Eav\Support\EavModels;
@@ -173,6 +174,18 @@ trait HasAttributes
     }
 
     /**
+     * Builder for attribute-filter subqueries, resolved globally by entity type.
+     *
+     * Filtering must not depend on the instance's scoped schema (which is empty
+     * for a transient/relation-scoped model, e.g. a category-scoped Product) —
+     * otherwise no attribute resolves and the filter silently matches everything.
+     */
+    protected function attributeFilterBuilder(): AttributeQueryBuilder
+    {
+        return AttributeManager::for($this->attributeEntityType())->builder();
+    }
+
+    /**
      * Scope: filter by a single attribute value.
      *
      * @throws JsonException|BindingResolutionException
@@ -183,9 +196,9 @@ trait HasAttributes
             return $this->scopeWhereAttributeTree($query, $code, $value);
         }
 
-        $sub = $this->eav()->builder()->subquery($code, $value, $operator);
+        $sub = $this->attributeFilterBuilder()->subquery($code, $value, $operator);
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query->whereKey([]);
     }
 
     /**
@@ -205,9 +218,9 @@ trait HasAttributes
      */
     public function scopeWhereAttributeBetween(Builder $query, string $code, float|int $min, float|int $max): Builder
     {
-        $sub = $this->eav()->builder()->subquery($code, [$min, $max], 'between');
+        $sub = $this->attributeFilterBuilder()->subquery($code, [$min, $max], 'between');
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query->whereKey([]);
     }
 
     /**
@@ -217,9 +230,9 @@ trait HasAttributes
      */
     public function scopeWhereAttributeIn(Builder $query, string $code, array $values): Builder
     {
-        $sub = $this->eav()->builder()->subquery($code, $values, 'in');
+        $sub = $this->attributeFilterBuilder()->subquery($code, $values, 'in');
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query->whereKey([]);
     }
 
     /**
@@ -233,7 +246,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributes(Builder $query, array $conditions): Builder
     {
-        $builder = $this->eav()->builder();
+        $builder = $this->attributeFilterBuilder();
 
         foreach ($conditions as $condition) {
             $sub = $builder->subquery(
@@ -242,9 +255,11 @@ trait HasAttributes
                 $condition['operator'] ?? '=',
             );
 
-            if ($sub) {
-                $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
+            if (! $sub) {
+                return $query->whereKey([]);
             }
+
+            $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
         }
 
         return $query;
@@ -260,10 +275,10 @@ trait HasAttributes
      */
     public function scopeWhereAttributeTree(Builder $query, string $code, mixed $value): Builder
     {
-        $sub = $this->eav()->builder()->subquery($code, $value, '=');
+        $sub = $this->attributeFilterBuilder()->subquery($code, $value, '=');
 
         if (! $sub) {
-            return $query;
+            return $query->whereKey([]);
         }
 
         $model = $query->getModel();
@@ -276,7 +291,7 @@ trait HasAttributes
             ->toArray();
 
         if (empty($matchingIds)) {
-            return $query->whereRaw('1 = 0');
+            return $query->whereKey([]);
         }
 
         $treeQuery = $model->newQuery();
@@ -295,7 +310,7 @@ trait HasAttributes
         }
 
         if (empty($allIds)) {
-            return $query->whereRaw('1 = 0');
+            return $query->whereKey([]);
         }
 
         return $query->whereIn($qualifiedKey, $allIds);
@@ -436,13 +451,11 @@ trait HasAttributes
         $foreignKey = $relation->getForeignPivotKeyName();
         $relatedKey = $relation->getRelatedPivotKeyName();
 
-        return EavModels::query('attribute')
-            ->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
-                $query->from($pivotTable)
-                    ->select($relatedKey)
-                    ->whereIn($foreignKey, $entityIds)
-                    ->distinct();
-            })
-            ->withRelations();
+        return EavModels::query('attribute')->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
+            $query->from($pivotTable)
+                ->select($relatedKey)
+                ->whereIn($foreignKey, $entityIds)
+                ->distinct();
+        })->withRelations();
     }
 }
