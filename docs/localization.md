@@ -5,25 +5,34 @@ weight: 70
 
 ## Locale Registry
 
-`LocaleRegistry` resolves locale IDs and codes using a single cached query per request. You may use it anywhere you need to translate between the two:
+`LocaleRegistry` is a scoped singleton that caches locale data for the duration of a request. It is the single source of truth for resolving locale IDs and codes:
 
 ```php
 use Jurager\Eav\Registry\LocaleRegistry;
 
 $registry = app(LocaleRegistry::class);
 
-$registry->defaultLocaleId();    // ID for the app.locale config value
-$registry->localeId('en');       // locale ID by code
-$registry->localeCode(1);        // locale code by ID
-$registry->resolve('ru');        // ID by code, or default if not found
-$registry->validLocaleIds();     // all valid locale IDs
-$registry->isValidLocaleId(2);   // check if a locale ID exists
-$registry->forget();             // clear cache (useful in tests)
+$registry->all();           // Collection<id, code>
+$registry->ids();           // array of all locale IDs
+$registry->code(1);         // ?string — locale code by ID
+$registry->find('en');      // ?int — locale ID by code
+$registry->has(1);          // bool — whether a locale ID exists
+$registry->resolve('ru');   // int — ID by code, or default() if not found
+$registry->current();       // int — first active locale that exists, or default()
+$registry->default();       // int — ID for app.locale config value
+$registry->forget();        // clear cache (useful in tests)
+```
+
+The registry is `scoped`, so in Octane environments the cache is reset between requests automatically. Active locales for a request are set via `set()`, typically from an `Accept-Language` middleware:
+
+```php
+$registry->set(['ru', 'en']);  // mark request-active locales
+$registry->get();              // ?array — the active locale codes, or null
 ```
 
 ## Per-Locale Attribute Values
 
-When an attribute has `localizable: true`, values are stored per locale. You may write multiple translations in a single call and read them back by locale ID:
+When an attribute has `localizable: true`, values are stored per locale. Write multiple translations in a single call and read them back by locale ID:
 
 ```php
 // Write
@@ -36,11 +45,11 @@ $product->eav()->set('name', [
 $product->eav()->value('name', localeId: 2); // 'Футболка'
 ```
 
-When no locale is specified, the default locale from `LocaleRegistry::defaultLocaleId()` is used.
+When no locale is specified, the default locale from `LocaleRegistry::default()` is used.
 
 ## Managing Locales
 
-`TranslationManager` handles locale CRUD. Each write method flushes the `LocaleRegistry` cache automatically, so subsequent lookups always see the latest data:
+`TranslationManager` handles locale CRUD. Each write method flushes the `LocaleRegistry` cache automatically:
 
 ```php
 use Jurager\Eav\Managers\TranslationManager;
@@ -91,7 +100,20 @@ $manager->save($attribute, [
 ], partial: true);
 ```
 
-When you use `SchemaManager` to create or update attributes, translations are handled automatically — pass the `translations` array in the data payload. You should reach for `TranslationManager::save()` directly only for non-EAV models or standalone locale management.
+When you use `SchemaManager` to create or update attributes, translations are handled automatically — pass the `translations` array in the data payload. Reach for `TranslationManager::save()` directly only for non-EAV models or standalone locale management.
+
+## Batch Saving Translations
+
+To sync translations for many models in a single upsert, use `batch()`. This is significantly faster than calling `save()` in a loop during imports:
+
+```php
+app(TranslationManager::class)->batch([
+    [$attribute1, [['locale_id' => 1, 'label' => 'Color'], ['locale_id' => 2, 'label' => 'Цвет']]],
+    [$attribute2, [['locale_id' => 1, 'label' => 'Size'],  ['locale_id' => 2, 'label' => 'Размер']]],
+]);
+```
+
+Each element is a two-item tuple of `[Model, translations]`. The second element uses the same format as `save()`. Entries without a `label` are discarded.
 
 ## Translating Non-EAV Models
 
@@ -110,12 +132,13 @@ class Region extends Model
                 'entity_translations',
             )
             ->using(EavModels::class('entity_translation'))
-            ->withPivot(['id', 'label', 'params', 'updated_at']);
+            ->withPivot(['id', 'label', 'params', 'updated_at'])
+            ->active();
     }
 }
 ```
 
-Once the relation is in place, call `save()` exactly as you would for an EAV model:
+The `active()` scope restricts the relation to the locales set for the current request. Once the relation is in place, call `save()` exactly as you would for an EAV model:
 
 ```php
 app(TranslationManager::class)->save($region, [

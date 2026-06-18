@@ -5,7 +5,7 @@ weight: 50
 
 ## Introduction
 
-The `SchemaManager` is the entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values. You may resolve it from the container wherever you need it:
+`SchemaManager` is the entry point for creating, updating, deleting, and sorting attribute definitions, groups, and enum values. Resolve it from the container wherever you need it:
 
 ```php
 use Jurager\Eav\Managers\SchemaManager;
@@ -16,8 +16,6 @@ $schema = app(SchemaManager::class);
 `SchemaManager` manages the *schema* — what attributes exist and how they are configured. For reading and writing attribute *values* on entity instances, use the `eav()` accessor described in [Reading & Writing Attributes](attributes.md).
 
 ## Managing Attributes
-
-`SchemaManager` delegates attribute operations to `AttributeSchema`, accessed via `$schema->attribute()`.
 
 ### Creating an Attribute
 
@@ -58,15 +56,17 @@ Type constraints are re-evaluated on every update. An `AttributeUpdated` event i
 $schema->attribute()->delete($attribute);
 ```
 
-An `AttributeDeleted` event is dispatched with a pre-deletion snapshot of the attribute.
+An `AttributeDeleted` event is dispatched.
 
 ### Sorting Attributes
 
-To move an attribute to a specific position within its group, call `sort` with a zero-based index. Siblings are renumbered automatically:
+To move an attribute to a specific position, call `sort` with a zero-based index. Siblings are renumbered automatically:
 
 ```php
 $schema->attribute()->sort($attribute, position: 0); // move to top
 ```
+
+When `attribute_group_id` is set, sorting is scoped to that group. When attributes have no group (`attribute_group_id` is null), all attributes of the same `entity_type` are sorted together — this is the expected behavior for projects that do not use attribute groups.
 
 ### Finding an Attribute
 
@@ -92,7 +92,7 @@ For existing attributes only translations are updated — other fields are not o
 
 ## Managing Groups
 
-Groups organize attributes for display. Operations are accessed via `$schema->group()`:
+Groups organize attributes for display:
 
 ```php
 $group = $schema->group()->create([
@@ -135,18 +135,19 @@ $schema->enum()->find(18);
 
 ## Querying the Schema
 
-Every query method accepts an optional `callable` modifier. Without a modifier, the method returns a `Collection`. You may pass a modifier to apply scopes, sorting, or pagination:
+Each query method returns an Eloquent `Builder` you may extend with any standard scopes, pagination, or ordering before executing:
 
 ```php
-$attributes = $schema->attributes(); // Collection
+$attributes = $schema->attributesQuery()
+    ->where('entity_type', 'product')
+    ->paginate(15);
 
-$paginated = $schema->attributes(
-    fn ($q) => $q->where('entity_type', 'product')->paginate(15)
-);
+$enums  = $schema->enumsQuery($attribute)->orderBy('sort')->get();
+$types  = $schema->typesQuery()->get();
+$groups = $schema->groupsQuery()->paginate(15);
 
-$enums  = $schema->enums($attribute, fn ($q) => $q->orderBy('sort')->get());
-$types  = $schema->types();
-$groups = $schema->groups(fn ($q) => $q->paginate(15));
+// Resolve a single attribute type by ID (throws ModelNotFoundException):
+$type = $schema->findType(1);
 ```
 
 ## Full-Text Search Over Attributes
@@ -157,7 +158,7 @@ When [Laravel Scout](https://laravel.com/docs/scout) is configured on the `Attri
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 
 try {
-    $results = $schema->search('color', fn ($b) => $b->paginate(15));
+    $results = $schema->search('color')->paginate(15);
 } catch (SearchNotAvailableException $e) {
     // Scout is not configured on the attribute model
 }

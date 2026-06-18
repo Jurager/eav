@@ -80,12 +80,12 @@ class AttributeSchema extends BaseSchema
         Event::dispatch(new AttributeDeleted($this->deleteRecord($attribute)));
     }
 
-    /** Move an attribute to a new zero-based position within its group. */
+    /** Move an attribute to a new zero-based position within its group (or across the entity type when groups are not used). */
     public function sort(Attribute $attribute, int $position): Attribute
     {
         $siblings = $this->query()
             ->withoutGlobalScope('ordered')
-            ->where('attribute_group_id', $attribute->attribute_group_id)
+            ->when($attribute->attribute_group_id, fn ($q, $id) => $q->where('attribute_group_id', $id))
             ->where('entity_type', $attribute->entity_type)
             ->orderBy('sort')
             ->orderBy('id')

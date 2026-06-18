@@ -11,7 +11,7 @@ Unlike most EAV implementations, attribute values are not stored in a single gen
 
 ## Requirements
 
-- PHP 8.4 or higher
+- PHP 8.5 or higher
 - Laravel 11, 12, or 13
 
 ## Documentation
