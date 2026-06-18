@@ -119,7 +119,7 @@ The default chunk size is 500 entities per transaction.
 
 ### Handling Errors During Batch Import
 
-By default, a failing entity re-throws and stops the batch. To handle failures per-entity and continue, pass a callback as the `onError` parameter:
+By default, a failing chunk re-throws and halts processing. When `onError` is provided, the strategy is optimistic: the chunk is attempted in a single transaction first. If that transaction fails, each entity is retried individually. Entities that fail individually are passed to `onError` and skipped — the rest of the batch continues:
 
 ```php
 AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $entity): void {
@@ -127,7 +127,7 @@ AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $e
 });
 ```
 
-The failed entity's transaction is rolled back; all other entities in the batch are unaffected.
+This means a single bad entity does not abort the entire import, but it also means successfully-persisted entities within a failed chunk are re-persisted during the per-entity retry (upsert semantics, so idempotent).
 
 ## Finding Entities by Attribute Value
 
@@ -141,6 +141,14 @@ $product  = $manager->builder()->findBy('price', 100.0, '<=');    // ?Model with
 
 $products = $manager->builder()->findAllBy('status', 'active');   // Collection
 $products = $manager->builder()->findAllBy('price', 50.0, '>=');  // Collection with operator
+```
+
+When you need to load multiple entities by a set of attribute values and index the result for O(1) lookup, use `findWhereIn()`. It returns a `Collection` keyed by the raw stored value:
+
+```php
+$byBarcode = $manager->builder()->findWhereIn('barcode', ['111', '222', '333']);
+
+$product = $byBarcode['111']; // Product|null
 ```
 
 For more advanced filtering, use the Eloquent scopes documented in [Querying](querying.md).

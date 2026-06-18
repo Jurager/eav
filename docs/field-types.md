@@ -79,17 +79,25 @@ $field->label(localeId: 2); // label for a specific locale
 
 ## Working With File and Image Fields
 
-`File` and `Image` expose `HasFileStorage` helpers for URL resolution and existence checks on Laravel's storage disks:
+`File` and `Image` store a path or URL in `value_text`. The base field returns the raw stored string. To resolve it into a URL, a signed link, or a media model, override `resolve()` in a subclass:
 
 ```php
-$field = $product->eav()->field('photo');
+use Jurager\Eav\Fields\File;
 
-$field->url();                            // string|array|null — public URL(s) on the 'public' disk
-$field->url(disk: 's3');                  // URL(s) on a named disk
-$field->url(disk: 'public', localeId: 2); // localized file URL
-$field->firstUrl();                       // ?string — first URL from a multiple-file field
-$field->exists();                         // bool — check file existence in storage
+class MediaFileField extends File
+{
+    public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
+    {
+        if ($rawValue === null) {
+            return null;
+        }
+
+        return Storage::disk('s3')->url($rawValue);
+    }
+}
 ```
+
+Register the subclass in `config/eav.php` under the appropriate type code. See [Defining Custom Field Types](#defining-custom-field-types) for registration details.
 
 ## Defining Custom Field Types
 

@@ -16,9 +16,17 @@ $product->attribute_values; // Collection<EntityAttribute>
 
 ### Hydrating Typed Field Instances
 
-`AttributeManager::values()` transforms the raw rows into typed `Field` instances. The manager checks whether `attribute_values` is already loaded on the model and uses the in-memory collection when available, avoiding a new query.
+`AttributeManager::values()` transforms the raw rows into typed `Field` instances with a resolved `value` property. When `attribute_values` is already loaded on the model, the in-memory collection is used — no additional query. Missing sub-relations are batch-loaded automatically.
 
-For this to work without N+1 on sub-relations, load them in one batch before serialization:
+You may filter by attribute code or paginate:
+
+```php
+$product->eav()->values();                    // Collection — all attributes
+$product->eav()->values(['color', 'weight']); // Collection — specific codes only
+$product->eav()->values(paginated: 15);       // LengthAwarePaginator
+```
+
+For best performance on collections, eager-load everything upfront before serialization:
 
 ```php
 $products->load([
@@ -61,7 +69,7 @@ When `attributeScopeModel()` returns a non-null class, the inheritance resolver 
 The inheritance resolver detects the tree strategy automatically:
 
 - **Nested set** (`_lft`/`_rgt` columns, for example via `kalnoy/nestedset`) — every ancestor is resolved in a single bounds query.
-- **Parent ID chain** — walks `parent_id` level by level, up to ten levels deep.
+- **Parent ID chain** — walks `parent_id` level by level, up to the configured limit.
 
 Inheritance stops at the first ancestor where `shouldInheritAttributes()` returns `false`.
 
@@ -75,21 +83,53 @@ Root (inherits: false)
 
 A product assigned to `Phones` sees attributes from `Phones` and `Electronics`. `Root` attributes are excluded because inheritance stops there.
 
+### Inheritance Depth
+
+The parent-ID strategy walks up to `eav.max_inheritance_depth` levels (default `10`). If the chain exceeds this limit, a `CircularInheritanceException` is thrown with the IDs that could not be resolved. This catches circular `parent_id` references before they cause an infinite loop:
+
+```php
+// config/eav.php
+'max_inheritance_depth' => 20,
+```
+
+## Scoped Uniqueness
+
+By default, the `unique` attribute flag enforces uniqueness globally across all entity instances. To restrict the check to a narrower scope — for example, unique within a category subtree — override `attributeUniqueScopes()` on the model:
+
+```php
+public static function attributeUniqueScopes(): array
+{
+    return [
+        'code' => function (Builder $query, self $entity): void {
+            $rootId = $entity->parent_id === null
+                ? $entity->id
+                : static::query()->whereAncestorOf($entity->id)->whereNull('parent_id')->value('id');
+
+            if ($rootId) {
+                $query->whereIn('entity_id', static::query()->whereDescendantOrSelf($rootId)->select('id'));
+            }
+        },
+    ];
+}
+```
+
+The array key is the attribute code. The closure receives the `entity_attribute` Builder and the entity being validated; add `where` conditions to limit the uniqueness scope. Attributes not listed in the array use global uniqueness.
+
 ## Events
 
-`SchemaManager` dispatches a domain event after every successful mutation. All events live in the `Jurager\Eav\Events\` namespace:
+Observers dispatch a domain event after every successful mutation. All events live in the `Jurager\Eav\Events\` namespace:
 
 | Event | Property | When |
 |---|---|---|
 | `AttributeCreated` | `Attribute $attribute` | Attribute created |
-| `AttributeUpdated` | `Attribute $attribute` | Attribute updated (fresh instance) |
-| `AttributeDeleted` | `Attribute $attribute` | Attribute deleted (pre-deletion snapshot) |
+| `AttributeUpdated` | `Attribute $attribute` | Attribute updated |
+| `AttributeDeleted` | `Attribute $attribute` | Attribute soft-deleted or force-deleted |
 | `AttributeGroupCreated` | `AttributeGroup $group` | Group created |
-| `AttributeGroupUpdated` | `AttributeGroup $group` | Group updated (fresh instance) |
-| `AttributeGroupDeleted` | `AttributeGroup $group` | Group deleted (snapshot) |
+| `AttributeGroupUpdated` | `AttributeGroup $group` | Group updated |
+| `AttributeGroupDeleted` | `AttributeGroup $group` | Group deleted |
 | `AttributeEnumCreated` | `AttributeEnum $enum` | Enum value created |
-| `AttributeEnumUpdated` | `AttributeEnum $enum` | Enum value updated (fresh instance) |
-| `AttributeEnumDeleted` | `AttributeEnum $enum` | Enum value deleted (snapshot) |
+| `AttributeEnumUpdated` | `AttributeEnum $enum` | Enum value updated |
+| `AttributeEnumDeleted` | `AttributeEnum $enum` | Enum value deleted |
 
 Laravel auto-discovers listeners by type-hint on `handle()`, so no manual registration is needed:
 
@@ -115,9 +155,9 @@ The package integrates with [Laravel Scout](https://laravel.com/docs/scout). An 
 
 ### Building the Search Array
 
-`HasSearchableAttributes` provides `toSearchableArray()` and `shouldBeSearchable()` that delegate to `AttributeManager::indexData()`. Attributes with `searchable: true` **or** `filterable: true` are included so that Meilisearch (and other engines that require data to be present for filtering) can work correctly.
+`HasSearchableAttributes` provides `toSearchableArray()` and `shouldBeSearchable()` that delegate to `AttributeManager::indexData()`. Attributes with `searchable: true` **or** `filterable: true` are included so that Meilisearch can work correctly.
 
-To add model-specific fields alongside attribute data, you may override `toSearchableArray()`:
+To add model-specific fields alongside attribute data, override `toSearchableArray()`:
 
 ```php
 public function toSearchableArray(): array
@@ -142,7 +182,7 @@ public function toSearchableArray(): array
 | `restored` | `searchable: true` | `SyncSearchable` |
 | `restored` | `filterable: true` | `SyncFilterable` |
 
-`SyncSearchable` implements `ShouldQueue` and `ShouldBeUnique`. It finds every entity instance with a stored value for the changed attribute and calls `->searchable()` on the collection, re-populating document data in the index.
+`SyncSearchable` implements `ShouldQueue` and `ShouldBeUnique`. It finds every entity instance with a stored value for the changed attribute and calls `->searchable()` on the collection.
 
 ### Meilisearch: Syncing filterableAttributes
 
@@ -155,11 +195,9 @@ When dispatched, it:
 3. Preserves all non-EAV paths (e.g. `id`, `is_active`) that were set outside this package.
 4. Replaces all `attributes.*` paths with the fresh set.
 
-This means you never need to manually call `scout:sync-index-settings` when attribute definitions change — the job handles it automatically.
-
 ### Custom Field Types and filterableKeys
 
-When building a custom field type, you may override `filterableKeys()` to control which index paths are registered as filterable in Meilisearch. The default returns `['{code}']`; `Select` returns `['{code}', '{code}_code']` so that faceting on the string enum code is available alongside the integer ID:
+When building a custom field type, you may override `filterableKeys()` to control which index paths are registered as filterable. The default returns `['{code}']`; `Select` returns `['{code}', '{code}_code']` so that faceting on the string enum code is available alongside the integer ID:
 
 ```php
 public function filterableKeys(): array
