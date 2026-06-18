@@ -4,6 +4,7 @@ namespace Jurager\Eav\Managers;
 
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use JsonException;
@@ -182,7 +183,7 @@ class AttributeManager
         // constructing a throwaway AttributeManager just to call query() on it.
         $attributes = $registry->resolve(
             $registryKey,
-            fn () => $entity->availableAttributesQuery($parameters)?->get() ?? collect()
+            fn () => $entity->availableAttributesQuery($parameters)?->get() ?? new EloquentCollection()
         );
 
         return static::buildFromCollection($attributes);
