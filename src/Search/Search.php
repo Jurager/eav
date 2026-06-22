@@ -26,7 +26,7 @@ class Search
     private array $filter = [];
 
     /** @var array<string, string> */
-    private array $fieldMap = [];
+    private array $map = [];
 
     /** @var Facet[] */
     private array $facets = [];
@@ -65,9 +65,9 @@ class Search
     }
 
     /** @param array<string, string> $map  Filter key → indexed Meilisearch field. */
-    public function fieldMap(array $map): static
+    public function map(array $map): static
     {
-        $this->fieldMap = $map;
+        $this->map = $map;
 
         return $this;
     }
@@ -160,7 +160,7 @@ class Search
                 }
             }
 
-            return $this->fieldMap[$key] ?? null;
+            return $this->map[$key] ?? null;
         };
     }
 
