@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Fluent;
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Filtering\EavFieldResolver;
+use Jurager\Eav\Filtering\EavSortResolver;
 use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
@@ -42,6 +44,21 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(FilterCompiler::class);
 
         $this->app->bind(Search::class);
+
+        $this->registerFilterableResolvers();
+    }
+
+    private function registerFilterableResolvers(): void
+    {
+        if (!interface_exists(\Jurager\Filterable\Contracts\FieldResolverInterface::class)) {
+            return;
+        }
+
+        $this->app->singleton(EavFieldResolver::class);
+        $this->app->singleton(EavSortResolver::class);
+
+        // Single tag — HasFilterable inspects each resolver's interfaces via instanceof.
+        $this->app->tag([EavFieldResolver::class, EavSortResolver::class], 'filterable.resolvers');
     }
 
     public function boot(): void
