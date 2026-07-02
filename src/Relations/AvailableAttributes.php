@@ -17,7 +17,7 @@ class AvailableAttributes extends Relation
     /** @param  Closure(Model): (Builder|null)  $resolver */
     public function __construct(Builder $query, Model $parent, protected Closure $resolver)
     {
-        parent::__construct(self::scopedQuery($resolver, $parent) ?? $query->whereKey([]), $parent);
+        parent::__construct($query->whereKey([]), $parent);
     }
 
     public function addConstraints(): void
@@ -50,12 +50,19 @@ class AvailableAttributes extends Relation
 
     public function getResults(): Collection
     {
-        return $this->query->get();
+        return self::scopedQuery($this->resolver, $this->parent)?->get() ?? $this->related->newCollection();
     }
 
     public function getEager(): Collection
     {
         return $this->related->newCollection();
+    }
+
+    public function __call($method, $parameters): mixed
+    {
+        $query = ($this->resolver)($this->parent) ?? $this->related->newQuery()->whereKey([]);
+
+        return $query->$method(...$parameters);
     }
 
     /** @return Collection<int, Model> */

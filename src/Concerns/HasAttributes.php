@@ -149,7 +149,8 @@ trait HasAttributes
         $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
 
         return $this->availableAttributesRelation(static function (Model $parent) use ($entityClass, $scope, $constrain): ?Builder {
-            $query = AttributeManager::for($entityClass)->query($scope($parent));
+
+            $query = (new $entityClass())->availableAttributesQuery($scope($parent));
 
             return $query !== null && $constrain !== null ? $constrain($query) : $query;
         });
