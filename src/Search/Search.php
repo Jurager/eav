@@ -115,6 +115,7 @@ class Search
             ids: array_column($main->getHits(), 'id'),
             total: $main->getEstimatedTotalHits() ?? 0,
             facets: $this->group($facets),
+            context: $ctx,
         );
     }
 

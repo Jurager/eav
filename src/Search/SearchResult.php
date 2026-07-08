@@ -5,6 +5,7 @@ namespace Jurager\Eav\Search;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
+use Jurager\Eav\Search\Facets\FacetContext;
 
 /**
  * Value object returned by {@see Search::search()}.
@@ -21,7 +22,13 @@ class SearchResult
         public readonly array $ids,
         public readonly int $total,
         public readonly array $facets,
+        private readonly ?FacetContext $context = null,
     ) {
+    }
+
+    public function context(): ?FacetContext
+    {
+        return $this->context;
     }
 
     /**
