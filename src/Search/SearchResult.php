@@ -62,6 +62,15 @@ class SearchResult
             ->sortBy(fn ($model) => array_search((string) $model->getKey(), $stringIds) ?: PHP_INT_MAX)
             ->values();
 
+        // filter[included.*] scopes eager-loaded relations, not the result set itself —
+        // apply it uniformly here regardless of whether these IDs came from Meilisearch
+        // or a plain DB query. Duck-typed: no dependency on the package that provides it.
+        foreach ($items as $item) {
+            if (method_exists($item, 'loadFilteredRelations')) {
+                $item->loadFilteredRelations();
+            }
+        }
+
         return new LengthAwarePaginator(
             $items,
             $this->total,

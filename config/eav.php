@@ -100,4 +100,18 @@ return [
         'link'     => Link::class,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Search
+    |--------------------------------------------------------------------------
+    | When a filter mixes indexed and non-indexed fields, Search narrows a
+    | relevance-ordered candidate window from Meilisearch and refines it
+    | through the model's own DB filtering. This caps how large that window
+    | gets — results beyond it aren't considered once a DB-only condition
+    | is also active.
+    */
+    'search' => [
+        'hybrid_candidate_limit' => 1000,
+    ],
+
 ];

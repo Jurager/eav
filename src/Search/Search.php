@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Search\Contracts\InteractsWithIndex;
+use Jurager\Eav\Search\Events\FilterKeyUnresolved;
 use Jurager\Eav\Search\Facets\Facet;
 use Jurager\Eav\Search\Facets\FacetContext;
 use Jurager\Eav\Support\EavModels;
@@ -32,6 +34,8 @@ class Search
     private array $facets = [];
 
     private ?Indexes $index = null;
+
+    private ?Model $model = null;
 
     public function __construct(
         private readonly FilterCompiler $compiler,
@@ -89,8 +93,10 @@ class Search
             return new SearchResult([], 0, []);
         }
 
+        $this->model = new $modelClass();
+
         $ctx = $this->context();
-        $this->index = $this->meilisearch->index((new $modelClass())->searchableAs());
+        $this->index = $this->meilisearch->index($this->model->searchableAs());
 
         $facetFields = collect($this->facets)
             ->flatMap(fn (Facet $facet) => $facet->facetFields($ctx))
@@ -98,11 +104,22 @@ class Search
             ->values()
             ->all();
 
+        $resolve = $this->resolver($ctx);
+        $unresolved = $this->compiler->unresolved($this->filter, $resolve);
+
+        foreach ($unresolved as $key => $value) {
+            FilterKeyUnresolved::dispatch($this->entityType, (string) $key, $value);
+        }
+
+        // A DB-only condition can only be honored if the model can filter itself —
+        // otherwise it's dropped, same as always (now visible via the event above).
+        $hybrid = $unresolved !== [] && method_exists($modelClass, 'scopeFilter');
+
         $main = $this->index->search($this->query, array_filter([
-            'filter' => $this->compiler->compile($this->filter, $this->resolver($ctx)),
+            'filter' => $this->compiler->compile($this->filter, $resolve),
             'facets' => $facetFields ?: null,
-            'limit' => $perPage,
-            'offset' => ($page - 1) * $perPage,
+            'limit' => $hybrid ? (int) config('eav.search.hybrid_candidate_limit', 1000) : $perPage,
+            'offset' => $hybrid ? 0 : ($page - 1) * $perPage,
         ]));
 
         $facets = [];
@@ -111,12 +128,45 @@ class Search
             $facets += $facet->collect($this, $main, $ctx);
         }
 
+        $ids = array_column($main->getHits(), 'id');
+        $total = $main->getEstimatedTotalHits() ?? 0;
+
+        if ($hybrid) {
+            [$ids, $total] = $this->refine($modelClass, $ids, $unresolved, $perPage, $page);
+        }
+
         return new SearchResult(
-            ids: array_column($main->getHits(), 'id'),
-            total: $main->getEstimatedTotalHits() ?? 0,
+            ids: $ids,
+            total: $total,
             facets: $this->group($facets),
             context: $ctx,
         );
+    }
+
+    /**
+     * Narrows a Meilisearch candidate ID list through the model's own DB filtering,
+     * preserving Meilisearch relevance order (which SQL can't express), then paginates
+     * the narrowed list itself.
+     *
+     * @param  class-string<Model>  $modelClass
+     * @param  (int|string)[]  $ids
+     * @param  array<string, mixed>  $filter
+     * @return array{0: (int|string)[], 1: int}
+     */
+    private function refine(string $modelClass, array $ids, array $filter, int $perPage, int $page): array
+    {
+        $order = array_flip(array_map('strval', $ids));
+        $keyName = $this->model->getKeyName();
+
+        $refined = $modelClass::query()
+            ->whereIn($keyName, $ids)
+            ->filter($filter)
+            ->pluck($keyName)
+            ->all();
+
+        usort($refined, fn ($a, $b) => ($order[(string) $a] ?? PHP_INT_MAX) <=> ($order[(string) $b] ?? PHP_INT_MAX));
+
+        return [array_slice($refined, ($page - 1) * $perPage, $perPage), count($refined)];
     }
 
     /** Whether a filter is active for the given key. */
@@ -155,10 +205,21 @@ class Search
                 return null;
             }
 
+            // Every HasSearchableAttributes model always indexes its own key as 'id'
+            // (see the trait's default toSearchableArray()) — a structural guarantee,
+            // not something each model needs to declare.
+            if ($key === 'id') {
+                return 'id';
+            }
+
             foreach ($this->facets as $facet) {
                 if (($field = $facet->field($key, $ctx)) !== null) {
                     return $field;
                 }
+            }
+
+            if ($this->model instanceof InteractsWithIndex && ($field = $this->model->indexed()[$key] ?? null) !== null) {
+                return $field;
             }
 
             return $this->map[$key] ?? null;

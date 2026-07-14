@@ -49,6 +49,58 @@ class FilterCompiler
     }
 
     /**
+     * The counterpart to compile(): returns the subset of $filter whose keys couldn't be
+     * resolved to an indexed field, using the same $resolve closure — so callers can hand
+     * it off to another query engine instead of silently losing it. `or`/`and` groups are
+     * kept whole if any member is unresolved, since their conditions can't be split across
+     * two separate query engines.
+     *
+     * @param  array<string, mixed>  $filter
+     * @param  callable(string): ?string  $resolve
+     * @return array<string, mixed>
+     */
+    public function unresolved(array $filter, callable $resolve): array
+    {
+        $result = [];
+
+        foreach ($filter as $key => $value) {
+            if (($key === 'or' || $key === 'and') && is_array($value)) {
+                if (! $this->groupResolves($value, $resolve)) {
+                    $result[$key] = $value;
+                }
+
+                continue;
+            }
+
+            if ($resolve((string) $key) === null) {
+                $result[$key] = $value;
+            }
+        }
+
+        return $result;
+    }
+
+    /** @param  array<int|string, mixed>  $group */
+    private function groupResolves(array $group, callable $resolve): bool
+    {
+        $entries = array_is_list($group) ? $group : [$group];
+
+        foreach ($entries as $sub) {
+            if (! is_array($sub)) {
+                continue;
+            }
+
+            foreach (array_keys($sub) as $key) {
+                if ($resolve((string) $key) === null) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * @param  array<string, mixed>  $filter
      * @return string[]
      */
