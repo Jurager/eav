@@ -81,6 +81,11 @@ class SearchTest extends TestCase
             {
                 return ['categories.category_id' => 'category_ids'];
             }
+
+            public function narrow(array $ids, array $filter): array
+            {
+                return $ids;
+            }
         });
 
         $this->assertSame('category_ids', $this->resolve('categories.category_id'));
@@ -101,6 +106,11 @@ class SearchTest extends TestCase
             public function indexed(): array
             {
                 return ['id' => 'something_else'];
+            }
+
+            public function narrow(array $ids, array $filter): array
+            {
+                return $ids;
             }
         });
 

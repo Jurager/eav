@@ -1,14 +1,17 @@
 <?php
 
 namespace Jurager\Eav\Search\Contracts;
-
-/**
- * Declares which of a model's non-EAV (base) fields are also present in its
- * Meilisearch index, and what they're called there — so Search can resolve
- * filter keys for them the same way it already does for EAV attribute facets.
- */
 interface InteractsWithIndex
 {
-    /** @return array<string, string> External filter key => indexed Meilisearch field. */
+    /** @return array<string, string> External filter key => indexed searchable field. */
     public function indexed(): array;
+
+    /**
+     * Narrow a candidate identificator list by filter conditions that don't map to an indexed field.
+     *
+     * @param  (int|string)[]  $ids
+     * @param  array<string, mixed>  $filter
+     * @return (int|string)[]
+     */
+    public function narrow(array $ids, array $filter): array;
 }

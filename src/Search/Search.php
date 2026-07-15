@@ -4,10 +4,10 @@ namespace Jurager\Eav\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Facades\Log;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
-use Jurager\Eav\Search\Events\FilterKeyUnresolved;
 use Jurager\Eav\Search\Facets\Facet;
 use Jurager\Eav\Search\Facets\FacetContext;
 use Jurager\Eav\Support\EavModels;
@@ -108,17 +108,23 @@ class Search
         $unresolved = $this->compiler->unresolved($this->filter, $resolve);
 
         foreach ($unresolved as $key => $value) {
-            FilterKeyUnresolved::dispatch($this->entityType, (string) $key, $value);
+            Log::warning('eav.search: filter key has no indexed field, condition dropped', [
+                'entity_type' => $this->entityType,
+                'key' => $key,
+                'value' => $value,
+            ]);
         }
 
-        // A DB-only condition can only be honored if the model can filter itself —
-        // otherwise it's dropped, same as always (now visible via the event above).
-        $hybrid = $unresolved !== [] && method_exists($modelClass, 'scopeFilter');
+        // Apply hybrid search only when there are filters that cannot be resolved by the
+        // search index but can be handled by the database. Models that don't support this
+        // capability fall back to the regular search behavior..
+        $hybrid = $unresolved !== [] && $this->model instanceof InteractsWithIndex;
+        $candidateLimit = (int) config('eav.search.hybrid_candidate_limit', 1000);
 
         $main = $this->index->search($this->query, array_filter([
             'filter' => $this->compiler->compile($this->filter, $resolve),
             'facets' => $facetFields ?: null,
-            'limit' => $hybrid ? (int) config('eav.search.hybrid_candidate_limit', 1000) : $perPage,
+            'limit' => $hybrid ? $candidateLimit : $perPage,
             'offset' => $hybrid ? 0 : ($page - 1) * $perPage,
         ]));
 
@@ -132,7 +138,15 @@ class Search
         $total = $main->getEstimatedTotalHits() ?? 0;
 
         if ($hybrid) {
-            [$ids, $total] = $this->refine($modelClass, $ids, $unresolved, $perPage, $page);
+            if ($total > $candidateLimit) {
+                Log::warning('eav.search: hybrid candidate window exceeded, some matches may be missed', [
+                    'entity_type' => $this->entityType,
+                    'limit' => $candidateLimit,
+                    'estimated_total' => $total,
+                ]);
+            }
+
+            [$ids, $total] = $this->hybridPaginate($ids, $unresolved, $perPage, $page);
         }
 
         return new SearchResult(
@@ -144,29 +158,22 @@ class Search
     }
 
     /**
-     * Narrows a Meilisearch candidate ID list through the model's own DB filtering,
-     * preserving Meilisearch relevance order (which SQL can't express), then paginates
-     * the narrowed list itself.
+     * Applies additional filtering to search results.
+     * Returns a paginated subset while preserving the original search relevance order.
      *
-     * @param  class-string<Model>  $modelClass
      * @param  (int|string)[]  $ids
      * @param  array<string, mixed>  $filter
      * @return array{0: (int|string)[], 1: int}
      */
-    private function refine(string $modelClass, array $ids, array $filter, int $perPage, int $page): array
+    private function hybridPaginate(array $ids, array $filter, int $perPage, int $page): array
     {
         $order = array_flip(array_map('strval', $ids));
-        $keyName = $this->model->getKeyName();
 
-        $refined = $modelClass::query()
-            ->whereIn($keyName, $ids)
-            ->filter($filter)
-            ->pluck($keyName)
-            ->all();
+        $narrowed = $this->model->narrow($ids, $filter);
 
-        usort($refined, fn ($a, $b) => ($order[(string) $a] ?? PHP_INT_MAX) <=> ($order[(string) $b] ?? PHP_INT_MAX));
+        usort($narrowed, fn ($a, $b) => ($order[(string) $a] ?? PHP_INT_MAX) <=> ($order[(string) $b] ?? PHP_INT_MAX));
 
-        return [array_slice($refined, ($page - 1) * $perPage, $perPage), count($refined)];
+        return [array_slice($narrowed, ($page - 1) * $perPage, $perPage), count($narrowed)];
     }
 
     /** Whether a filter is active for the given key. */
