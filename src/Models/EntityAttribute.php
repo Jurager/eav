@@ -56,7 +56,7 @@ class EntityAttribute extends Model
 
     public function enum(): BelongsToScoped
     {
-        return $this->belongsToScoped(EavModels::class('attribute_enum'), 'attribute_id', 'value_integer');
+        return $this->belongsToScoped(EavModels::class('attribute_enum'), 'value_integer', 'attribute_id');
     }
 
     public function translations(): MorphToMany

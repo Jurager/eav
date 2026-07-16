@@ -2,16 +2,16 @@
 
 namespace Jurager\Eav\Concerns;
 
-use Illuminate\Support\Str;
 use Jurager\Eav\Relations\BelongsToScoped;
 
 trait HasScopedRelations
 {
-    /** Define a scoped belongs-to relationship. */
+    /** Define a scoped, inverse one-to-one or many relationship. */
     protected function belongsToScoped(
         string $related,
-        string $scopeKey,
-        ?string $foreignKey = null,
+        string $foreignKey,
+        string $foreignScopeKey,
+        ?string $ownerScopeKey = null,
         ?string $ownerKey = null,
         ?string $relation = null
     ): BelongsToScoped {
@@ -19,7 +19,6 @@ trait HasScopedRelations
 
         $instance = $this->newRelatedInstance($related);
 
-        $foreignKey ??= Str::snake($relation).'_'.$instance->getKeyName();
         $ownerKey ??= $instance->getKeyName();
 
         return new BelongsToScoped(
@@ -28,8 +27,8 @@ trait HasScopedRelations
             $foreignKey,
             $ownerKey,
             $relation,
-            $scopeKey,
-            $scopeKey
+            $foreignScopeKey,
+            $ownerScopeKey ?? $foreignScopeKey
         );
     }
 }
