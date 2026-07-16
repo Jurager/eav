@@ -146,7 +146,7 @@ trait HasAttributes
      * @param  Closure(static): array<int>|null  $scope  Scope entity ids; defaults to the nested-set subtree.
      * @param  Closure(Builder): Builder|null  $constrain
      */
-    public function relatedAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): ClosureRelation
+    public function closuredAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): ClosureRelation
     {
         $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
 
