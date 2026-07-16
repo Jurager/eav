@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * @property int $id
@@ -33,8 +33,8 @@ class AttributeGroup extends Model
 
     public function translations(): MorphToMany
     {
-        return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
-            ->using(EavModels::class('entity_translation'))
+        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
+            ->using(Eav::$entityTranslationModel)
             ->withPivot(['id', 'label', 'params'])
             ->withTimestamps()
             ->when(app(LocaleRegistry::class)->get(), fn ($q, $codes) => $q->whereIn('code', $codes));
@@ -42,6 +42,6 @@ class AttributeGroup extends Model
 
     public function attributes(): HasMany
     {
-        return $this->hasMany(EavModels::class('attribute'), 'attribute_group_id');
+        return $this->hasMany(Eav::$attributeModel, 'attribute_group_id');
     }
 }

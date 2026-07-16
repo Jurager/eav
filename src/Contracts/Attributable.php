@@ -6,40 +6,18 @@ use Illuminate\Database\Eloquent\Builder;
 
 interface Attributable
 {
-    /**
-     * Entity type string used to scope attributes (e.g. 'product', 'category').
-     * Must match the morph map key registered for this model.
-     */
-    public function attributeEntityType(): string;
+    /** Get the EAV entity type identifier. */
+    public function getEavEntityType(): string;
 
-    /**
-     * IDs of the scope-model records that determine which attributes are available for this entity.
-     * Return [] for a global (unscoped) attribute set.
-     * Example: a Product returns its category IDs; a Category returns [].
-     *
-     * @return array<int>
-     */
-    public function attributeParameters(): array;
+    /** Get the scope IDs that determine available attributes. */
+    public function getEavScopes(): array;
 
-    /**
-     * Whether this entity should inherit attributes from its parent.
-     * Called by AttributeInheritanceResolver when resolving relation-scoped attributes.
-     */
-    public function shouldInheritAttributes(): bool;
+    /** Determine if the entity inherits attributes from its parent. */
+    public function shouldInheritEavAttributes(): bool;
 
-    /**
-     * Columns that must be selected when loading this entity for inheritance resolution.
-     * Override to include any column that shouldInheritAttributes() reads from.
-     *
-     * @return array<string>
-     */
-    public function inheritanceScopeColumns(): array;
+    /** Get the columns required for inheritance resolution. */
+    public function getEavInheritanceColumns(): array;
 
-    /**
-     * Builder that returns Attribute records available for this entity.
-     * Called by AttributeManager to load the attribute schema.
-     *
-     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
-     */
-    public function availableAttributesQuery(array $params = []): ?Builder;
+    /** Get the query builder for available attributes. */
+    public function getAvailableAttributesQuery(array $scopes = []): ?Builder;
 }

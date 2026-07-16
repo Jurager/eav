@@ -10,7 +10,7 @@ use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Jurager\Eav\Search\Facets\Facet;
 use Jurager\Eav\Search\Facets\FacetContext;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
@@ -195,7 +195,7 @@ class Search
     /** Loads filterable attributes for the entity and wraps them with their field dependencies. */
     private function context(): FacetContext
     {
-        $attributes = EavModels::query('attribute')
+        $attributes = Eav::$attributeModel::query()
             ->forEntity($this->entityType)
             ->where('filterable', true)
             ->with('type')

@@ -2,18 +2,18 @@
 
 namespace Jurager\Eav\Exceptions;
 
+/** Exception thrown when attribute inheritance exceeds the maximum depth. */
 class CircularInheritanceException extends EavException
 {
-    /** @param array<int|string> $remainingIds */
-    public static function maxDepthExceeded(string $model, array $remainingIds, int $maxDepth): self
+    /** Create a new exception instance for max depth. */
+    public static function maxDepthExceeded(string $model, array $unresolvedIds, int $maxDepth): self
     {
-        $ids = implode(', ', $remainingIds);
-
-        return new self(
-            "Failed to resolve attribute inheritance for [{$model}] within the configured depth limit ({$maxDepth}). "
-            ."The following parent IDs remain unresolved: [{$ids}]. "
-            .'This usually indicates a circular inheritance chain or an unexpectedly deep hierarchy. '
-            .'Review the parent_id relationships or adjust eav.max_inheritance_depth.'
-        );
+        return new self(sprintf(
+            'Maximum attribute inheritance depth (%d) exceeded for [%s]. Unresolved IDs: [%s]. ' .
+            'Check for circular dependencies or increase "eav.max_inheritance_depth".',
+            $maxDepth,
+            $model,
+            implode(', ', $unresolvedIds)
+        ));
     }
 }

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\Concerns\HasScopedRelations;
 use Jurager\Eav\Relations\BelongsToScoped;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * @property int $id
@@ -51,18 +51,18 @@ class EntityAttribute extends Model
 
     public function attribute(): BelongsTo
     {
-        return $this->belongsTo(EavModels::class('attribute'));
+        return $this->belongsTo(Eav::$attributeModel);
     }
 
     public function enum(): BelongsToScoped
     {
-        return $this->belongsToScoped(EavModels::class('attribute_enum'), 'value_integer', 'attribute_id');
+        return $this->belongsToScoped(Eav::$attributeEnumModel, 'value_integer', 'attribute_id');
     }
 
     public function translations(): MorphToMany
     {
-        return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
-            ->using(EavModels::class('entity_translation'))
+        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
+            ->using(Eav::$entityTranslationModel)
             ->withPivot(['id', 'label', 'created_at', 'updated_at'])
             ->active();
     }

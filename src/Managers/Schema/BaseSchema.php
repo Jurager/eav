@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Managers\Schema;
 
 use Illuminate\Database\Eloquent\Builder;
@@ -7,7 +9,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Managers\TranslationManager;
-use Jurager\Eav\Support\EavModels;
 
 abstract class BaseSchema
 {
@@ -16,14 +17,16 @@ abstract class BaseSchema
     ) {
     }
 
-    abstract protected function modelKey(): string;
+    /** Return the class name of the associated model. */
+    abstract protected function modelClass(): string;
 
+    /** Get the base query builder for the model. */
     protected function query(): Builder
     {
-        return EavModels::query($this->modelKey());
+        return $this->modelClass()::query();
     }
 
-    /** @param  array<int, array<string, mixed>>  $translations */
+    /** Create a record within a transaction and save translations. */
     protected function createRecord(callable $factory, array $translations): Model
     {
         return DB::transaction(function () use ($factory, $translations): Model {
@@ -34,7 +37,7 @@ abstract class BaseSchema
         });
     }
 
-    /** @param  array<string, mixed>  $data @param  array<int, array<string, mixed>>  $translations */
+    /** Update a record within a transaction and save translations. */
     protected function updateRecord(Model $model, array $data, array $translations): Model
     {
         return DB::transaction(function () use ($model, $data, $translations): Model {
@@ -45,7 +48,7 @@ abstract class BaseSchema
         });
     }
 
-    /** Clone, delete, and return snapshot for event dispatching. */
+    /** Clone, delete, and return a snapshot of the model. */
     protected function deleteRecord(Model $model): Model
     {
         $snapshot = clone $model;
@@ -55,7 +58,7 @@ abstract class BaseSchema
         return $snapshot;
     }
 
-    /** @param  Collection<int, Model>  $reordered */
+    /** Apply sort order to a collection of models. */
     protected function applySort(Collection $reordered): void
     {
         DB::transaction(function () use ($reordered): void {
@@ -66,7 +69,7 @@ abstract class BaseSchema
         });
     }
 
-    /** @return array<int, array<string, mixed>> */
+    /** Extract translations from the data array. */
     protected function extractTranslations(array &$data): array
     {
         $translations = $data['translations'] ?? [];
@@ -75,6 +78,7 @@ abstract class BaseSchema
         return $translations;
     }
 
+    /** Save translations for the given model. */
     protected function saveTranslations(Model $model, array $translations): void
     {
         if (! empty($translations)) {
@@ -82,14 +86,10 @@ abstract class BaseSchema
         }
     }
 
-    /**
-     * @param  Collection<int, Model>  $items
-     * @return Collection<int, Model>
-     */
+    /** Reorder items in a collection. */
     protected function reorder(Collection $items, int $id, int $targetIndex): Collection
     {
         $list = $items->values();
-
         $currentIndex = $list->search(fn ($item) => $item->id === $id);
 
         if ($currentIndex === false) {
@@ -97,7 +97,6 @@ abstract class BaseSchema
         }
 
         $item = $list->splice($currentIndex, 1)->first();
-
         $targetIndex = max(0, min($targetIndex, $list->count()));
 
         $list->splice($targetIndex, 0, [$item]);

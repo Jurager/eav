@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Events\AttributeEnumCreated;
@@ -16,32 +18,32 @@ class AttributeEnumObserver
     ) {
     }
 
+    /** Handle the "saved" event for the enum. */
     public function saved(AttributeEnum $enum): void
     {
-        $this->enums->forget($enum->attribute_id);
-        $this->syncSearchable($enum);
+        $this->handle($enum);
 
-        if ($enum->wasRecentlyCreated) {
-            AttributeEnumCreated::dispatch($enum);
-        } else {
-            AttributeEnumUpdated::dispatch($enum);
-        }
+        $enum->wasRecentlyCreated
+            ? AttributeEnumCreated::dispatch($enum)
+            : AttributeEnumUpdated::dispatch($enum);
     }
 
+    /** Handle the "deleted" event for the enum. */
     public function deleted(AttributeEnum $enum): void
     {
-        $this->enums->forget($enum->attribute_id);
-        $this->syncSearchable($enum);
+        $this->handle($enum);
 
         AttributeEnumDeleted::dispatch($enum);
     }
 
-    protected function syncSearchable(AttributeEnum $enum): void
+    /** Handle common post-change tasks: clear cache and sync searchable state. */
+    protected function handle(AttributeEnum $enum): void
     {
-        $attribute = $enum->attribute;
+        $this->enums->forget($enum->attribute_id);
 
-        if ($attribute?->searchable) {
-            SyncSearchable::dispatch($attribute->entity_type, $attribute->id)->afterCommit();
+        if ($enum->attribute?->searchable) {
+            SyncSearchable::dispatch($enum->attribute->entity_type, $enum->attribute_id)
+                ->afterCommit();
         }
     }
 }

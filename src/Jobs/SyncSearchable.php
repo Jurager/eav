@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -7,11 +9,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
-/**
- * Re-index all entities with a stored value for the given attribute.
- */
 class SyncSearchable implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
@@ -24,38 +23,36 @@ class SyncSearchable implements ShouldBeUnique, ShouldQueue
 
     public function uniqueId(): string
     {
-        return "$this->entityType:$this->attributeId";
+        return "{$this->entityType}:{$this->attributeId}";
     }
 
     public function handle(): void
     {
         $modelClass = Relation::getMorphedModel($this->entityType);
 
-        if (! $modelClass || ! is_subclass_of($modelClass, Model::class)) {
-            return;
-        }
-
-        if (! method_exists($modelClass, 'searchable')) {
+        if (! $this->isValidModel($modelClass)) {
             return;
         }
 
         $model = new $modelClass();
-        $key = $model->getKeyName();
-        $table = $model->getTable();
+        $table = (new (Eav::$entityAttributeModel)())->getTable();
 
-        $eaTable = EavModels::make('entity_attribute')->getTable();
+        $modelClass::query()
+            ->whereExists(
+                fn ($query) => $query
+                ->from($table)
+                ->whereColumn('entity_id', "{$model->getTable()}.{$model->getKeyName()}")
+                ->where('attribute_id', $this->attributeId)
+                ->where('entity_type', $this->entityType)
+            )
+            ->chunkById(1000, fn ($models) => $models->each->searchable(), $model->getKeyName());
+    }
 
-        $query = $modelClass::query()
-            ->whereExists(function ($q) use ($table, $key, $eaTable) {
-                $q->selectRaw(1)
-                    ->from($eaTable)
-                    ->whereColumn("$eaTable.entity_id", "$table.$key")
-                    ->where("$eaTable.attribute_id", $this->attributeId)
-                    ->where("$eaTable.entity_type", $this->entityType);
-            });
-
-        $query->chunkById(1000, function ($models) {
-            $models->each->searchable();
-        }, $key);
+    /** Determine if the model class is valid for indexing. */
+    protected function isValidModel(?string $modelClass): bool
+    {
+        return $modelClass
+            && is_subclass_of($modelClass, Model::class)
+            && method_exists($modelClass, 'searchable');
     }
 }

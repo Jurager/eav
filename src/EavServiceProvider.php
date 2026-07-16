@@ -23,13 +23,14 @@ use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Search\FilterCompiler;
 use Jurager\Eav\Search\Search;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
-use Jurager\Eav\Support\EavModels;
 
 class EavServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/eav.php', 'eav');
+
+        $this->configureModels();
 
         $this->app->singleton(AttributeTypeRegistry::class);
         $this->app->scoped(LocaleRegistry::class);
@@ -42,6 +43,17 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(FilterCompiler::class);
 
         $this->app->bind(Search::class);
+    }
+
+    private function configureModels(): void
+    {
+        Eav::$attributeModel = config('eav.models.attribute', Eav::$attributeModel);
+        Eav::$attributeTypeModel = config('eav.models.attribute_type', Eav::$attributeTypeModel);
+        Eav::$attributeGroupModel = config('eav.models.attribute_group', Eav::$attributeGroupModel);
+        Eav::$attributeEnumModel = config('eav.models.attribute_enum', Eav::$attributeEnumModel);
+        Eav::$entityAttributeModel = config('eav.models.entity_attribute', Eav::$entityAttributeModel);
+        Eav::$entityTranslationModel = config('eav.models.entity_translation', Eav::$entityTranslationModel);
+        Eav::$localeModel = config('eav.models.locale', Eav::$localeModel);
     }
 
     public function boot(): void
@@ -87,11 +99,7 @@ class EavServiceProvider extends ServiceProvider
                 return;
             }
 
-            if (! EavModels::has('attribute')) {
-                return;
-            }
-
-            EavModels::query('attribute')
+            Eav::$attributeModel::query()
                 ->withoutGlobalScopes()
                 ->where('filterable', true)
                 ->distinct()
@@ -102,18 +110,14 @@ class EavServiceProvider extends ServiceProvider
 
     private function registerObservers(): void
     {
-        $models = [
-            'attribute' => AttributeObserver::class,
-            'attribute_enum' => AttributeEnumObserver::class,
-            'attribute_group' => AttributeGroupObserver::class,
+        $observers = [
+            Eav::$attributeModel => AttributeObserver::class,
+            Eav::$attributeEnumModel => AttributeEnumObserver::class,
+            Eav::$attributeGroupModel => AttributeGroupObserver::class,
         ];
 
-        foreach ($models as $key => $observer) {
-            $model = config("eav.models.$key");
-
-            if ($model) {
-                $model::observe($observer);
-            }
+        foreach ($observers as $model => $observer) {
+            $model::observe($observer);
         }
     }
 

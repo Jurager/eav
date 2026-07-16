@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
@@ -7,9 +9,6 @@ use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
-/**
- * Creates Field instances from Attribute models.
- */
 class FieldFactory
 {
     /** @var array<string, class-string<Field>> */
@@ -22,11 +21,7 @@ class FieldFactory
         $this->types = config('eav.types', []);
     }
 
-    /**
-     * @param  class-string<Field>  $class
-     *
-     * @throws InvalidFieldTypeException
-     */
+    /** Register a new field type class. */
     public function register(string $type, string $class): void
     {
         if (! is_subclass_of($class, Field::class)) {
@@ -36,16 +31,13 @@ class FieldFactory
         $this->types[$type] = $class;
     }
 
+    /** Check if a field type is registered. */
     public function has(string $type): bool
     {
         return isset($this->types[$type]);
     }
 
-    /**
-     * @return class-string<Field>
-     *
-     * @throws InvalidFieldTypeException
-     */
+    /** Resolve a class name for a given field type. */
     public function resolve(string $type): string
     {
         if (! $this->has($type)) {
@@ -55,9 +47,7 @@ class FieldFactory
         return $this->types[$type];
     }
 
-    /**
-     * @throws InvalidFieldTypeException
-     */
+    /** Make a field instance from an attribute model. */
     public function make(Attribute $attribute): Field
     {
         if ($attribute->type === null) {
@@ -69,7 +59,7 @@ class FieldFactory
         return new $class($attribute, $this->localeRegistry, $this->enumRegistry);
     }
 
-    /** @return array<string, class-string<Field>> */
+    /** Get all registered field types. */
     public function all(): array
     {
         return $this->types;

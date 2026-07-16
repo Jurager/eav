@@ -1,17 +1,16 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Managers;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Support\EavModels;
 
-/**
- * Manages locales and persists translation data for any translatable model.
- */
 class TranslationManager
 {
     public function __construct(
@@ -19,63 +18,59 @@ class TranslationManager
     ) {
     }
 
-    /** @param  callable(Builder): mixed|null  $modifier */
+    /** Execute a custom query on locales or return all. */
     public function locales(?callable $modifier = null): mixed
     {
-        $query = EavModels::query('locale');
+        $query = Eav::$localeModel::query();
 
         return $modifier ? $modifier($query) : $query->get();
     }
 
+    /** Find a locale by ID. */
     public function locale(int $id): Locale
     {
-        return EavModels::query('locale')->findOrFail($id);
+        return Eav::$localeModel::query()->findOrFail($id);
     }
 
+    /** Create a new locale. */
     public function create(array $data): Locale
     {
-        $locale = EavModels::query('locale')->create($data);
-
+        $locale = Eav::$localeModel::query()->create($data);
         $this->localeRegistry->forget();
 
         return $locale;
     }
 
+    /** Update an existing locale. */
     public function update(Locale $locale, array $data): Locale
     {
         $locale->update($data);
-
         $this->localeRegistry->forget();
 
         return $locale;
     }
 
+    /** Delete a locale. */
     public function delete(Locale $locale): void
     {
         $locale->delete();
-
         $this->localeRegistry->forget();
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $translations
-     *
+     * Save translations for a specific model.
      * @throws \JsonException
      */
     public function save(Model $model, array $translations, bool $partial = false): void
     {
-        $indexed = array_filter(
-            array_column($translations, null, 'locale_id'),
-            static fn ($t) => ! is_null($t['label'] ?? null),
-        );
-
+        $indexed = $this->indexTranslations($translations);
         $localeIds = array_keys($indexed);
 
         if (! $partial) {
-            EavModels::query('entity_translation')
+            Eav::$entityTranslationModel::query()
                 ->where('entity_type', $model->getMorphClass())
                 ->where('entity_id', $model->getKey())
-                ->when($localeIds, fn ($q) => $q->whereNotIn('locale_id', $localeIds))
+                ->when($localeIds, fn (Builder $q) => $q->whereNotIn('locale_id', $localeIds))
                 ->delete();
         }
 
@@ -84,21 +79,14 @@ class TranslationManager
         }
 
         $now = Carbon::now();
-        $rows = [];
+        $rows = array_map(fn ($id, $t) => $this->buildTranslationRow($model, $id, $t, $now), array_keys($indexed), $indexed);
 
-        foreach ($indexed as $localeId => $translation) {
-            $rows[] = $this->buildTranslationRow($model, $localeId, $translation, $now);
-        }
-
-        EavModels::query('entity_translation')
+        Eav::$entityTranslationModel::query()
             ->upsert($rows, ['entity_type', 'entity_id', 'locale_id'], ['label', 'params', 'updated_at']);
     }
 
     /**
-     * Persist translations for many models in a single bulk upsert.
-     *
-     * @param  array<int, array{0: Model, 1: array<int, array<string, mixed>>}>  $modelsWithTranslations
-     *
+     * Persist translations for multiple models in a bulk upsert.
      * @throws \JsonException
      */
     public function batch(array $modelsWithTranslations, ?Carbon $timestamp = null): void
@@ -107,32 +95,28 @@ class TranslationManager
         $rows = [];
 
         foreach ($modelsWithTranslations as [$model, $translations]) {
-            $indexed = array_filter(
-                array_column($translations, null, 'locale_id'),
-                static fn ($t) => ! is_null($t['label'] ?? null),
-            );
-
-            foreach ($indexed as $localeId => $translation) {
+            foreach ($this->indexTranslations($translations) as $localeId => $translation) {
                 $rows[] = $this->buildTranslationRow($model, $localeId, $translation, $timestamp);
             }
         }
 
-        if (empty($rows)) {
-            return;
-        }
-
         foreach (array_chunk($rows, 1000) as $chunk) {
-            EavModels::query('entity_translation')
+            Eav::$entityTranslationModel::query()
                 ->upsert($chunk, ['entity_type', 'entity_id', 'locale_id'], ['label', 'params', 'updated_at']);
         }
     }
 
-    /**
-     * @param  array<string, mixed>  $translation
-     *
-     * @throws \JsonException
-     */
-    private function buildTranslationRow(Model $model, int $localeId, array $translation, Carbon $timestamp): array
+    /** Index translations by locale_id. */
+    protected function indexTranslations(array $translations): array
+    {
+        return array_filter(
+            array_column($translations, null, 'locale_id'),
+            static fn (array $t) => ! is_null($t['label'] ?? null),
+        );
+    }
+
+    /** Build a single translation row for upsert. */
+    protected function buildTranslationRow(Model $model, int $localeId, array $translation, Carbon $timestamp): array
     {
         $params = array_filter([
             'short_name'  => $translation['short_name'] ?? null,

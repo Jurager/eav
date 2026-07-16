@@ -1,19 +1,20 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
 
-/**
- * URL field limited to absolute HTTP/HTTPS links.
- */
 class Link extends Field
 {
+    /** Get the storage column name. */
     public function column(): string
     {
         return self::STORAGE_TEXT;
     }
 
+    /** Validate the field value. */
     protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null) {
@@ -37,6 +38,7 @@ class Link extends Field
         return true;
     }
 
+    /** Normalize the field value to a string. */
     protected function normalize(mixed $value): string
     {
         return (string) $value;

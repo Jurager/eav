@@ -1,8 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Managers\Schema;
 
-use Illuminate\Support\Facades\Event;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Events\AttributeEnumCreated;
 use Jurager\Eav\Events\AttributeEnumDeleted;
 use Jurager\Eav\Events\AttributeEnumUpdated;
@@ -11,12 +13,14 @@ use Jurager\Eav\Models\AttributeEnum;
 
 class EnumSchema extends BaseSchema
 {
+    /** Find an enum by ID. */
     public function find(int $id): AttributeEnum
     {
         /** @var AttributeEnum */
         return $this->query()->findOrFail($id);
     }
 
+    /** Create a new enum for the given attribute. */
     public function create(Attribute $attribute, array $data): AttributeEnum
     {
         $translations = $this->extractTranslations($data);
@@ -29,6 +33,7 @@ class EnumSchema extends BaseSchema
         return $enum;
     }
 
+    /** Update an existing enum. */
     public function update(AttributeEnum $enum, array $data): AttributeEnum
     {
         $translations = $this->extractTranslations($data);
@@ -41,13 +46,15 @@ class EnumSchema extends BaseSchema
         return $enum;
     }
 
+    /** Delete an enum. */
     public function delete(AttributeEnum $enum): void
     {
         Event::dispatch(new AttributeEnumDeleted($this->deleteRecord($enum)));
     }
 
-    protected function modelKey(): string
+    /** Get the model class. */
+    protected function modelClass(): string
     {
-        return 'attribute_enum';
+        return Eav::$attributeEnumModel;
     }
 }

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * @property int $id
@@ -80,23 +80,23 @@ class Attribute extends Model
 
     public function type(): BelongsTo
     {
-        return $this->belongsTo(EavModels::class('attribute_type'), 'attribute_type_id');
+        return $this->belongsTo(Eav::$attributeTypeModel, 'attribute_type_id');
     }
 
     public function group(): BelongsTo
     {
-        return $this->belongsTo(EavModels::class('attribute_group'), 'attribute_group_id');
+        return $this->belongsTo(Eav::$attributeGroupModel, 'attribute_group_id');
     }
 
     public function enums(): HasMany
     {
-        return $this->hasMany(EavModels::class('attribute_enum'), 'attribute_id');
+        return $this->hasMany(Eav::$attributeEnumModel, 'attribute_id');
     }
 
     public function translations(): MorphToMany
     {
-        return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
-            ->using(EavModels::class('entity_translation'))
+        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
+            ->using(Eav::$entityTranslationModel)
             ->withPivot(['id', 'label', 'params'])
             ->withTimestamps()
             ->active();

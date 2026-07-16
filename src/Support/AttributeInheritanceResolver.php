@@ -21,7 +21,7 @@ class AttributeInheritanceResolver
     public function resolve(Collection $entities, string $model): Collection
     {
         $base = $entities->values();
-        $toInherit = $entities->filter(fn ($e) => $e->shouldInheritAttributes());
+        $toInherit = $entities->filter(fn ($e) => $e->shouldInheritEavAttributes());
 
         if ($toInherit->isEmpty()) {
             return $base;
@@ -44,7 +44,7 @@ class AttributeInheritanceResolver
         }
 
         $instance = new $model();
-        $columns = array_unique(array_merge($instance->inheritanceScopeColumns(), ['_lft', '_rgt']));
+        $columns = array_unique(array_merge($instance->getEavInheritanceColumns(), ['_lft', '_rgt']));
 
         $ancestors = $model::query()
             ->where(function ($query) use ($valid) {
@@ -92,7 +92,7 @@ class AttributeInheritanceResolver
         while ($currentIds->isNotEmpty() && $remaining-- > 0) {
             $parents = $model::query()
                 ->whereIn('id', $currentIds)
-                ->select((new $model())->inheritanceScopeColumns())
+                ->select((new $model())->getEavInheritanceColumns())
                 ->get()
                 ->keyBy('id');
 
@@ -103,7 +103,7 @@ class AttributeInheritanceResolver
             $allParents = $allParents->merge($parents);
 
             $currentIds = $parents
-                ->filter(fn ($p) => $p->shouldInheritAttributes() && $p->parent_id)
+                ->filter(fn ($p) => $p->shouldInheritEavAttributes() && $p->parent_id)
                 ->pluck('parent_id')
                 ->unique()
                 ->diff($allParents->keys());
@@ -126,7 +126,7 @@ class AttributeInheritanceResolver
             $ancestor = $ancestors->get($currentId);
             $result->push($ancestor);
 
-            if (! $ancestor->shouldInheritAttributes()) {
+            if (! $ancestor->shouldInheritEavAttributes()) {
                 break;
             }
 

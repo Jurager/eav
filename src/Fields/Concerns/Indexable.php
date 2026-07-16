@@ -1,18 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields\Concerns;
 
 /**
- * Search index and facet support for Field.
+ * Trait providing search index and facet support for fields.
  *
  * @phpstan-require-extends \Jurager\Eav\Fields\Field
  */
 trait Indexable
 {
-    /**
-     * Attribute-level keys this field contributes to filterableAttributes.
-     * Prefixed with "attributes." by SyncFilterable before sending to Meilisearch.
-     */
+    /** Get attribute-level keys this field contributes to filterableAttributes. */
     public function filterableKeys(): array
     {
         return [$this->code()];
@@ -20,7 +19,6 @@ trait Indexable
 
     /**
      * Enrich a raw Meilisearch facet distribution with display labels.
-     * Default: pass through unchanged. Override in enum-backed fields.
      *
      * @param  array<string, int>  $distribution
      * @return array<string, array{count: int, label: string}>|array<string, int>
@@ -30,7 +28,7 @@ trait Indexable
         return $distribution;
     }
 
-    /** @return array<string, mixed> */
+    /** Get data for the search index. */
     public function indexData(): array
     {
         $code = $this->code();
@@ -46,6 +44,6 @@ trait Indexable
             static fn ($v) => $v !== null && $v !== ''
         ));
 
-        return $values ? [$code => $values] : [];
+        return ! empty($values) ? [$code => $values] : [];
     }
 }

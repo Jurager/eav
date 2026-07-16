@@ -21,7 +21,7 @@ use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Support\AttributeQueryBuilder;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Support\AttributeValidator;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * @property Collection $assignedAttributes
@@ -42,7 +42,7 @@ trait HasAttributes
         static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
 
         static::resolveRelationUsing('available_attributes', fn (Model $model) => $model->availableAttributesRelation(
-            fn (Model $entity) => $entity->availableAttributesQuery($entity->attributeParameters()),
+            fn (Model $entity) => $entity->getAvailableAttributesQuery($entity->getEavScopes()),
         ));
     }
 
@@ -102,25 +102,25 @@ trait HasAttributes
     /**
      * Return available attribute definitions for this entity.
      *
-     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
+     * @param  array<int>  $params  Scope-model IDs from getEavScopes().
      * @return Collection<int, mixed>
      * @throws BindingResolutionException
      * @throws CircularDependencyException
      */
     public function availableAttributes(array $params = []): Collection
     {
-        return $this->availableAttributesQuery($params)?->get() ?? collect();
+        return $this->getAvailableAttributesQuery($params)?->get() ?? collect();
     }
 
     /**
      * Return a query builder for available attributes (global or by relation).
      *
-     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
+     * @param  array<int>  $params  Scope-model IDs from getEavScopes().
      * @return Builder|null
      * @throws BindingResolutionException
      * @throws CircularDependencyException
      */
-    public function availableAttributesQuery(array $params = []): ?Builder
+    public function getAvailableAttributesQuery(array $params = []): ?Builder
     {
         if (($model = static::attributeScopeModel()) !== null) {
             return $this->scopedAttributesQuery($params, $model);
@@ -136,7 +136,7 @@ trait HasAttributes
      */
     public function availableAttributesRelation(Closure $resolver): ClosureRelation
     {
-        return $this->closureRelation(EavModels::class('attribute'), $resolver);
+        return $this->closureRelation(Eav::$attributeModel, $resolver);
     }
 
     /**
@@ -152,7 +152,7 @@ trait HasAttributes
 
         return $this->availableAttributesRelation(static function (Model $parent) use ($entityClass, $scope, $constrain): ?Builder {
 
-            $query = (new $entityClass())->availableAttributesQuery($scope($parent));
+            $query = (new $entityClass())->getAvailableAttributesQuery($scope($parent));
 
             return $query !== null && $constrain !== null ? $constrain($query) : $query;
         });
@@ -185,7 +185,7 @@ trait HasAttributes
      */
     protected function attributeFilterBuilder(): AttributeQueryBuilder
     {
-        return AttributeManager::for($this->attributeEntityType())->builder();
+        return AttributeManager::for($this->getEavEntityType())->builder();
     }
 
     /**
@@ -321,29 +321,29 @@ trait HasAttributes
      * Whether this entity should inherit attributes from its parent.
      * Override in models that support attribute inheritance.
      */
-    public function shouldInheritAttributes(): bool
+    public function shouldInheritEavAttributes(): bool
     {
         return false;
     }
 
     /**
      * Columns needed when loading this entity for inheritance resolution.
-     * Override to add any column that shouldInheritAttributes() reads from.
+     * Override to add any column that shouldInheritEavAttributes() reads from.
      *
      * @return array<string>
      */
-    public function inheritanceScopeColumns(): array
+    public function getEavInheritanceColumns(): array
     {
         return ['id', 'parent_id'];
     }
 
     /**
-     * Default filter parameters passed to availableAttributesQuery().
+     * Default filter parameters passed to getAvailableAttributesQuery().
      * Override in models that use byRelation scope (e.g. return category IDs for Product).
      *
      * @return array<int>
      */
-    public function attributeParameters(): array
+    public function getEavScopes(): array
     {
         return [];
     }
@@ -353,7 +353,7 @@ trait HasAttributes
      */
     public function assignedAttributes(): MorphToMany
     {
-        return $this->morphToMany(EavModels::class('attribute'), 'entity', 'entity_attribute')
+        return $this->morphToMany(Eav::$attributeModel, 'entity', 'entity_attribute')
             ->withTimestamps()
             ->withPivot(['id', 'value_text', 'value_integer', 'value_float', 'value_boolean', 'value_date', 'value_datetime']);
     }
@@ -363,7 +363,7 @@ trait HasAttributes
      */
     public function attributeValues(): MorphMany
     {
-        return $this->morphMany(EavModels::class('entity_attribute'), 'entity');
+        return $this->morphMany(Eav::$entityAttributeModel, 'entity');
     }
 
     /**
@@ -388,15 +388,15 @@ trait HasAttributes
      */
     protected function globalAttributesQuery(): Builder
     {
-        return EavModels::query('attribute')
-            ->forEntity($this->attributeEntityType())
+        return Eav::$attributeModel::query()
+            ->forEntity($this->getEavEntityType())
             ->withRelations();
     }
 
     /**
      * Return a query for attributes scoped through related entities (e.g. categories for products).
      *
-     * @param  array<int>  $params  Scope-model IDs from attributeParameters().
+     * @param  array<int>  $params  Scope-model IDs from getEavScopes().
      * @param  class-string<Attributable>  $model
      *
      * @throws BindingResolutionException
@@ -410,7 +410,7 @@ trait HasAttributes
 
         $instance = new $model();
 
-        $columns = $instance->inheritanceScopeColumns();
+        $columns = $instance->getEavInheritanceColumns();
 
         if ($instance instanceof Hierarchical) {
             $columns = array_merge($columns, ['_lft', '_rgt']);
@@ -451,7 +451,7 @@ trait HasAttributes
         $foreignKey = $relation->getForeignPivotKeyName();
         $relatedKey = $relation->getRelatedPivotKeyName();
 
-        return EavModels::query('attribute')->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
+        return Eav::$attributeModel::query()->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
             $query->from($pivotTable)
                 ->select($relatedKey)
                 ->whereIn($foreignKey, $entityIds)

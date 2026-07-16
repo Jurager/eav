@@ -5,7 +5,7 @@ namespace Jurager\Eav\Support\Concerns;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * Core EAV persistence engine shared between AttributePersister and BatchAttributePersister.
@@ -34,12 +34,12 @@ trait ExecutesPersistence
             return;
         }
 
-        EavModels::query(self::MODEL_TRANSLATION)
+        Eav::$entityTranslationModel::query()
             ->where('entity_type', self::MODEL_ATTRIBUTE)
             ->whereIn('entity_id', $ids)
             ->delete();
 
-        EavModels::query(self::MODEL_ATTRIBUTE)
+        Eav::$entityAttributeModel::query()
             ->whereIn('id', $ids)
             ->delete();
     }
@@ -60,7 +60,7 @@ trait ExecutesPersistence
             return;
         }
 
-        $existing = EavModels::query(self::MODEL_ATTRIBUTE)
+        $existing = Eav::$entityAttributeModel::query()
             ->where('entity_type', $type)
             ->whereIn('entity_id', array_keys($grouped))
             ->whereIn('attribute_id', $attributeIds)
@@ -85,7 +85,7 @@ trait ExecutesPersistence
 
         $this->inChunks(
             $updates->pluck('row'),
-            fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)
+            fn (Collection $chunk) => Eav::$entityAttributeModel::query()
                 ->upsert($chunk->all(), ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
         );
 
@@ -101,11 +101,11 @@ trait ExecutesPersistence
 
         $rows = $inserts->pluck('row');
 
-        $maxIdBefore = (int) (EavModels::query(self::MODEL_ATTRIBUTE)->max('id') ?? 0);
+        $maxIdBefore = (int) (Eav::$entityAttributeModel::query()->max('id') ?? 0);
 
         $this->inChunks(
             $rows,
-            fn (Collection $chunk) => EavModels::query(self::MODEL_ATTRIBUTE)->insert($chunk->all()),
+            fn (Collection $chunk) => Eav::$entityAttributeModel::query()->insert($chunk->all()),
         );
 
         $hasTranslations = $inserts->pluck('translations')->contains(fn ($t) => ! empty($t));
@@ -119,7 +119,7 @@ trait ExecutesPersistence
 
         $this->inChunks(
             $this->buildTranslationRows(collect($mapped)),
-            fn (Collection $chunk) => EavModels::query(self::MODEL_TRANSLATION)
+            fn (Collection $chunk) => Eav::$entityTranslationModel::query()
                 ->upsert($chunk->all(), ['entity_type', 'entity_id', 'locale_id'], self::TRANSLATION_VALUE_COLUMNS),
         );
     }
@@ -138,7 +138,7 @@ trait ExecutesPersistence
         $emptyIds = $translatable->filter(fn ($t) => empty($t))->keys();
 
         if ($emptyIds->isNotEmpty()) {
-            EavModels::query(self::MODEL_TRANSLATION)
+            Eav::$entityTranslationModel::query()
                 ->where('entity_type', self::MODEL_ATTRIBUTE)
                 ->whereIn('entity_id', $emptyIds)
                 ->delete();
@@ -154,7 +154,7 @@ trait ExecutesPersistence
 
         $this->inChunks(
             $this->buildTranslationRows($withData),
-            fn (Collection $chunk) => EavModels::query(self::MODEL_TRANSLATION)
+            fn (Collection $chunk) => Eav::$entityTranslationModel::query()
                 ->upsert($chunk->all(), ['entity_type', 'entity_id', 'locale_id'], self::TRANSLATION_VALUE_COLUMNS),
         );
     }
@@ -176,7 +176,7 @@ trait ExecutesPersistence
                 $recordIds = $group->keys()->all();
                 $keepLocales = $group->first();
 
-                EavModels::query(self::MODEL_TRANSLATION)
+                Eav::$entityTranslationModel::query()
                     ->where('entity_type', self::MODEL_ATTRIBUTE)
                     ->whereIn('entity_id', $recordIds)
                     ->whereNotIn('locale_id', $keepLocales)
@@ -247,7 +247,7 @@ trait ExecutesPersistence
 
     private function fetchCreatedRecords(string $type, Collection $rows, int $maxIdBefore): Collection
     {
-        return EavModels::query(self::MODEL_ATTRIBUTE)
+        return Eav::$entityAttributeModel::query()
             ->where('entity_type', $type)
             ->whereIn('entity_id', $rows->pluck('entity_id')->unique())
             ->whereIn('attribute_id', $rows->pluck('attribute_id')->unique())

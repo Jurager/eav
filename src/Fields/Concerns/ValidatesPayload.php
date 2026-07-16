@@ -1,11 +1,13 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields\Concerns;
 
 use Illuminate\Support\Facades\Validator;
 
 /**
- * Payload validation, normalization, and Laravel rule application for Field.
+ * Trait providing payload validation, normalization, and rule application for fields.
  *
  * @phpstan-require-extends \Jurager\Eav\Fields\Field
  */
@@ -14,26 +16,19 @@ trait ValidatesPayload
     /** @var array<string> */
     protected array $validationErrors = [];
 
+    /** Check if there are validation errors. */
     public function hasErrors(): bool
     {
         return ! empty($this->validationErrors);
     }
 
-    /** @return array<string> */
+    /** Get validation errors. */
     public function errors(): array
     {
         return $this->validationErrors;
     }
 
-    /**
-     * Validate the full incoming payload, handling cardinality and localization.
-     *
-     * Override in subclasses that have a non-standard payload shape (e.g. Select).
-     * Default:
-     *   - non-localizable, single   → validate() + rules()
-     *   - non-localizable, multiple → iterate values, validate() + rules() per item
-     *   - localizable               → iterate locale translations, validate() + rules() per item
-     */
+    /** Validate the full incoming payload. */
     protected function validatePayload(mixed $values): bool
     {
         if (! $this->isLocalizable()) {
@@ -78,7 +73,7 @@ trait ValidatesPayload
                     return $this->addError(__('eav::attributes.validation.locale_required'));
                 }
 
-                if (! $this->localeRegistry->has($translation['locale_id'])) {
+                if (! $this->localeRegistry->has((int) $translation['locale_id'])) {
                     return $this->addError(__('eav::attributes.validation.invalid_locale'));
                 }
 
@@ -91,7 +86,7 @@ trait ValidatesPayload
         return true;
     }
 
-    /** @return array<int, array{locale_id: int|null, value: mixed}> */
+    /** Normalize input values into storage format. */
     protected function normalizeValues(array|string $values): array
     {
         if (! $this->isLocalizable()) {
@@ -102,21 +97,30 @@ trait ValidatesPayload
             return [['locale_id' => null, 'value' => $normalized]];
         }
 
-        $groups = $this->isMultiple() ? $values : [$values];
+        $input = $this->isMultiple() ? $values : [$values];
 
         $byLocale = [];
-        foreach ($groups as $group) {
+
+        foreach ($input as $group) {
             foreach ($group as $translation) {
-                $byLocale[$translation['locale_id']][] = $this->normalize($translation['values']);
+                $localeId = (int) $translation['locale_id'];
+                $byLocale[$localeId][] = $this->normalize($translation['values']);
             }
         }
 
-        return collect($byLocale)->map(fn ($values, $localeId) => [
-            'locale_id' => $localeId,
-            'value' => $this->isMultiple() ? $values : $values[0],
-        ])->values()->all();
+        $result = [];
+
+        foreach ($byLocale as $localeId => $items) {
+            $result[] = [
+                'locale_id' => $localeId,
+                'value'     => $this->isMultiple() ? $items : $items[0],
+            ];
+        }
+
+        return $result;
     }
 
+    /** Add a validation error. */
     protected function addError(string $message): bool
     {
         $this->validationErrors[] = $message;
@@ -124,6 +128,7 @@ trait ValidatesPayload
         return false;
     }
 
+    /** Apply Laravel validation rules to a value. */
     private function applyRules(mixed $value): bool
     {
         if (! $this->validate($value, $this->entity)) {
@@ -149,9 +154,7 @@ trait ValidatesPayload
         return true;
     }
 
-    /**
-     * Convert configurable validation rules stored on the attribute to Laravel rule strings.
-     */
+    /** Convert attribute validations to Laravel rules. */
     private function rules(): array
     {
         $map = config('eav.validations', []);

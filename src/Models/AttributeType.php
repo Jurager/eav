@@ -4,7 +4,7 @@ namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * @property int $id
@@ -40,7 +40,7 @@ class AttributeType extends Model
 
     public function attributes(): HasMany
     {
-        return $this->hasMany(EavModels::class('attribute'), 'attribute_type_id');
+        return $this->hasMany(Eav::$attributeModel, 'attribute_type_id');
     }
 
     protected function casts(): array

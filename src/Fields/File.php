@@ -1,33 +1,26 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
 
-/**
- * Generic file field.
- *
- * Storage is intentionally minimal — values are validated permissively and
- * passed through normalization. URL resolution, existence checks and any
- * other infrastructure concerns are the responsibility of the consuming
- * application (e.g. via a subclass that overrides resolve()).
- */
 class File extends Field
 {
+    /** Get the storage column name. */
     public function column(): string
     {
         return self::STORAGE_TEXT;
     }
 
-    /**
-     * File value validation is intentionally permissive.
-     * Concrete upload flow should validate file type and size before saving the value.
-     */
+    /** Validate the field value (permissive by design). */
     protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         return true;
     }
 
+    /** Normalize the field value. */
     protected function normalize(mixed $value): mixed
     {
         if ($value === null) {
@@ -35,7 +28,10 @@ class File extends Field
         }
 
         if (is_array($value)) {
-            return array_values(array_filter($value, static fn ($v): bool => $v !== null && $v !== ''));
+            return collect($value)
+                ->filter(static fn ($v): bool => $v !== null && $v !== '')
+                ->values()
+                ->all();
         }
 
         return $value;

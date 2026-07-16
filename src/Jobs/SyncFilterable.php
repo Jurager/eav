@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Jobs;
 
 use Illuminate\Contracts\Queue\ShouldBeUnique;
@@ -7,15 +9,12 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Support\EavModels;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\MeilisearchEngine;
 use Meilisearch\Client;
 
-/**
- * Sync filterable attributes for a given entity type.
- */
 class SyncFilterable implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
@@ -32,63 +31,52 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
 
     public function handle(FieldFactory $fieldFactory): void
     {
-        if (! class_exists(EngineManager::class) || ! class_exists(Client::class)) {
-            return;
-        }
-
-        $engine = app(EngineManager::class)->driver();
-
-        if (! $engine instanceof MeilisearchEngine) {
+        if (! $this->isMeilisearchEngine()) {
             return;
         }
 
         $modelClass = Relation::getMorphedModel($this->entityType);
 
-        if (! $modelClass || ! is_subclass_of($modelClass, Model::class)) {
-            return;
-        }
-
-        if (! method_exists($modelClass, 'searchableAs')) {
+        if (! $modelClass || ! is_subclass_of($modelClass, Model::class) || ! method_exists($modelClass, 'searchableAs')) {
             return;
         }
 
         $indexName = (new $modelClass())->searchableAs();
+        $paths = $this->getFilterablePaths($fieldFactory);
 
-        $paths = EavModels::query('attribute')
+        app(Client::class)->index($indexName)->updateFilterableAttributes(
+            array_values(array_unique(array_merge($this->getConfiguredFilterableAttributes($modelClass), $paths)))
+        );
+    }
+
+    /** Determine if the current Scout engine is Meilisearch. */
+    protected function isMeilisearchEngine(): bool
+    {
+        return class_exists(EngineManager::class)
+            && class_exists(Client::class)
+            && app(EngineManager::class)->driver() instanceof MeilisearchEngine;
+    }
+
+    /** Map filterable attributes to their indexable paths. */
+    protected function getFilterablePaths(FieldFactory $fieldFactory): array
+    {
+        return Eav::$attributeModel::query()
             ->forEntity($this->entityType)
             ->where('filterable', true)
             ->with('type')
             ->get()
-            ->flatMap(function ($attribute) use ($fieldFactory) {
-                $field = $fieldFactory->make($attribute);
-
-                return collect($field->filterableKeys())->map(fn ($key) => "attributes.$key");
-            })
+            ->flatMap(fn ($attribute) => $fieldFactory->make($attribute)->filterableKeys())
+            ->map(fn (string $key) => "attributes.{$key}")
             ->unique()
             ->values()
             ->all();
-
-        $index = app(Client::class)->index($indexName);
-
-        $index->updateFilterableAttributes(
-            array_values(array_unique(array_merge($this->configuredFilterableAttributes($modelClass), $paths))),
-        );
     }
 
-    /**
-     * Non-EAV filterable attributes declared for the model in scout config.
-     *
-     * Read from configuration rather than the live index so the result is
-     * deterministic and independent of the order in which this job and
-     * `scout:sync-index-settings` apply their (asynchronous) Meilisearch tasks.
-     *
-     * @param  class-string  $modelClass
-     * @return array<int, string>
-     */
-    private function configuredFilterableAttributes(string $modelClass): array
+    /** Get non-EAV filterable attributes declared in config. */
+    protected function getConfiguredFilterableAttributes(string $modelClass): array
     {
-        $indexSettings = config('scout.meilisearch.index-settings', []);
+        $settings = config('scout.meilisearch.index-settings', []);
 
-        return $indexSettings[$modelClass]['filterableAttributes'] ?? [];
+        return $settings[$modelClass]['filterableAttributes'] ?? [];
     }
 }

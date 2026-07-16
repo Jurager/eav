@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Managers\Schema;
 
 use Illuminate\Support\Carbon;
@@ -9,12 +11,8 @@ use Illuminate\Support\Facades\Event;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
-/**
- * Handles bulk creation of attributes in a single batched DB operation.
- */
 class AttributeBatchSchema
 {
     public function __construct(
@@ -23,8 +21,10 @@ class AttributeBatchSchema
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $attributesData
-     * @return Collection<string, Attribute>  Keyed by "{entity_type}:{code}".
+     * Execute the batch creation of attributes.
+     * @param array<int, array<string, mixed>> $attributesData
+     * @return Collection<string, Attribute> Keyed by "{entity_type}:{code}".
+     * @throws \Throwable
      */
     public function execute(array $attributesData, bool $fireEvents = true): Collection
     {
@@ -39,13 +39,13 @@ class AttributeBatchSchema
         [$rows, $translationMap] = $this->buildRows($attributesData, $types, $sortCounters, $now);
 
         $created = DB::transaction(function () use ($rows, $translationMap, $now): Collection {
-            $maxIdBefore = (int) (EavModels::query('attribute')->withTrashed()->max('id') ?? 0);
+            $maxIdBefore = (int) (Eav::$attributeModel::query()->withTrashed()->max('id') ?? 0);
 
             foreach (array_chunk($rows, 500) as $chunk) {
-                EavModels::query('attribute')->insert($chunk);
+                Eav::$attributeModel::query()->insert($chunk);
             }
 
-            $created = EavModels::query('attribute')
+            $created = Eav::$attributeModel::query()
                 ->whereIn('entity_type', array_values(array_unique(array_column($rows, 'entity_type'))))
                 ->whereIn('code', array_column($rows, 'code'))
                 ->where('id', '>', $maxIdBefore)
@@ -64,36 +64,24 @@ class AttributeBatchSchema
         return $created;
     }
 
-    /**
-     * Pre-fetch attribute types indexed by ID.
-     *
-     * @param  array<int, array<string, mixed>>  $attributesData
-     * @return Collection<int, AttributeType>
-     */
+    /** Pre-fetch attribute types indexed by ID. */
     private function fetchTypes(array $attributesData): Collection
     {
-        return EavModels::query('attribute_type')
+        return Eav::$attributeTypeModel::query()
             ->whereIn('id', array_values(array_unique(array_column($attributesData, 'attribute_type_id'))))
             ->get()
             ->keyBy('id');
     }
 
-    /**
-     * Pre-compute MAX(sort) per group so inserts get sequential sort values.
-     *
-     * @param  array<int, array<string, mixed>>  $attributesData
-     * @return array<string, int>  Keyed by (string) group_id, or "" for ungrouped.
-     */
+    /** Pre-compute MAX(sort) per group for sequential numbering. */
     private function initializeSortCounters(array $attributesData): array
     {
-        $groupIds = array_values(array_unique(
-            array_map(fn (array $d) => $d['attribute_group_id'] ?? null, $attributesData),
-        ));
+        $groupIds = array_values(array_map(fn (array $d) => $d['attribute_group_id'] ?? null, array_unique($attributesData)));
 
         $counters = [];
 
         foreach ($groupIds as $groupId) {
-            $counters[(string) $groupId] = (int) EavModels::query('attribute')
+            $counters[(string) $groupId] = (int) Eav::$attributeModel::query()
                 ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
                 ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
                 ->max('sort');
@@ -102,21 +90,14 @@ class AttributeBatchSchema
         return $counters;
     }
 
-    /**
-     * Transform raw payloads into DB row arrays and extract translation data.
-     *
-     * @param  array<int, array<string, mixed>>  $attributesData
-     * @param  Collection<int, AttributeType>  $types
-     * @param  array<string, int>  $sortCounters
-     * @return array{0: array<int, array>, 1: array<string, array>}
-     */
+    /** Transform raw payloads into DB row arrays and extract translation data. */
     private function buildRows(array $attributesData, Collection $types, array $sortCounters, Carbon $now): array
     {
         $translationMap = [];
         $rows = [];
 
         foreach ($attributesData as $data) {
-            $key = ($data['entity_type'] ?? '').':'.$data['code'];
+            $key = ($data['entity_type'] ?? '') . ':' . $data['code'];
             $translationMap[$key] = $data['translations'] ?? [];
             unset($data['translations']);
 
@@ -137,12 +118,7 @@ class AttributeBatchSchema
         return [$rows, $translationMap];
     }
 
-    /**
-     * Persist translations for a batch of newly created attributes in a single upsert.
-     *
-     * @param  Collection<string, Attribute>  $created
-     * @param  array<string, array>  $translationMap
-     */
+    /** Persist translations for a batch of newly created attributes. */
     private function saveBatchTranslations(Collection $created, array $translationMap, Carbon $now): void
     {
         $batch = $created

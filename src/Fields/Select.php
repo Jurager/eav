@@ -1,25 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\AttributeEnum;
 
-/**
- * Enum-backed select field storing selected enum IDs in integer column.
- */
+/** Field for enum-backed select, storing selected ID in an integer column. */
 class Select extends Field
 {
+    /** Get the storage column name. */
     public function column(): string
     {
         return self::STORAGE_INTEGER;
     }
 
+    /** Check if this field supports enums. */
     public function isEnum(): bool
     {
         return true;
     }
 
+    /** Convert field values to storage format. */
     public function toStorage(): array
     {
         $value = $this->values[0]['value'] ?? null;
@@ -28,6 +31,7 @@ class Select extends Field
         return array_map(static fn ($v) => ['value' => $v, 'translations' => []], $items);
     }
 
+    /** Get the current value as an int or array of ints. */
     public function value(?int $localeId = null): int|array|null
     {
         $raw = $this->values[0]['value'] ?? null;
@@ -39,6 +43,7 @@ class Select extends Field
         };
     }
 
+    /** Get the selected enum instance. */
     public function enum(?int $localeId = null): ?AttributeEnum
     {
         $enumId = $this->value($localeId);
@@ -50,7 +55,7 @@ class Select extends Field
         return $this->enumRegistry->find($this->attribute->id, $enumId);
     }
 
-    /** @return array<int, AttributeEnum> */
+    /** Get all selected enum instances. */
     public function enums(?int $localeId = null): array
     {
         $value = $this->value($localeId);
@@ -65,6 +70,7 @@ class Select extends Field
             ->all();
     }
 
+    /** Get the label for the current value(s). */
     public function label(?int $localeId = null): string|array|null
     {
         $localeId ??= $this->localeRegistry->default();
@@ -79,6 +85,7 @@ class Select extends Field
         return $this->enum()?->label($localeId);
     }
 
+    /** Get data for the search index. */
     public function indexData(): array
     {
         $code = $this->code();
@@ -88,8 +95,9 @@ class Select extends Field
             return [];
         }
 
+        $enums = $this->enums();
         $enumCode = $this->isMultiple()
-            ? array_map(static fn (AttributeEnum $enum) => $enum->code, $this->enums())
+            ? array_map(static fn (AttributeEnum $enum) => $enum->code, $enums)
             : $this->enum()?->code;
 
         if ($enumCode === null || $enumCode === []) {
@@ -98,13 +106,13 @@ class Select extends Field
 
         $result = [$code => $enumCode];
 
-        $labels = array_values(array_unique(array_filter(
-            array_merge(...array_map(
-                fn (int $localeId) => (array) $this->label($localeId),
-                $this->localeRegistry->ids()
-            )),
-            static fn ($label) => $label !== null && $label !== ''
-        )));
+        $labels = collect($this->localeRegistry->ids())
+            ->map(fn (int $localeId) => $this->label($localeId))
+            ->flatten()
+            ->filter(fn ($label) => $label !== null && $label !== '')
+            ->unique()
+            ->values()
+            ->all();
 
         if ($labels) {
             $result["{$code}_label"] = $labels;
@@ -113,10 +121,7 @@ class Select extends Field
         return $result;
     }
 
-    /**
-     * @param  array<string, int>  $distribution
-     * @return array<string, array{count: int, label: string}>
-     */
+    /** Enrich distribution data with labels. */
     public function enrichFacetDistribution(array $distribution, ?int $localeId = null): array
     {
         $enums = $this->enumRegistry->all($this->attribute->id)->keyBy('code');
@@ -127,11 +132,9 @@ class Select extends Field
             $label = $code;
 
             if ($enum !== null) {
-                if ($localeId !== null) {
-                    $label = $enum->label($localeId) ?? $code;
-                } else {
-                    $label = $enum->translations->first()?->pivot?->label ?? $code;
-                }
+                $label = $localeId !== null
+                    ? ($enum->label($localeId) ?? $code)
+                    : ($enum->translations->first()?->pivot?->label ?? $code);
             }
 
             $result[$code] = ['count' => $count, 'label' => $label];
@@ -140,6 +143,7 @@ class Select extends Field
         return $result;
     }
 
+    /** Normalize raw input values into storage format. */
     protected function normalizeValues(array|string|int $values): array
     {
         $normalized = is_array($values)
@@ -149,23 +153,30 @@ class Select extends Field
         return [['locale_id' => null, 'value' => $normalized]];
     }
 
+    /** Validate the field value. */
     protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if ($value === null) {
             return true;
         }
 
-        if (! is_numeric($value)) {
-            return $this->addError(__('eav::attributes.validation.invalid_value'));
-        }
+        $values = (array) $value;
 
-        if (! $this->enumRegistry->isValidId($this->attribute->id, (int) $value)) {
-            return $this->addError(__('eav::attributes.validation.invalid_enum'));
+        foreach ($values as $item) {
+
+            if (! is_numeric($item)) {
+                return $this->addError(__('eav::attributes.validation.invalid_value'));
+            }
+
+            if (! $this->enumRegistry->isValidId($this->attribute->id, (int) $item)) {
+                return $this->addError(__('eav::attributes.validation.invalid_enum'));
+            }
         }
 
         return true;
     }
 
+    /** Normalize the value to an integer. */
     protected function normalize(mixed $value): int
     {
         return (int) $value;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Managers\Schema;
 
 use Illuminate\Support\Facades\Event;
@@ -8,22 +10,25 @@ use Jurager\Eav\Events\AttributeDeleted;
 use Jurager\Eav\Events\AttributeUpdated;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 class AttributeSchema extends BaseSchema
 {
-    public function __construct(TranslationManager $translations, private AttributeBatchSchema $batchSchema)
-    {
+    public function __construct(
+        TranslationManager $translations,
+        private AttributeBatchSchema $batchSchema,
+    ) {
         parent::__construct($translations);
     }
 
+    /** Find an attribute by ID. */
     public function find(int $id): Attribute
     {
         /** @var Attribute */
         return $this->query()->findOrFail($id);
     }
 
-    /** Find by entity type and code, or create. Existing attributes only get translations updated. */
+    /** Find by entity type and code, or create. */
     public function findOrCreate(string $entityType, string $code, array $data): Attribute
     {
         $attribute = $this->query()
@@ -32,9 +37,7 @@ class AttributeSchema extends BaseSchema
             ->first();
 
         if ($attribute) {
-            $translations = $data['translations'] ?? [];
-
-            if (! empty($translations)) {
+            if ($translations = $data['translations'] ?? []) {
                 $this->translations->save($attribute, $translations);
             }
 
@@ -44,10 +47,11 @@ class AttributeSchema extends BaseSchema
         return $this->create($data);
     }
 
+    /** Create a new attribute. */
     public function create(array $data): Attribute
     {
         $translations = $this->extractTranslations($data);
-        $type = EavModels::query('attribute_type')->findOrFail($data['attribute_type_id']);
+        $type = Eav::$attributeTypeModel::query()->findOrFail($data['attribute_type_id']);
 
         $data = $type->constrain($data);
         $data['sort'] ??= $this->nextSort($data['attribute_group_id'] ?? null);
@@ -60,10 +64,11 @@ class AttributeSchema extends BaseSchema
         return $attribute;
     }
 
+    /** Update an existing attribute. */
     public function update(Attribute $attribute, array $data): Attribute
     {
         $translations = $this->extractTranslations($data);
-        $type = EavModels::query('attribute_type')->findOrFail($data['attribute_type_id'] ?? $attribute->attribute_type_id);
+        $type = Eav::$attributeTypeModel::query()->findOrFail($data['attribute_type_id'] ?? $attribute->attribute_type_id);
 
         $data = $type->constrain($data);
 
@@ -75,12 +80,13 @@ class AttributeSchema extends BaseSchema
         return $attribute;
     }
 
+    /** Delete an attribute. */
     public function delete(Attribute $attribute): void
     {
         Event::dispatch(new AttributeDeleted($this->deleteRecord($attribute)));
     }
 
-    /** Move an attribute to a new zero-based position within its group (or across the entity type when groups are not used). */
+    /** Sort an attribute within its group or entity scope. */
     public function sort(Attribute $attribute, int $position): Attribute
     {
         $siblings = $this->query()
@@ -96,22 +102,24 @@ class AttributeSchema extends BaseSchema
         return $attribute->fresh();
     }
 
+    /** Get the batch schema manager. */
     public function batch(): AttributeBatchSchema
     {
         return $this->batchSchema;
     }
 
-    protected function modelKey(): string
+    /** Get the model class. */
+    protected function modelClass(): string
     {
-        return 'attribute';
+        return Eav::$attributeModel;
     }
 
-    /** Return the next sort value for a new attribute in the given group. */
+    /** Get the next sort value for an attribute in the given group. */
     private function nextSort(?int $groupId): int
     {
         return (int) $this->query()
-            ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
-            ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
-            ->max('sort') + 1;
+                ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
+                ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
+                ->max('sort') + 1;
     }
 }

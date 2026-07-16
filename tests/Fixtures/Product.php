@@ -16,7 +16,7 @@ class Product extends Model implements Attributable
 
     protected $fillable = ['name'];
 
-    public function attributeEntityType(): string
+    public function getEavEntityType(): string
     {
         return 'product';
     }

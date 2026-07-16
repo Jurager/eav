@@ -4,7 +4,7 @@ namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 /**
  * @property int $id
@@ -26,7 +26,7 @@ class EntityTranslation extends MorphPivot
 
     public function locale(): BelongsTo
     {
-        return $this->belongsTo(EavModels::class('locale'), 'locale_id');
+        return $this->belongsTo(Eav::$localeModel, 'locale_id');
     }
 
     protected function casts(): array

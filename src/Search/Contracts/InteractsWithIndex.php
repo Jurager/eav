@@ -1,6 +1,7 @@
 <?php
 
 namespace Jurager\Eav\Search\Contracts;
+
 interface InteractsWithIndex
 {
     /** @return array<string, string> External filter key => indexed searchable field. */

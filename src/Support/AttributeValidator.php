@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Managers\AttributeManager;
 
@@ -41,7 +42,7 @@ class AttributeValidator
         $this->manager = $manager ?? AttributeManager::for($entity);
         $this->manager->ensureSchema();
 
-        $this->entityType = $entity->attributeEntityType();
+        $this->entityType = $entity->getEavEntityType();
         $this->entityId = $entity->id ?? null;
 
         $modelClass = Relation::getMorphedModel($this->entityType);
@@ -129,7 +130,7 @@ class AttributeValidator
     {
         $scopeCallback = $this->uniqueScopes[$field->attribute()->code] ?? null;
 
-        $base = EavModels::query('entity_attribute')
+        $base = Eav::$entityAttributeModel::query()
             ->where('entity_type', $this->entityType)
             ->where('attribute_id', $field->attribute()->id)
             ->when($this->entityId, fn ($q) => $q->where('entity_id', '!=', $this->entityId))
@@ -151,7 +152,7 @@ class AttributeValidator
                 return [];
             }
 
-            $conflict = EavModels::query('entity_translation')
+            $conflict = Eav::$entityTranslationModel::query()
                 ->where('entity_type', 'entity_attribute')
                 ->whereIn('entity_id', $base->select('id'))
                 ->where(function ($q) use ($labels) {

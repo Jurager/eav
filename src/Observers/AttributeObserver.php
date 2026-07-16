@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Events\AttributeCreated;
@@ -11,7 +13,7 @@ use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 class AttributeObserver
 {
@@ -21,23 +23,16 @@ class AttributeObserver
     ) {
     }
 
-    /**
-     * Forget the schema cache when a new attribute is created.
-     */
+    /** Handle the "created" event. */
     public function created(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
-
-        if ($attribute->filterable) {
-            $this->syncFilterable($attribute);
-        }
+        $this->syncAttributeStates($attribute);
 
         AttributeCreated::dispatch($attribute);
     }
 
-    /**
-     * Re-index entities and sync filterable settings when searchable/filterable flags change.
-     */
+    /** Handle the "updated" event. */
     public function updated(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
@@ -54,9 +49,7 @@ class AttributeObserver
         AttributeUpdated::dispatch($attribute);
     }
 
-    /**
-     * Re-index and clean up values when an attribute is deleted.
-     */
+    /** Handle the "deleted" event. */
     public function deleted(Attribute $attribute): void
     {
         if ($attribute->isForceDeleting()) {
@@ -64,50 +57,37 @@ class AttributeObserver
         }
 
         $this->schema->forget($attribute->entity_type);
+        $this->syncAttributeStates($attribute);
 
-        if ($attribute->searchable) {
-            $this->syncSearchable($attribute);
-        }
-
-        if ($attribute->filterable) {
-            $this->syncFilterable($attribute);
-        }
-
-        EavModels::query('entity_attribute')
+        Eav::$entityAttributeModel::query()
             ->where('attribute_id', $attribute->id)
             ->delete();
 
         AttributeDeletedEvent::dispatch($attribute);
     }
 
-    /**
-     * Flush caches, update indexes, and prune stored values on permanent deletion.
-     */
+    /** Handle the "forceDeleted" event. */
     public function forceDeleted(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
         $this->enums->forget($attribute->id);
 
-        if ($attribute->searchable) {
-            $this->syncSearchable($attribute);
-        }
-
-        if ($attribute->filterable) {
-            $this->syncFilterable($attribute);
-        }
-
+        $this->syncAttributeStates($attribute);
         PruneAttribute::dispatch($attribute->id);
 
         AttributeDeletedEvent::dispatch($attribute);
     }
 
-    /**
-     * Re-index and sync filterable settings when a soft-deleted attribute is restored.
-     */
+    /** Handle the "restored" event. */
     public function restored(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
+        $this->syncAttributeStates($attribute);
+    }
 
+    /** Sync all relevant attribute states (searchable/filterable). */
+    protected function syncAttributeStates(Attribute $attribute): void
+    {
         if ($attribute->searchable) {
             $this->syncSearchable($attribute);
         }
@@ -117,11 +97,13 @@ class AttributeObserver
         }
     }
 
+    /** Dispatch the job to sync searchable index. */
     protected function syncSearchable(Attribute $attribute): void
     {
         SyncSearchable::dispatch($attribute->entity_type, $attribute->id)->afterCommit();
     }
 
+    /** Dispatch the job to sync filterable index. */
     protected function syncFilterable(Attribute $attribute): void
     {
         SyncFilterable::dispatch($attribute->entity_type)->afterCommit();

@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Collection;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Registry\EnumRegistry;
 
@@ -34,7 +35,7 @@ class AttributeQueryBuilder
             return null;
         }
 
-        $sub = EavModels::query('entity_attribute')
+        $sub = Eav::$entityAttributeModel::query()
             ->select('entity_id')
             ->where('entity_type', $entityType)
             ->where('attribute_id', $field->attribute()->id);
@@ -128,7 +129,7 @@ class AttributeQueryBuilder
 
         $column = $field->column();
 
-        $rows = EavModels::query('entity_attribute')
+        $rows = Eav::$entityAttributeModel::query()
             ->select(['entity_id', $column])
             ->where('entity_type', $entityType)
             ->where('attribute_id', $field->attribute()->id)
