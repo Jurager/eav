@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Jurager\Eav\Relations\AvailableAttributes;
+use Jurager\Eav\Relations\ClosureRelation;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 use JsonException;
@@ -30,6 +30,8 @@ use Jurager\Eav\Support\EavModels;
  */
 trait HasAttributes
 {
+    use HasClosureRelations;
+
     /**
      * Cached AttributeManager instance — one per model instance.
      */
@@ -132,19 +134,19 @@ trait HasAttributes
      *
      * @param  Closure(Model): (Builder|null)  $resolver
      */
-    public function availableAttributesRelation(Closure $resolver): AvailableAttributes
+    public function availableAttributesRelation(Closure $resolver): ClosureRelation
     {
-        return new AvailableAttributes(EavModels::query('attribute'), $this, $resolver);
+        return $this->closureRelation(EavModels::class('attribute'), $resolver);
     }
 
     /**
-     * Relation exposing another entity's available attributes scoped to this model.
+     * Relation exposing another entity's available attributes, scoped to this model.
      *
      * @param  class-string  $entityClass
      * @param  Closure(static): array<int>|null  $scope  Scope entity ids; defaults to the nested-set subtree.
      * @param  Closure(Builder): Builder|null  $constrain
      */
-    public function scopedAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): AvailableAttributes
+    public function relatedAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): ClosureRelation
     {
         $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
 
