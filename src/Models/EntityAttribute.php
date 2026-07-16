@@ -5,6 +5,8 @@ namespace Jurager\Eav\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Jurager\Eav\Concerns\HasScopedRelations;
+use Jurager\Eav\Relations\BelongsToScoped;
 use Jurager\Eav\Support\EavModels;
 
 /**
@@ -21,6 +23,8 @@ use Jurager\Eav\Support\EavModels;
  */
 class EntityAttribute extends Model
 {
+    use HasScopedRelations;
+
     protected $table = 'entity_attribute';
 
     protected $fillable = [
@@ -28,6 +32,15 @@ class EntityAttribute extends Model
         'value_text', 'value_integer', 'value_float',
         'value_boolean', 'value_date', 'value_datetime',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'value_boolean' => 'boolean',
+            'value_date' => 'date',
+            'value_datetime' => 'datetime',
+        ];
+    }
 
     protected static function booted(): void
     {
@@ -41,20 +54,16 @@ class EntityAttribute extends Model
         return $this->belongsTo(EavModels::class('attribute'));
     }
 
+    public function enum(): BelongsToScoped
+    {
+        return $this->belongsToScoped(EavModels::class('attribute_enum'), 'attribute_id', 'value_integer');
+    }
+
     public function translations(): MorphToMany
     {
         return $this->morphToMany(EavModels::class('locale'), 'entity', 'entity_translations')
             ->using(EavModels::class('entity_translation'))
             ->withPivot(['id', 'label', 'created_at', 'updated_at'])
             ->active();
-    }
-
-    protected function casts(): array
-    {
-        return [
-            'value_boolean' => 'boolean',
-            'value_date' => 'date',
-            'value_datetime' => 'datetime',
-        ];
     }
 }
