@@ -5,7 +5,7 @@ weight: 20
 
 ## Making a Model Attributable
 
-Implement `Attributable` and use `HasAttributes`. Only `attributeEntityType()` is required:
+Implement `Attributable` and use `HasAttributes`. Only `getEavEntityType()` is required:
 
 ```php
 use Jurager\Eav\Concerns\HasAttributes;
@@ -15,7 +15,7 @@ class Product extends Model implements Attributable
 {
     use HasAttributes;
 
-    public function attributeEntityType(): string
+    public function getEavEntityType(): string
     {
         return 'product';
     }
@@ -55,15 +55,15 @@ See [Advanced](advanced.md#search-indexing) for the full indexing workflow.
 
 ## Scoping Attributes Via a Related Model
 
-To give each product its own attribute schema based on its categories, override two methods:
+By default every entity shares one global attribute schema per entity type. To give each product its own schema based on its categories instead, override `attributeScopeModel()` and `getEavScopes()`:
 
 ```php
-protected static function attributeScopeModel(): string
+protected static function attributeScopeModel(): ?string
 {
     return Category::class;
 }
 
-public function attributeParameters(): array
+public function getEavScopes(): array
 {
     $this->loadMissing('categories');
 
@@ -71,15 +71,16 @@ public function attributeParameters(): array
 }
 ```
 
-The scope-provider model (`Category`) must override `attributes()` with a `BelongsToMany`:
+`getEavScopes()` returns the related scope IDs — here, the product's category IDs. The package resolves the schema through those categories, following [attribute inheritance](advanced.md#attribute-inheritance) if enabled.
+
+The scope model exposes its attributes through `attributeScopeRelation()`, which defaults to the standard `entity_attribute` relation. Override it with a dedicated pivot table to keep attribute assignment separate from any EAV values stored on the category itself:
 
 ```php
 // Category.php
-public function attributes(): BelongsToMany
+public function attributeScopeRelation(): BelongsToMany
 {
-    return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id')
-        ->withPivot(['id', 'created_at']);
+    return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id');
 }
 ```
 
-`HasAttributes` provides a default `attributes()` returning a `MorphToMany` via `entity_attribute` — available on every Attributable model. Scope providers override it with a `BelongsToMany` so the package can resolve the schema through that relation.
+`$product->availableAttributes()` now resolves to the union of attributes assigned to every category the product belongs to.

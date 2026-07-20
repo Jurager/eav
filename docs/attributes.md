@@ -5,7 +5,7 @@ weight: 30
 
 ## Introduction
 
-Every attributable model exposes an `eav()` accessor that returns a per-instance attribute manager. You may use this manager to read and write attribute values, persist single attributes or full sets, and batch-sync large collections.
+Every attributable model exposes an `eav()` accessor for reading and writing attribute values, persisting single attributes or full sets, and batch-syncing large collections.
 
 ## Reading Values
 
@@ -119,7 +119,7 @@ The default chunk size is 500 entities per transaction.
 
 ### Handling Errors During Batch Import
 
-By default, a failing chunk re-throws and halts processing. When `onError` is provided, the strategy is optimistic: the chunk is attempted in a single transaction first. If that transaction fails, each entity is retried individually. Entities that fail individually are passed to `onError` and skipped — the rest of the batch continues:
+By default, a failing chunk re-throws and halts processing. Pass `onError` to retry a failed chunk entity-by-entity instead — bad entities are skipped and passed to the callback, and the rest of the batch continues:
 
 ```php
 AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $entity): void {
@@ -127,7 +127,7 @@ AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $e
 });
 ```
 
-This means a single bad entity does not abort the entire import, but it also means successfully-persisted entities within a failed chunk are re-persisted during the per-entity retry (upsert semantics, so idempotent).
+Persistence is upsert-based, so entities already saved before a chunk failed are retried safely.
 
 ## Finding Entities by Attribute Value
 

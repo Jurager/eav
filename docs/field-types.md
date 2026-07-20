@@ -104,6 +104,7 @@ Register the subclass in `config/eav.php` under the appropriate type code. See [
 You may define your own field type by extending the `Field` base class and implementing three abstract methods. The example below stores a measurement with a unit reference:
 
 ```php
+use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 
 class MeasurementField extends Field
@@ -113,7 +114,7 @@ class MeasurementField extends Field
         return Field::STORAGE_FLOAT;
     }
 
-    protected function validate(mixed $value): bool
+    protected function validate(mixed $value, ?Attributable $entity = null): bool
     {
         if (! is_array($value) || ! isset($value['value'], $value['measurement_unit_id'])) {
             return $this->addError('Measurement value must contain value and measurement_unit_id.');
@@ -171,7 +172,7 @@ You may register the type through the configuration file:
 
 ```php
 // config/eav.php
-'field_types' => [
+'types' => [
     'measurement' => \App\Fields\MeasurementField::class,
 ],
 ```

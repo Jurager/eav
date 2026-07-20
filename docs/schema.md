@@ -66,7 +66,7 @@ To move an attribute to a specific position, call `sort` with a zero-based index
 $schema->attribute()->sort($attribute, position: 0); // move to top
 ```
 
-When `attribute_group_id` is set, sorting is scoped to that group. When attributes have no group (`attribute_group_id` is null), all attributes of the same `entity_type` are sorted together — this is the expected behavior for projects that do not use attribute groups.
+Sorting is scoped to `attribute_group_id` when set; ungrouped attributes are sorted together across the entity type.
 
 ### Finding an Attribute
 
@@ -166,7 +166,7 @@ try {
 
 ## Batch Creating Attributes
 
-To create many attributes at once — for example during an import — use the batch API. Existing attributes (matched by `entity_type` + `code`) are skipped; only missing ones are inserted:
+To create many attributes at once — for example during an import — use the batch API. It inserts every attribute in a single transaction and persists all translations in one additional batched upsert, which is significantly faster than calling `create()` in a loop:
 
 ```php
 $created = $schema->attribute()->batch()->execute([
@@ -184,5 +184,7 @@ $created = $schema->attribute()->batch()->execute([
     ],
 ], fireEvents: false);
 ```
+
+`(entity_type, code)` is unique — `batch()` does not check for existing attributes before inserting, so passing a pair that already exists throws and rolls back the whole batch. When re-running an import, filter out attributes you've already created, or use `findOrCreate()` per attribute when idempotency matters more than raw throughput.
 
 Pass `fireEvents: false` to suppress `AttributeCreated` events during large imports.

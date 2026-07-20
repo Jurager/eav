@@ -48,14 +48,14 @@ foreach ($products as $product) {
 
 Entities arranged in a hierarchy may inherit the attribute schema of their ancestors. A common use case is a category tree where a subcategory exposes every attribute from its parent categories.
 
-To enable inheritance, override `shouldInheritAttributes()` on the scope model:
+To enable inheritance, override `shouldInheritEavAttributes()` on the scope model:
 
 ```php
 class Category extends Model implements Attributable
 {
     use HasAttributes, NodeTrait;
 
-    public function shouldInheritAttributes(): bool
+    public function shouldInheritEavAttributes(): bool
     {
         return $this->is_inherits_properties && $this->parent_id !== null;
     }
@@ -71,7 +71,7 @@ The inheritance resolver detects the tree strategy automatically:
 - **Nested set** (`_lft`/`_rgt` columns, for example via `kalnoy/nestedset`) — every ancestor is resolved in a single bounds query.
 - **Parent ID chain** — walks `parent_id` level by level, up to the configured limit.
 
-Inheritance stops at the first ancestor where `shouldInheritAttributes()` returns `false`.
+Inheritance stops at the first ancestor where `shouldInheritEavAttributes()` returns `false`.
 
 Given the following tree:
 
@@ -170,17 +170,9 @@ public function toSearchableArray(): array
 
 ### Automatic Index Sync
 
-`AttributeObserver` is registered automatically. It dispatches jobs when attribute definitions change:
+`AttributeObserver` is registered automatically. Whenever an attribute is created, updated, deleted, force-deleted, or restored, it dispatches `SyncSearchable` and/or `SyncFilterable` for whichever of the `searchable` / `filterable` flags are `true` (on update, only when that flag actually changed). Force-deleting also dispatches `PruneAttribute` to remove the attribute's stored values.
 
-| Event | Condition | Jobs dispatched |
-|---|---|---|
-| `created` | `filterable: true` | `SyncFilterable` |
-| `updated` | `searchable` flag changed | `SyncSearchable` |
-| `updated` | `filterable` flag changed | `SyncFilterable`, `SyncSearchable` |
-| `deleted` | `searchable: true` | `SyncSearchable` |
-| `deleted` | `filterable: true` | `SyncFilterable` |
-| `restored` | `searchable: true` | `SyncSearchable` |
-| `restored` | `filterable: true` | `SyncFilterable` |
+`AttributeCreated`, `AttributeUpdated`, and `AttributeDeleted` (fired on both soft- and force-delete) dispatch alongside the sync jobs; `restored` fires no domain event.
 
 `SyncSearchable` implements `ShouldQueue` and `ShouldBeUnique`. It finds every entity instance with a stored value for the changed attribute and calls `->searchable()` on the collection.
 
@@ -197,7 +189,7 @@ When dispatched, it:
 
 ### Custom Field Types and filterableKeys
 
-When building a custom field type, you may override `filterableKeys()` to control which index paths are registered as filterable. The default returns `['{code}']`; `Select` returns `['{code}', '{code}_code']` so that faceting on the string enum code is available alongside the integer ID:
+When building a custom field type, you may override `filterableKeys()` to control which index paths are registered as filterable. The default (used by all built-in types, including `Select`) returns a single `['{code}']` path:
 
 ```php
 public function filterableKeys(): array

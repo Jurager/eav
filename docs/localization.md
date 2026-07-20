@@ -117,22 +117,19 @@ Each element is a two-item tuple of `[Model, translations]`. The second element 
 
 ## Translating Non-EAV Models
 
-Any application model may use the same `entity_translations` table. Add the relation using the `EavModels` helper so your model picks up the configured class overrides:
+Any application model may use the same `entity_translations` table. Build the relation off `Eav::$localeModel` / `Eav::$entityTranslationModel` so your model picks up any [model overrides](installation.md#overriding-models) configured in `eav.models`:
 
 ```php
-use Jurager\Eav\Support\EavModels;
+use Jurager\Eav\Eav;
 
 class Region extends Model
 {
     public function translations(): MorphToMany
     {
-        return $this->morphToMany(
-                EavModels::class('locale'),
-                'entity',
-                'entity_translations',
-            )
-            ->using(EavModels::class('entity_translation'))
-            ->withPivot(['id', 'label', 'params', 'updated_at'])
+        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
+            ->using(Eav::$entityTranslationModel)
+            ->withPivot(['id', 'label', 'params'])
+            ->withTimestamps()
             ->active();
     }
 }

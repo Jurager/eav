@@ -5,13 +5,11 @@ weight: 1
 
 ## Introduction
 
-`jurager/eav` adds a flexible Entity-Attribute-Value system to Eloquent models. You may use it to define an attribute schema once per entity type — `Product`, `Category`, anything that implements the `Attributable` contract — and store values in typed columns that are properly indexed, validated, and scoped per locale.
-
-Unlike most EAV implementations, attribute values are not stored in a single generic column. The package picks the correct typed column (`value_integer`, `value_float`, `value_text`, `value_date`, `value_boolean`, `value_datetime`) based on the attribute's field type, which keeps queries fast and the schema honest about what's in each row.
+Package adds a flexible Entity-Attribute-Value system to Eloquent models. You may use it to define an attribute schema once per entity type — `Product`, `Category`, anything that implements the `Attributable` contract — and store values in typed columns that are properly indexed, validated, and scoped per locale.
 
 ## Requirements
 
-- PHP 8.5 or higher
+- PHP 8.4 or higher
 - Laravel 11, 12, or 13
 
 ## Documentation

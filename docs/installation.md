@@ -19,7 +19,7 @@ Publish the configuration file to your application:
 php artisan vendor:publish --tag=eav-config
 ```
 
-This creates `config/eav.php` with two sections: `models` (override any package model with a subclass) and `field_types` (register custom field types). See [Overriding Models](#overriding-models) and [Field Types](field-types.md) for details.
+This will create a `config/eav.php` file in your application. See [Overriding Models](#overriding-models) and [Field Types](field-types.md) for details.
 
 ## Running Migrations
 
@@ -42,7 +42,7 @@ The package adds the following tables to your database:
 | `entity_attribute` | Polymorphic typed values per entity instance |
 | `entity_translations` | Localized labels for any model |
 
-To add application-specific columns to the `attributes` table — for example, a `measurement_id` foreign key — you should create a separate migration in your application after publishing the package migrations. This keeps your customizations clear of the package's upgrade path.
+To add application-specific columns to the `attributes` table, create a separate migration in your application rather than editing the published one.
 
 ## Overriding Models
 
