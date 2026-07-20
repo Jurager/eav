@@ -87,7 +87,7 @@ trait ValidatesPayload
     }
 
     /** Normalize input values into storage format. */
-    protected function normalizeValues(array|string $values): array
+    protected function normalizeValues(mixed $values): array
     {
         if (! $this->isLocalizable()) {
             $normalized = is_array($values)

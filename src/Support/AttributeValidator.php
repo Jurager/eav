@@ -1,8 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Support;
 
 use Illuminate\Contracts\Container\BindingResolutionException;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
@@ -128,6 +131,18 @@ class AttributeValidator
      */
     private function validateUniqueness(Field $field): array
     {
+        $base = $this->baseUniquenessQuery($field);
+
+        $conflict = $field->isLocalizable()
+            ? $this->hasLocalizableConflict($base, $field)
+            : $this->hasScalarConflict($base, $field);
+
+        return $conflict ? [__('eav::attributes.validation.unique')] : [];
+    }
+
+    /** The entity_attribute rows a uniqueness check should compare against. */
+    private function baseUniquenessQuery(Field $field): Builder
+    {
         $scopeCallback = $this->uniqueScopes[$field->attribute()->code] ?? null;
 
         $base = Eav::$entityAttributeModel::query()
@@ -143,37 +158,43 @@ class AttributeValidator
             $scopeCallback($base, $this->entity);
         }
 
-        if ($field->isLocalizable()) {
-            $labels = collect($field->toStorage())
-                ->flatMap(fn ($item) => $item['translations'] ?? [])
-                ->filter(fn ($t) => isset($t['value']) && $t['value'] !== null && $t['value'] !== '');
+        return $base;
+    }
 
-            if ($labels->isEmpty()) {
-                return [];
-            }
+    /** Whether a localizable field's translated labels collide with an existing row. */
+    private function hasLocalizableConflict(Builder $base, Field $field): bool
+    {
+        $labels = collect($field->toStorage())
+            ->flatMap(fn ($item) => $item['translations'] ?? [])
+            ->filter(fn ($t) => isset($t['value']) && $t['value'] !== null && $t['value'] !== '');
 
-            $conflict = Eav::$entityTranslationModel::query()
-                ->where('entity_type', 'entity_attribute')
-                ->whereIn('entity_id', $base->select('id'))
-                ->where(function ($q) use ($labels) {
-                    foreach ($labels as $t) {
-                        // Use LOWER() for case-insensitive comparison on both MySQL and PostgreSQL.
-                        $q->orWhere(fn ($q) => $q
-                            ->where('locale_id', $t['locale_id'])
-                            ->whereRaw('LOWER(label) = ?', [mb_strtolower((string) $t['value'])]));
-                    }
-                })
-                ->exists();
-        } else {
-            $values = array_values(array_filter(array_column($field->toStorage(), 'value'), fn ($v) => $v !== null));
-
-            if (empty($values)) {
-                return [];
-            }
-
-            $conflict = $base->whereNotNull($field->column())->whereIn($field->column(), $values)->exists();
+        if ($labels->isEmpty()) {
+            return false;
         }
 
-        return $conflict ? [__('eav::attributes.validation.unique')] : [];
+        return Eav::$entityTranslationModel::query()
+            ->where('entity_type', 'entity_attribute')
+            ->whereIn('entity_id', $base->select('id'))
+            ->where(function ($q) use ($labels) {
+                foreach ($labels as $t) {
+                    // Use LOWER() for case-insensitive comparison on both MySQL and PostgreSQL.
+                    $q->orWhere(fn ($q) => $q
+                        ->where('locale_id', $t['locale_id'])
+                        ->whereRaw('LOWER(label) = ?', [mb_strtolower((string) $t['value'])]));
+                }
+            })
+            ->exists();
+    }
+
+    /** Whether a non-localizable field's raw values collide with an existing row. */
+    private function hasScalarConflict(Builder $base, Field $field): bool
+    {
+        $values = array_values(array_filter(array_column($field->toStorage(), 'value'), fn ($v) => $v !== null));
+
+        if (empty($values)) {
+            return false;
+        }
+
+        return $base->whereNotNull($field->column())->whereIn($field->column(), $values)->exists();
     }
 }

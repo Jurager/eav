@@ -4,18 +4,25 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Search;
 
-use Jurager\Eav\Search\FilterCompiler;
+use Jurager\Eav\Search\MeilisearchFilterCompiler;
 use Jurager\Eav\Tests\TestCase;
+use Jurager\Filterable\Parsing\FilterParser;
+use Jurager\Filterable\Support\ParsedFilters;
 
-class FilterCompilerTest extends TestCase
+class MeilisearchFilterCompilerTest extends TestCase
 {
-    private FilterCompiler $compiler;
+    private MeilisearchFilterCompiler $compiler;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->compiler = new FilterCompiler();
+        $this->compiler = new MeilisearchFilterCompiler();
+    }
+
+    private function parse(array $raw): ParsedFilters
+    {
+        return (new FilterParser())->parse($raw, []);
     }
 
     /** @return \Closure(string): ?string */
@@ -30,14 +37,14 @@ class FilterCompilerTest extends TestCase
 
     public function test_compile_resolves_a_known_key(): void
     {
-        $result = $this->compiler->compile(['id' => ['in' => '1,2,3']], $this->resolver(['id' => 'id']));
+        $result = $this->compiler->compile($this->parse(['id' => ['in' => '1,2,3']]), $this->resolver(['id' => 'id']));
 
         $this->assertSame('id IN [1, 2, 3]', $result);
     }
 
     public function test_compile_drops_an_unresolvable_key(): void
     {
-        $result = $this->compiler->compile(['id' => ['in' => '1,2,3']], $this->resolver([]));
+        $result = $this->compiler->compile($this->parse(['id' => ['in' => '1,2,3']]), $this->resolver([]));
 
         $this->assertNull($result);
     }
@@ -45,7 +52,7 @@ class FilterCompilerTest extends TestCase
     public function test_compile_drops_only_the_unresolvable_key_and_keeps_the_rest(): void
     {
         $result = $this->compiler->compile(
-            ['id' => ['in' => '1,2'], 'unknown' => ['eq' => 'x']],
+            $this->parse(['id' => ['in' => '1,2'], 'unknown' => ['eq' => 'x']]),
             $this->resolver(['id' => 'id']),
         );
 
@@ -59,7 +66,7 @@ class FilterCompilerTest extends TestCase
     public function test_unresolved_is_empty_when_every_key_resolves(): void
     {
         $result = $this->compiler->unresolved(
-            ['id' => ['in' => '1,2'], 'category_ids' => ['eq' => 5]],
+            $this->parse(['id' => ['in' => '1,2'], 'category_ids' => ['eq' => 5]]),
             $this->resolver(['id' => 'id', 'category_ids' => 'category_ids']),
         );
 
@@ -70,7 +77,7 @@ class FilterCompilerTest extends TestCase
     {
         $filter = ['id' => ['in' => '1,2'], 'sku' => ['eq' => 'ABC']];
 
-        $result = $this->compiler->unresolved($filter, $this->resolver(['id' => 'id']));
+        $result = $this->compiler->unresolved($this->parse($filter), $this->resolver(['id' => 'id']));
 
         $this->assertSame(['sku' => ['eq' => 'ABC']], $result);
     }
@@ -84,7 +91,7 @@ class FilterCompilerTest extends TestCase
             ],
         ];
 
-        $result = $this->compiler->unresolved($filter, $this->resolver(['id' => 'id']));
+        $result = $this->compiler->unresolved($this->parse($filter), $this->resolver(['id' => 'id']));
 
         $this->assertSame($filter, $result);
     }
@@ -98,7 +105,7 @@ class FilterCompilerTest extends TestCase
             ],
         ];
 
-        $result = $this->compiler->unresolved($filter, $this->resolver(['id' => 'id', 'category_ids' => 'category_ids']));
+        $result = $this->compiler->unresolved($this->parse($filter), $this->resolver(['id' => 'id', 'category_ids' => 'category_ids']));
 
         $this->assertSame([], $result);
     }
@@ -108,8 +115,8 @@ class FilterCompilerTest extends TestCase
         $filter = ['id' => ['in' => '1,2'], 'sku' => ['eq' => 'ABC']];
         $resolve = $this->resolver(['id' => 'id']);
 
-        $compiled = $this->compiler->compile($filter, $resolve);
-        $leftover = $this->compiler->unresolved($filter, $resolve);
+        $compiled = $this->compiler->compile($this->parse($filter), $resolve);
+        $leftover = $this->compiler->unresolved($this->parse($filter), $resolve);
 
         $this->assertSame('id IN [1, 2]', $compiled);
         $this->assertSame(['sku' => ['eq' => 'ABC']], $leftover);

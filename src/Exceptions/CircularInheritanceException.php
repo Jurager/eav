@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Exceptions;
 
 /** Exception thrown when attribute inheritance exceeds the maximum depth. */

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
-use Jurager\Eav\Search\FilterCompiler;
+use Jurager\Eav\Search\MeilisearchFilterCompiler;
 use Jurager\Eav\Search\Facets\FacetContext;
 use Jurager\Eav\Search\Search;
 use Jurager\Eav\Tests\TestCase;
@@ -28,7 +28,7 @@ class SearchTest extends TestCase
         parent::setUp();
 
         $this->search = new Search(
-            new FilterCompiler(),
+            new MeilisearchFilterCompiler(),
             Mockery::mock(FieldFactory::class),
             Mockery::mock(LocaleRegistry::class),
             Mockery::mock(Client::class),

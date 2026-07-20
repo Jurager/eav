@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;

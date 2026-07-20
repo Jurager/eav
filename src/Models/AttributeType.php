@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Model;

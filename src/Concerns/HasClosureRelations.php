@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Concerns;
 
 use Closure;
@@ -14,7 +16,7 @@ trait HasClosureRelations
      *
      * @param  Closure(Model): (Builder|null)  $resolver
      */
-    protected function closureRelation($related, Closure $resolver): ClosureRelation
+    protected function closureRelation(string $related, Closure $resolver): ClosureRelation
     {
         $instance = $this->newRelatedInstance($related);
 

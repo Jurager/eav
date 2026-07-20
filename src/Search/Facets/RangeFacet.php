@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Search\Facets;
 
 use Jurager\Eav\Search\Search;
@@ -19,23 +21,23 @@ class RangeFacet extends Facet
     {
     }
 
-    public function facetFields(FacetContext $ctx): array
+    public function facetFields(FacetContext $context): array
     {
         return $this->fields;
     }
 
-    public function field(string $key, FacetContext $ctx): ?string
+    public function field(string $key, FacetContext $context): ?string
     {
         return in_array($key, $this->fields, true) ? $key : null;
     }
 
-    public function collect(Search $search, MeilisearchResult $main, FacetContext $ctx): array
+    public function collect(Search $search, MeilisearchResult $main, FacetContext $context): array
     {
         $result = [];
 
         foreach ($this->fields as $field) {
             $response = $this->disjunctive && $search->hasFilter($field)
-                ? $search->facetOnlySearch($field, [$field], $ctx)
+                ? $search->facetOnlySearch($field, [$field], $context)
                 : $main;
 
             $stats = $response->getFacetStats();

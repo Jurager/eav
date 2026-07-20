@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Search\Facets;
 
 use Jurager\Eav\Search\Search;
@@ -51,10 +53,10 @@ abstract class Facet
      *
      * @return string[]
      */
-    abstract public function facetFields(FacetContext $ctx): array;
+    abstract public function facetFields(FacetContext $context): array;
 
     /** Map a filter key to its Meilisearch field, or null if this facet doesn't own it. */
-    abstract public function field(string $key, FacetContext $ctx): ?string;
+    abstract public function field(string $key, FacetContext $context): ?string;
 
     /**
      * Pull this facet's contribution from the response as a flat [indexField => value]
@@ -62,5 +64,5 @@ abstract class Facet
      *
      * @return array<string, mixed>
      */
-    abstract public function collect(Search $search, MeilisearchResult $main, FacetContext $ctx): array;
+    abstract public function collect(Search $search, MeilisearchResult $main, FacetContext $context): array;
 }

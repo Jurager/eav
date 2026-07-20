@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Exceptions;
 
 /** Exception thrown when an entity instance is missing. */

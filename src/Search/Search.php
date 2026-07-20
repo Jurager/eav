@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Search;
 
 use Illuminate\Database\Eloquent\Model;
@@ -7,30 +9,29 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Log;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Jurager\Eav\Search\Facets\Facet;
 use Jurager\Eav\Search\Facets\FacetContext;
 use Jurager\Eav\Eav;
+use Jurager\Filterable\Parsing\FilterParser;
+use Jurager\Filterable\Support\ParsedFilters;
 use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
 
-/**
- * Fluent builder for faceted search over indexed entities.
- */
 class Search
 {
     private string $entityType = '';
 
     private ?string $query = null;
 
-    /** @var array<string, mixed> */
-    private array $filter = [];
+    private ParsedFilters $filter;
 
     /** @var array<string, string> */
     private array $map = [];
 
-    /** @var Facet[] */
+    /** @var array<int, Facet> */
     private array $facets = [];
 
     private ?Indexes $index = null;
@@ -38,21 +39,27 @@ class Search
     private ?Model $model = null;
 
     public function __construct(
-        private readonly FilterCompiler $compiler,
+        private readonly MeilisearchFilterCompiler $compiler,
         private readonly FieldFactory $fieldFactory,
         private readonly LocaleRegistry $localeRegistry,
         private readonly Client $meilisearch,
     ) {
+        $this->filter = (new FilterParser())->parse([], []);
     }
 
+    /** Create search instance for entity type. */
     public static function for(string $entityType): static
     {
         $instance = app(static::class);
         $instance->entityType = $entityType;
 
+        $modelClass = Relation::getMorphedModel($entityType);
+        $instance->model = $modelClass ? new $modelClass() : null;
+
         return $instance;
     }
 
+    /** Set search query string. */
     public function query(?string $query): static
     {
         $this->query = $query;
@@ -60,15 +67,89 @@ class Search
         return $this;
     }
 
-    /** @param array<string, mixed> $filter */
+    /** Parse and resolve filters. */
     public function filter(array $filter): static
     {
-        $this->filter = $filter;
+        $parsed = (new FilterParser())->parse($filter, []);
+
+        if ($this->model !== null) {
+            $parsed = $parsed->withSanitized(
+                filters:   $this->resolveFilters($parsed->filters, $this->model),
+                orGroups:  $parsed->orGroups,
+                andGroups: $parsed->andGroups,
+            );
+        }
+
+        $this->filter = $parsed;
 
         return $this;
     }
 
-    /** @param array<string, string> $map  Filter key → indexed Meilisearch field. */
+    /** Resolve filters unhandled by search index via tagged resolvers. */
+    private function resolveFilters(array $filters, Model $model): array
+    {
+        $resolvers = null;
+        $result = [];
+
+        foreach ($filters as $key => $value) {
+            $key = (string) $key;
+
+            if (! str_contains($key, '.') || $this->directlyIndexed($key, $model)) {
+                $result[$key] = $value;
+                continue;
+            }
+
+            $resolvers ??= [...app()->tagged('eav.search.resolvers')];
+            $resolved = null;
+
+            foreach ($resolvers as $resolver) {
+                /** @var FilterResolver $resolver */
+                if (($resolved = $resolver->resolve($key, $value, $model)) !== null) {
+                    break;
+                }
+            }
+
+            [$resolvedKey, $resolvedValue] = $resolved ?? [$key, $value];
+            $result[$resolvedKey] = $resolvedValue;
+        }
+
+        return $result;
+    }
+
+    /** Check if filter key is directly indexed. */
+    private function directlyIndexed(string $key, Model $model): bool
+    {
+        return $model instanceof InteractsWithIndex && array_key_exists($key, $model->indexed());
+    }
+
+    /** Check if filter is active for key. */
+    public function hasFilter(string $key): bool
+    {
+        return array_key_exists($key, $this->filter->filters);
+    }
+
+    /** Read numeric IDs from filter. */
+    public function ids(string $key): array
+    {
+        $value = $this->filter->filters[$key] ?? null;
+
+        if (is_array($value)) {
+            $value = $value['in'] ?? $value['eq'] ?? $value;
+        }
+
+        if (blank($value)) {
+            return [];
+        }
+
+        $items = is_array($value) ? $value : explode(',', (string) $value);
+
+        return array_values(array_filter(
+            array_map('intval', $items),
+            static fn ($id): bool => $id > 0
+        ));
+    }
+
+    /** Set filter keys mapping. */
     public function map(array $map): static
     {
         $this->map = $map;
@@ -76,7 +157,7 @@ class Search
         return $this;
     }
 
-    /** @param Facet[] $facets */
+    /** Set facets for computation. */
     public function facets(array $facets): static
     {
         $this->facets = $facets;
@@ -84,67 +165,36 @@ class Search
         return $this;
     }
 
-    /** @return SearchResult<Model> */
+    /** Execute search. */
     public function search(int $perPage = 15, int $page = 1): SearchResult
     {
-        $modelClass = Relation::getMorphedModel($this->entityType);
-
-        if (! $modelClass || ! method_exists($modelClass, 'searchableAs')) {
+        if (! $this->model || ! method_exists($this->model, 'searchableAs')) {
             return new SearchResult([], 0, []);
         }
 
-        $this->model = new $modelClass();
-
-        $ctx = $this->context();
+        $context = $this->context();
         $this->index = $this->meilisearch->index($this->model->searchableAs());
 
-        $facetFields = collect($this->facets)
-            ->flatMap(fn (Facet $facet) => $facet->facetFields($ctx))
-            ->unique()
-            ->values()
-            ->all();
-
-        $resolve = $this->resolver($ctx);
+        $resolve = $this->resolver($context);
         $unresolved = $this->compiler->unresolved($this->filter, $resolve);
 
-        foreach ($unresolved as $key => $value) {
-            Log::warning('eav.search: filter key has no indexed field, condition dropped', [
-                'entity_type' => $this->entityType,
-                'key' => $key,
-                'value' => $value,
-            ]);
-        }
+        $this->logUnresolved($unresolved);
 
-        // Apply hybrid search only when there are filters that cannot be resolved by the
-        // search index but can be handled by the database. Models that don't support this
-        // capability fall back to the regular search behavior..
         $hybrid = $unresolved !== [] && $this->model instanceof InteractsWithIndex;
         $candidateLimit = (int) config('eav.search.hybrid_candidate_limit', 1000);
 
         $main = $this->index->search($this->query, array_filter([
             'filter' => $this->compiler->compile($this->filter, $resolve),
-            'facets' => $facetFields ?: null,
-            'limit' => $hybrid ? $candidateLimit : $perPage,
+            'facets' => $this->facetFields($context) ?: null,
+            'limit'  => $hybrid ? $candidateLimit : $perPage,
             'offset' => $hybrid ? 0 : ($page - 1) * $perPage,
         ]));
-
-        $facets = [];
-
-        foreach ($this->facets as $facet) {
-            $facets += $facet->collect($this, $main, $ctx);
-        }
 
         $ids = array_column($main->getHits(), 'id');
         $total = $main->getEstimatedTotalHits() ?? 0;
 
         if ($hybrid) {
-            if ($total > $candidateLimit) {
-                Log::warning('eav.search: hybrid candidate window exceeded, some matches may be missed', [
-                    'entity_type' => $this->entityType,
-                    'limit' => $candidateLimit,
-                    'estimated_total' => $total,
-                ]);
-            }
+            $this->warnIfHybridWindowExceeded($total, $candidateLimit);
 
             [$ids, $total] = $this->hybridPaginate($ids, $unresolved, $perPage, $page);
         }
@@ -152,47 +202,83 @@ class Search
         return new SearchResult(
             ids: $ids,
             total: $total,
-            facets: $this->group($facets),
-            context: $ctx,
+            facets: $this->group($this->collectFacets($main, $context)),
+            context: $context,
         );
     }
 
-    /**
-     * Applies additional filtering to search results.
-     * Returns a paginated subset while preserving the original search relevance order.
-     *
-     * @param  (int|string)[]  $ids
-     * @param  array<string, mixed>  $filter
-     * @return array{0: (int|string)[], 1: int}
-     */
+    /** Get required Meilisearch facet fields. */
+    private function facetFields(FacetContext $context): array
+    {
+        $fields = [];
+
+        foreach ($this->facets as $facet) {
+            foreach ($facet->facetFields($context) as $field) {
+                $fields[] = $field;
+            }
+        }
+
+        return array_values(array_unique($fields));
+    }
+
+    /** Collect facets from search result. */
+    private function collectFacets(MeilisearchResult $main, FacetContext $context): array
+    {
+        $facets = [];
+
+        foreach ($this->facets as $facet) {
+            foreach ($facet->collect($this, $main, $context) as $key => $value) {
+                $facets[$key] = $value;
+            }
+        }
+
+        return $facets;
+    }
+
+    /** Log unresolved filter keys. */
+    private function logUnresolved(array $unresolved): void
+    {
+        foreach (array_keys($unresolved) as $key) {
+            Log::warning("eav.search: filter key [{$key}] has no indexed field, condition dropped", [
+                'entity_type' => $this->entityType,
+            ]);
+        }
+    }
+
+    /** Log warning if hybrid search window is exceeded. */
+    private function warnIfHybridWindowExceeded(int $total, int $candidateLimit): void
+    {
+        if ($total > $candidateLimit) {
+            Log::warning('eav.search: hybrid candidate window exceeded', [
+                'entity_type' => $this->entityType,
+                'limit' => $candidateLimit,
+                'estimated_total' => $total,
+            ]);
+        }
+    }
+
+    /** Apply database-level filtering to search results. */
     private function hybridPaginate(array $ids, array $filter, int $perPage, int $page): array
     {
         $order = array_flip(array_map('strval', $ids));
-
         $narrowed = $this->model->narrow($ids, $filter);
 
-        usort($narrowed, fn ($a, $b) => ($order[(string) $a] ?? PHP_INT_MAX) <=> ($order[(string) $b] ?? PHP_INT_MAX));
+        usort($narrowed, static fn ($a, $b) => ($order[(string) $a] ?? PHP_INT_MAX) <=> ($order[(string) $b] ?? PHP_INT_MAX));
 
         return [array_slice($narrowed, ($page - 1) * $perPage, $perPage), count($narrowed)];
     }
 
-    /** Whether a filter is active for the given key. */
-    public function hasFilter(string $key): bool
-    {
-        return array_key_exists($key, $this->filter);
-    }
-
-    /** @param  string[]  $fields */
-    public function facetOnlySearch(string $excludeKey, array $fields, FacetContext $ctx): MeilisearchResult
+    /** Perform facet-only search. */
+    public function facetOnlySearch(string $excludeKey, array $fields, FacetContext $context): MeilisearchResult
     {
         return $this->index->search($this->query, array_filter([
-            'filter' => $this->compiler->compile($this->filter, $this->resolver($ctx, exclude: $excludeKey)),
+            'filter' => $this->compiler->compile($this->filter, $this->resolver($context, exclude: $excludeKey)),
             'facets' => $fields,
-            'limit' => 0,
+            'limit'  => 0,
         ]));
     }
 
-    /** Loads filterable attributes for the entity and wraps them with their field dependencies. */
+    /** Load filterable attributes context. */
     private function context(): FacetContext
     {
         $attributes = Eav::$attributeModel::query()
@@ -204,23 +290,20 @@ class Search
         return new FacetContext($attributes, $this->fieldFactory, $this->localeRegistry->current());
     }
 
-    /** @return \Closure(string): ?string */
-    private function resolver(FacetContext $ctx, ?string $exclude = null): \Closure
+    /** Create field resolver closure. */
+    private function resolver(FacetContext $context, ?string $exclude = null): \Closure
     {
-        return function (string $key) use ($ctx, $exclude): ?string {
+        return function (string $key) use ($context, $exclude): ?string {
             if ($exclude !== null && $key === $exclude) {
                 return null;
             }
 
-            // Every HasSearchableAttributes model always indexes its own key as 'id'
-            // (see the trait's default toSearchableArray()) — a structural guarantee,
-            // not something each model needs to declare.
             if ($key === 'id') {
                 return 'id';
             }
 
             foreach ($this->facets as $facet) {
-                if (($field = $facet->field($key, $ctx)) !== null) {
+                if (($field = $facet->field($key, $context)) !== null) {
                     return $field;
                 }
             }
@@ -233,7 +316,7 @@ class Search
         };
     }
 
-    /** @param  array<string, mixed>  $flat */
+    /** Group flat facet keys into nested structures. */
     private function group(array $flat): array
     {
         $result = [];

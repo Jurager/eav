@@ -78,7 +78,7 @@ class TranslationManager
             return;
         }
 
-        $now = Carbon::now();
+        $now = now();
         $rows = array_map(fn ($id, $t) => $this->buildTranslationRow($model, $id, $t, $now), array_keys($indexed), $indexed);
 
         Eav::$entityTranslationModel::query()
@@ -91,7 +91,7 @@ class TranslationManager
      */
     public function batch(array $modelsWithTranslations, ?Carbon $timestamp = null): void
     {
-        $timestamp ??= Carbon::now();
+        $timestamp ??= now();
         $rows = [];
 
         foreach ($modelsWithTranslations as [$model, $translations]) {

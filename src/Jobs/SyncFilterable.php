@@ -29,9 +29,9 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         return $this->entityType;
     }
 
-    public function handle(FieldFactory $fieldFactory): void
+    public function handle(FieldFactory $fieldFactory, EngineManager $engineManager, Client $client): void
     {
-        if (! $this->isMeilisearchEngine()) {
+        if (! $this->isMeilisearchEngine($engineManager)) {
             return;
         }
 
@@ -44,17 +44,17 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         $indexName = (new $modelClass())->searchableAs();
         $paths = $this->getFilterablePaths($fieldFactory);
 
-        app(Client::class)->index($indexName)->updateFilterableAttributes(
+        $client->index($indexName)->updateFilterableAttributes(
             array_values(array_unique(array_merge($this->getConfiguredFilterableAttributes($modelClass), $paths)))
         );
     }
 
     /** Determine if the current Scout engine is Meilisearch. */
-    protected function isMeilisearchEngine(): bool
+    protected function isMeilisearchEngine(EngineManager $engineManager): bool
     {
         return class_exists(EngineManager::class)
             && class_exists(Client::class)
-            && app(EngineManager::class)->driver() instanceof MeilisearchEngine;
+            && $engineManager->driver() instanceof MeilisearchEngine;
     }
 
     /** Map filterable attributes to their indexable paths. */

@@ -35,10 +35,6 @@ class AttributeManager
     /** @var array<string, mixed>|null */
     private ?array $indexData = null;
 
-    private ?FieldFactory $fieldFactory = null;
-
-    private ?EnumRegistry $enumRegistry = null;
-
     private ?AttributeQueryBuilder $builder = null;
 
     /** FQCN stored for schema-only managers created from a class string. */
@@ -46,6 +42,8 @@ class AttributeManager
 
     public function __construct(
         protected ?Attributable $entity = null,
+        private readonly ?FieldFactory $fieldFactory = null,
+        private readonly ?EnumRegistry $enumRegistry = null,
     ) {
     }
 
@@ -53,7 +51,7 @@ class AttributeManager
     public static function for(string|Attributable $entity): static
     {
         if ($entity instanceof Attributable) {
-            return new static($entity);
+            return app(static::class, ['entity' => $entity]);
         }
 
         $registry = app(SchemaRegistry::class);
@@ -276,7 +274,7 @@ class AttributeManager
     public function builder(): AttributeQueryBuilder
     {
         return $this->builder ??= new AttributeQueryBuilder(
-            $this->enumRegistry(),
+            $this->enumRegistry,
             fn (string $code) => $this->field($code),
             fn (string $code) => $this->entity?->getEavEntityType()
                 ?? ($this->fields[$code] ?? null)?->attribute()->entity_type,
@@ -286,7 +284,7 @@ class AttributeManager
     protected static function buildFromCollection(Collection $attributes): static
     {
         $attributes->loadMissing('type');
-        $instance = new static(null);
+        $instance = app(static::class, ['entity' => null]);
 
         foreach ($attributes as $attribute) {
             $instance->fields[$attribute->code] = $instance->makeField($attribute);
@@ -345,7 +343,7 @@ class AttributeManager
 
     private function makeField(Attribute $attribute): Field
     {
-        return $this->fieldFactory()->make($attribute)->forEntity($this->entity);
+        return $this->fieldFactory->make($attribute)->forEntity($this->entity);
     }
 
     private function persister(): AttributePersister
@@ -372,15 +370,5 @@ class AttributeManager
             }, []);
 
         return $attributes ? ['attributes' => $attributes] : [];
-    }
-
-    private function fieldFactory(): FieldFactory
-    {
-        return $this->fieldFactory ??= app(FieldFactory::class);
-    }
-
-    private function enumRegistry(): EnumRegistry
-    {
-        return $this->enumRegistry ??= app(EnumRegistry::class);
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Concerns;
 
 use Closure;
@@ -47,7 +49,7 @@ trait HasAttributes
     }
 
     /**
-     * Override in models to declare scoped uniqueness for specific EAV attributes.
+     * Override in models to declare scoped uniqueness for specific attributes.
      *
      * Return a map of [attributeCode => callable($query, $entity)].
      * The callable receives the entity_attribute Builder and the model instance,
@@ -199,9 +201,7 @@ trait HasAttributes
             return $this->scopeWhereAttributeTree($query, $code, $value);
         }
 
-        $sub = $this->attributeFilterBuilder()->subquery($code, $value, $operator);
-
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        return $this->applyAttributeSubquery($query, $code, $value, $operator);
     }
 
     /**
@@ -221,9 +221,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeBetween(Builder $query, string $code, float|int $min, float|int $max): Builder
     {
-        $sub = $this->attributeFilterBuilder()->subquery($code, [$min, $max], 'between');
-
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        return $this->applyAttributeSubquery($query, $code, [$min, $max], 'between');
     }
 
     /**
@@ -233,9 +231,7 @@ trait HasAttributes
      */
     public function scopeWhereAttributeIn(Builder $query, string $code, array $values): Builder
     {
-        $sub = $this->attributeFilterBuilder()->subquery($code, $values, 'in');
-
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        return $this->applyAttributeSubquery($query, $code, $values, 'in');
     }
 
     /**
@@ -249,21 +245,19 @@ trait HasAttributes
      */
     public function scopeWhereAttributes(Builder $query, array $conditions): Builder
     {
-        $builder = $this->attributeFilterBuilder();
-
         foreach ($conditions as $condition) {
-            $sub = $builder->subquery(
-                $condition['code'],
-                $condition['value'],
-                $condition['operator'] ?? '=',
-            );
-
-            if ($sub) {
-                $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
-            }
+            $this->applyAttributeSubquery($query, $condition['code'], $condition['value'], $condition['operator'] ?? '=');
         }
 
         return $query;
+    }
+
+    /** Constrain the query to keys matching an attribute-filter subquery, if one is resolvable. */
+    private function applyAttributeSubquery(Builder $query, string $code, mixed $value, string $operator): Builder
+    {
+        $sub = $this->attributeFilterBuilder()->subquery($code, $value, $operator);
+
+        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
     }
 
     /**
@@ -283,38 +277,53 @@ trait HasAttributes
         }
 
         $model = $query->getModel();
-        $keyName = $model->getKeyName();
-        $qualifiedKey = $model->getQualifiedKeyName();
-
-        $matchingIds = $model->newQuery()
-            ->whereIn($qualifiedKey, $sub)
-            ->pluck($keyName)
-            ->toArray();
+        $matchingIds = $this->matchingAttributeIds($model, $sub);
 
         if (empty($matchingIds)) {
             return $query->whereKey([]);
         }
 
+        $allIds = $this->expandToDescendants($model, $matchingIds);
+
+        return $allIds ? $query->whereIn($model->getQualifiedKeyName(), $allIds) : $query->whereKey([]);
+    }
+
+    /**
+     * Resolve the entity keys matched by an attribute-filter subquery.
+     *
+     * @return array<int, int|string>
+     */
+    private function matchingAttributeIds(Model $model, Builder $sub): array
+    {
+        return $model->newQuery()
+            ->whereIn($model->getQualifiedKeyName(), $sub)
+            ->pluck($model->getKeyName())
+            ->toArray();
+    }
+
+    /**
+     * Expand root ids to all NestedSet descendants. Falls back to the root ids
+     * unchanged when the model doesn't use NodeTrait.
+     *
+     * @param  array<int, int|string>  $ids
+     * @return array<int, int|string>
+     */
+    private function expandToDescendants(Model $model, array $ids): array
+    {
         $treeQuery = $model->newQuery();
 
-        if (method_exists($treeQuery, 'whereDescendantOrSelf')) {
-            $allIds = $treeQuery
-                ->where(function (Builder $q) use ($matchingIds): void {
-                    foreach (array_values($matchingIds) as $i => $id) {
-                        $q->whereDescendantOrSelf($id, $i === 0 ? 'and' : 'or');
-                    }
-                })
-                ->pluck($keyName)
-                ->toArray();
-        } else {
-            $allIds = $matchingIds;
+        if (! method_exists($treeQuery, 'whereDescendantOrSelf')) {
+            return $ids;
         }
 
-        if (empty($allIds)) {
-            return $query->whereKey([]);
-        }
-
-        return $query->whereIn($qualifiedKey, $allIds);
+        return $treeQuery
+            ->where(function (Builder $q) use ($ids): void {
+                foreach (array_values($ids) as $i => $id) {
+                    $q->whereDescendantOrSelf($id, $i === 0 ? 'and' : 'or');
+                }
+            })
+            ->pluck($model->getKeyName())
+            ->toArray();
     }
 
     /**
@@ -409,7 +418,30 @@ trait HasAttributes
         }
 
         $instance = new $model();
+        $entities = $this->loadInheritanceEntities($model, $instance, $params);
 
+        if ($entities === null) {
+            return null;
+        }
+
+        $entityIds = $this->resolveInheritedEntityIds($entities, $model);
+
+        if ($entityIds === null) {
+            return null;
+        }
+
+        $relation = $instance->attributeScopeRelation();
+
+        return $relation === null ? null : $this->attributeScopeSubquery($relation, $entityIds);
+    }
+
+    /**
+     * Load the entities named by $params with just the columns inheritance resolution needs.
+     *
+     * @param  array<int>  $params
+     */
+    private function loadInheritanceEntities(string $model, object $instance, array $params): ?Collection
+    {
         $columns = $instance->getEavInheritanceColumns();
 
         if ($instance instanceof Hierarchical) {
@@ -422,31 +454,26 @@ trait HasAttributes
             ->get()
             ->keyBy('id');
 
-        if ($entities->isEmpty()) {
-            return null;
-        }
+        return $entities->isEmpty() ? null : $entities;
+    }
 
-        $allEntities = app(AttributeInheritanceResolver::class)
-            ->resolve($entities, $model);
+    /** Resolve inherited entity ids via the configured AttributeInheritanceResolver. */
+    private function resolveInheritedEntityIds(Collection $entities, string $model): ?Collection
+    {
+        $allEntities = app(AttributeInheritanceResolver::class)->resolve($entities, $model);
 
         if (empty($allEntities)) {
             return null;
         }
 
-        $entityIds = $allEntities instanceof Collection
-            ? $allEntities->pluck('id')
-            : collect($allEntities)->pluck('id');
+        $entityIds = $allEntities instanceof Collection ? $allEntities->pluck('id') : collect($allEntities)->pluck('id');
 
-        if ($entityIds->isEmpty()) {
-            return null;
-        }
+        return $entityIds->isEmpty() ? null : $entityIds;
+    }
 
-        $relation = $instance->attributeScopeRelation();
-
-        if ($relation === null) {
-            return null;
-        }
-
+    /** Build the attribute-scope subquery for the given entities' pivot rows. */
+    private function attributeScopeSubquery(BelongsToMany $relation, Collection $entityIds): Builder
+    {
         $pivotTable = $relation->getTable();
         $foreignKey = $relation->getForeignPivotKeyName();
         $relatedKey = $relation->getRelatedPivotKeyName();

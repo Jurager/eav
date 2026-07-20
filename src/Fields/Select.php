@@ -144,7 +144,7 @@ class Select extends Field
     }
 
     /** Normalize raw input values into storage format. */
-    protected function normalizeValues(array|string|int $values): array
+    protected function normalizeValues(mixed $values): array
     {
         $normalized = is_array($values)
             ? array_map(fn ($v) => $this->normalize($v), $values)

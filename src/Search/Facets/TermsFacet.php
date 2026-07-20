@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Jurager\Eav\Search\Facets;
 
 use Jurager\Eav\Search\Search;
@@ -20,13 +22,13 @@ class TermsFacet extends Facet
     {
     }
 
-    public function facetFields(FacetContext $ctx): array
+    public function facetFields(FacetContext $context): array
     {
         $fields = [];
 
         foreach ($this->codes as $code) {
-            if ($attribute = $ctx->attribute($code)) {
-                foreach ($ctx->field($attribute)->filterableKeys() as $key) {
+            if ($attribute = $context->attribute($code)) {
+                foreach ($context->field($attribute)->filterableKeys() as $key) {
                     $fields[] = self::PREFIX.$key;
                 }
             }
@@ -35,27 +37,27 @@ class TermsFacet extends Facet
         return array_values(array_unique($fields));
     }
 
-    public function field(string $key, FacetContext $ctx): ?string
+    public function field(string $key, FacetContext $context): ?string
     {
         return in_array($key, $this->codes, true) ? self::PREFIX.$key : null;
     }
 
-    public function collect(Search $search, MeilisearchResult $main, FacetContext $ctx): array
+    public function collect(Search $search, MeilisearchResult $main, FacetContext $context): array
     {
         $result = [];
 
         foreach ($this->codes as $code) {
-            $attribute = $ctx->attribute($code);
+            $attribute = $context->attribute($code);
 
             if (! $attribute) {
                 continue;
             }
 
-            $field = $ctx->field($attribute);
+            $field = $context->field($attribute);
             $fields = array_map(fn (string $key) => self::PREFIX.$key, $field->filterableKeys());
 
             $response = $this->disjunctive && $search->hasFilter($code)
-                ? $search->facetOnlySearch($code, $fields, $ctx)
+                ? $search->facetOnlySearch($code, $fields, $context)
                 : $main;
 
             $distribution = $response->getFacetDistribution() ?? [];
@@ -69,7 +71,7 @@ class TermsFacet extends Facet
                     continue;
                 }
 
-                $result[$indexField] = $field->enrichFacetDistribution($raw, $ctx->localeId);
+                $result[$indexField] = $field->enrichFacetDistribution($raw, $context->localeId);
             }
         }
 

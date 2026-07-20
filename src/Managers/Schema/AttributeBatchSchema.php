@@ -34,7 +34,7 @@ class AttributeBatchSchema
 
         $types = $this->fetchTypes($attributesData);
         $sortCounters = $this->initializeSortCounters($attributesData);
-        $now = Carbon::now();
+        $now = now();
 
         [$rows, $translationMap] = $this->buildRows($attributesData, $types, $sortCounters, $now);
 
@@ -76,7 +76,7 @@ class AttributeBatchSchema
     /** Pre-compute MAX(sort) per group for sequential numbering. */
     private function initializeSortCounters(array $attributesData): array
     {
-        $groupIds = array_values(array_map(fn (array $d) => $d['attribute_group_id'] ?? null, array_unique($attributesData)));
+        $groupIds = array_unique(array_map(fn (array $d) => $d['attribute_group_id'] ?? null, $attributesData));
 
         $counters = [];
 
