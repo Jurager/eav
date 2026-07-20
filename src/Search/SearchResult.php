@@ -61,7 +61,11 @@ class SearchResult
         $items = $modelClass::query()
             ->whereIn($keyName, $ids)
             ->get()
-            ->sortBy(fn ($model) => array_search((string) $model->getKey(), $stringIds) ?: PHP_INT_MAX)
+            ->sortBy(function ($model) use ($stringIds) {
+                $index = array_search((string) $model->getKey(), $stringIds, true);
+
+                return $index !== false ? $index : PHP_INT_MAX;
+            })
             ->values();
 
         return new LengthAwarePaginator(
