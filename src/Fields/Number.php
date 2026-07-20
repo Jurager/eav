@@ -33,7 +33,7 @@ class Number extends Field
     {
         $numeric = $value + 0;
 
-        return (floor($numeric) === $numeric)
+        return ((float) $numeric === floor($numeric))
             ? (int) $numeric
             : (float) $numeric;
     }

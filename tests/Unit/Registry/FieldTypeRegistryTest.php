@@ -5,23 +5,23 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Registry;
 
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
-use Jurager\Eav\Fields\BooleanField;
-use Jurager\Eav\Fields\NumberField;
-use Jurager\Eav\Fields\TextField;
+use Jurager\Eav\Fields\Boolean;
+use Jurager\Eav\Fields\Number;
+use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Tests\TestCase;
 
 class FieldTypeRegistryTest extends TestCase
 {
-    private FieldTypeRegistry $registry;
+    private FieldFactory $registry;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->registry = app(FieldTypeRegistry::class);
+        $this->registry = app(FieldFactory::class);
     }
 
     // -----------------------------------------------------------------------
@@ -47,17 +47,17 @@ class FieldTypeRegistryTest extends TestCase
 
     public function test_resolve_returns_correct_class_for_text(): void
     {
-        $this->assertSame(TextField::class, $this->registry->resolve('text'));
+        $this->assertSame(Text::class, $this->registry->resolve('text'));
     }
 
     public function test_resolve_returns_correct_class_for_number(): void
     {
-        $this->assertSame(NumberField::class, $this->registry->resolve('number'));
+        $this->assertSame(Number::class, $this->registry->resolve('number'));
     }
 
     public function test_resolve_returns_correct_class_for_boolean(): void
     {
-        $this->assertSame(BooleanField::class, $this->registry->resolve('boolean'));
+        $this->assertSame(Boolean::class, $this->registry->resolve('boolean'));
     }
 
     public function test_resolve_throws_for_unknown_type(): void
@@ -73,10 +73,10 @@ class FieldTypeRegistryTest extends TestCase
 
     public function test_register_adds_custom_type(): void
     {
-        $this->registry->register('custom_text', TextField::class);
+        $this->registry->register('custom_text', Text::class);
 
         $this->assertTrue($this->registry->has('custom_text'));
-        $this->assertSame(TextField::class, $this->registry->resolve('custom_text'));
+        $this->assertSame(Text::class, $this->registry->resolve('custom_text'));
     }
 
     public function test_register_throws_for_non_field_class(): void
@@ -125,7 +125,7 @@ class FieldTypeRegistryTest extends TestCase
 
         $field = $this->registry->make($attribute);
 
-        $this->assertInstanceOf(TextField::class, $field);
+        $this->assertInstanceOf(Text::class, $field);
     }
 
     public function test_make_creates_number_field(): void
@@ -147,7 +147,7 @@ class FieldTypeRegistryTest extends TestCase
 
         $field = $this->registry->make($attribute);
 
-        $this->assertInstanceOf(NumberField::class, $field);
+        $this->assertInstanceOf(Number::class, $field);
     }
 
     public function test_make_throws_when_type_relation_not_loaded(): void

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Fields\NumberField;
+use Jurager\Eav\Fields\Number;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -43,9 +43,9 @@ class NumberFieldTest extends TestCase
         ], $attributes));
     }
 
-    private function makeField(array $attributes = []): NumberField
+    private function makeField(array $attributes = []): Number
     {
-        return new NumberField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new Number($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------

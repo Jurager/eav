@@ -15,6 +15,7 @@ use Jurager\Eav\Search\Search;
 use Jurager\Eav\Tests\TestCase;
 use Meilisearch\Client;
 use Mockery;
+use Psr\Log\LoggerInterface;
 use ReflectionClass;
 
 class SearchTest extends TestCase
@@ -32,6 +33,7 @@ class SearchTest extends TestCase
             Mockery::mock(FieldFactory::class),
             Mockery::mock(LocaleRegistry::class),
             Mockery::mock(Client::class),
+            Mockery::mock(LoggerInterface::class),
         );
 
         $this->context = new FacetContext(new Collection(), Mockery::mock(FieldFactory::class));

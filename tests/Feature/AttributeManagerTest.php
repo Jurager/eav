@@ -6,8 +6,8 @@ namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
-use Jurager\Eav\Fields\NumberField;
-use Jurager\Eav\Fields\TextField;
+use Jurager\Eav\Fields\Number;
+use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
@@ -59,7 +59,7 @@ class AttributeManagerTest extends FeatureTestCase
 
         $field = $manager->field('title');
 
-        $this->assertInstanceOf(TextField::class, $field);
+        $this->assertInstanceOf(Text::class, $field);
         $this->assertSame('title', $field->code());
     }
 
@@ -78,7 +78,7 @@ class AttributeManagerTest extends FeatureTestCase
         $product = $this->createProduct();
         $manager = AttributeManager::for($product);
 
-        $this->assertInstanceOf(NumberField::class, $manager->field('price'));
+        $this->assertInstanceOf(Number::class, $manager->field('price'));
     }
 
     // -----------------------------------------------------------------------
@@ -143,7 +143,7 @@ class AttributeManagerTest extends FeatureTestCase
         $product = $this->createProduct();
         $manager = AttributeManager::for($product);
 
-        // 42 is not a valid string for TextField
+        // 42 is not a valid string for Text
         $filled = $manager->fill(['title' => 42]);
 
         $this->assertCount(0, $filled);

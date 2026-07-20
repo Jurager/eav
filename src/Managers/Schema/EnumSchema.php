@@ -28,7 +28,7 @@ class EnumSchema extends BaseSchema
         /** @var AttributeEnum $enum */
         $enum = $this->createRecord(fn () => $attribute->enums()->create($data), $translations);
 
-        Event::dispatch(new AttributeEnumCreated($enum));
+        $this->events->dispatch(new AttributeEnumCreated($enum));
 
         return $enum;
     }
@@ -41,7 +41,7 @@ class EnumSchema extends BaseSchema
         /** @var AttributeEnum $enum */
         $enum = $this->updateRecord($enum, $data, $translations);
 
-        Event::dispatch(new AttributeEnumUpdated($enum->fresh()));
+        $this->events->dispatch(new AttributeEnumUpdated($enum->fresh()));
 
         return $enum;
     }
@@ -49,7 +49,7 @@ class EnumSchema extends BaseSchema
     /** Delete an enum. */
     public function delete(AttributeEnum $enum): void
     {
-        Event::dispatch(new AttributeEnumDeleted($this->deleteRecord($enum)));
+        $this->events->dispatch(new AttributeEnumDeleted($this->deleteRecord($enum)));
     }
 
     /** Get the model class. */

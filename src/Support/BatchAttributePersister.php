@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Support;
 
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Support\Concerns\ExecutesPersistence;
@@ -25,6 +25,10 @@ class BatchAttributePersister
 
     /** @var array<int|string, Attributable> */
     private array $entities = [];
+
+    public function __construct(private readonly ConnectionResolverInterface $db)
+    {
+    }
 
     /** @param  Collection<int, Field>  $fields */
     public function add(Attributable $entity, Collection $fields): void
@@ -66,7 +70,7 @@ class BatchAttributePersister
                     $this->persistGroup($type, $grouped);
                 } else {
                     try {
-                        DB::transaction(fn () => $this->persistGroup($type, $grouped));
+                        $this->db->connection()->transaction(fn () => $this->persistGroup($type, $grouped));
                     } catch (\Throwable) {
                         foreach ($grouped as $entityId => $fields) {
                             try {

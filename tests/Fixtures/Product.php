@@ -16,8 +16,16 @@ class Product extends Model implements Attributable
 
     protected $fillable = ['name'];
 
+    /** @var array<string, callable> Test-only hook for AttributeValidatorTest. */
+    public static array $uniqueScopes = [];
+
     public function getEavEntityType(): string
     {
         return 'product';
+    }
+
+    public static function attributeUniqueScopes(): array
+    {
+        return static::$uniqueScopes;
     }
 }

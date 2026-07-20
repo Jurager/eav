@@ -97,7 +97,7 @@ class AttributeManager
         }
 
         foreach ($batch->chunk(max(1, $chunkSize)) as $chunk) {
-            $persister = new BatchAttributePersister();
+            $persister = app(BatchAttributePersister::class);
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
@@ -348,7 +348,7 @@ class AttributeManager
 
     private function persister(): AttributePersister
     {
-        return $this->persister ??= new AttributePersister($this->resolveEntity());
+        return $this->persister ??= app(AttributePersister::class, ['entity' => $this->resolveEntity()]);
     }
 
     private function buildIndexData(): array

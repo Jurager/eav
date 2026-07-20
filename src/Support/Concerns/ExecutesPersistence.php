@@ -195,7 +195,7 @@ trait ExecutesPersistence
         }
 
         foreach ($groups as $localesStr => $recordIds) {
-            $keepLocales = explode(',', $localesStr);
+            $keepLocales = explode(',', (string) $localesStr);
             $this->translationsFor($recordIds)->whereNotIn('locale_id', $keepLocales)->delete();
         }
     }

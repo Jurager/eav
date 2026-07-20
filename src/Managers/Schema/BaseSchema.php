@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Managers\Schema;
 
+use Closure;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Managers\TranslationManager;
 
 abstract class BaseSchema
 {
     public function __construct(
         protected TranslationManager $translations,
+        protected ConnectionResolverInterface $db,
+        protected Dispatcher $events,
     ) {
     }
 
@@ -26,10 +30,16 @@ abstract class BaseSchema
         return $this->modelClass()::query();
     }
 
+    /** Run a callback within a database transaction. */
+    protected function transaction(Closure $callback): mixed
+    {
+        return $this->db->connection()->transaction($callback);
+    }
+
     /** Create a record within a transaction and save translations. */
     protected function createRecord(callable $factory, array $translations): Model
     {
-        return DB::transaction(function () use ($factory, $translations): Model {
+        return $this->transaction(function () use ($factory, $translations): Model {
             $model = $factory();
             $this->saveTranslations($model, $translations);
 
@@ -40,7 +50,7 @@ abstract class BaseSchema
     /** Update a record within a transaction and save translations. */
     protected function updateRecord(Model $model, array $data, array $translations): Model
     {
-        return DB::transaction(function () use ($model, $data, $translations): Model {
+        return $this->transaction(function () use ($model, $data, $translations): Model {
             $model->update($data);
             $this->saveTranslations($model, $translations);
 
@@ -61,7 +71,7 @@ abstract class BaseSchema
     /** Apply sort order to a collection of models. */
     protected function applySort(Collection $reordered): void
     {
-        DB::transaction(function () use ($reordered): void {
+        $this->transaction(function () use ($reordered): void {
             $reordered->each(function (Model $item, int $index): void {
                 $item->sort = $index;
                 $item->saveQuietly();

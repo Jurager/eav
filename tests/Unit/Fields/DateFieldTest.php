@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Carbon\Carbon;
-use Jurager\Eav\Fields\DateField;
+use Jurager\Eav\Fields\Date;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -44,9 +44,9 @@ class DateFieldTest extends TestCase
         ], $attributes));
     }
 
-    private function makeField(array $attributes = []): DateField
+    private function makeField(array $attributes = []): Date
     {
-        return new DateField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new Date($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Fields\FileField;
-use Jurager\Eav\Fields\ImageField;
+use Jurager\Eav\Fields\File;
+use Jurager\Eav\Fields\Image;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -44,9 +44,9 @@ class FileFieldTest extends TestCase
         ], $attributes));
     }
 
-    private function makeField(array $attributes = []): FileField
+    private function makeField(array $attributes = []): File
     {
-        return new FileField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new File($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------
@@ -59,15 +59,15 @@ class FileFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // ImageField is a FileField subclass
+    // Image is a File subclass
     // -----------------------------------------------------------------------
 
     public function test_image_field_extends_file_field(): void
     {
         $attribute = $this->makeAttribute(['code' => 'photo']);
-        $field = new ImageField($attribute, $this->localeRegistry, $this->enumRegistry);
+        $field = new Image($attribute, $this->localeRegistry, $this->enumRegistry);
 
-        $this->assertInstanceOf(FileField::class, $field);
+        $this->assertInstanceOf(File::class, $field);
         $this->assertSame(Field::STORAGE_TEXT, $field->column());
     }
 

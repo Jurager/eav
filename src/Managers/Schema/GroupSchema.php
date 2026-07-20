@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Managers\Schema;
 
-use Illuminate\Support\Facades\Event;
 use Jurager\Eav\Events\AttributeGroupCreated;
 use Jurager\Eav\Events\AttributeGroupDeleted;
 use Jurager\Eav\Events\AttributeGroupUpdated;
@@ -29,7 +28,7 @@ class GroupSchema extends BaseSchema
         /** @var AttributeGroup $group */
         $group = $this->createRecord(fn () => $this->query()->create($data), $translations);
 
-        Event::dispatch(new AttributeGroupCreated($group));
+        $this->events->dispatch(new AttributeGroupCreated($group));
 
         return $group;
     }
@@ -42,7 +41,7 @@ class GroupSchema extends BaseSchema
         /** @var AttributeGroup $group */
         $group = $this->updateRecord($group, $data, $translations);
 
-        Event::dispatch(new AttributeGroupUpdated($group->fresh()));
+        $this->events->dispatch(new AttributeGroupUpdated($group->fresh()));
 
         return $group;
     }
@@ -50,7 +49,7 @@ class GroupSchema extends BaseSchema
     /** Delete an attribute group. */
     public function delete(AttributeGroup $group): void
     {
-        Event::dispatch(new AttributeGroupDeleted($this->deleteRecord($group)));
+        $this->events->dispatch(new AttributeGroupDeleted($this->deleteRecord($group)));
     }
 
     /** Sort a group within the collection. */

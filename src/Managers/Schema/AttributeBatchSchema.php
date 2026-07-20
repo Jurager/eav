@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Managers\Schema;
 
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Models\Attribute;
@@ -17,6 +17,8 @@ class AttributeBatchSchema
 {
     public function __construct(
         private TranslationManager $translations,
+        private ConnectionResolverInterface $db,
+        private Dispatcher $events,
     ) {
     }
 
@@ -38,7 +40,7 @@ class AttributeBatchSchema
 
         [$rows, $translationMap] = $this->buildRows($attributesData, $types, $sortCounters, $now);
 
-        $created = DB::transaction(function () use ($rows, $translationMap, $now): Collection {
+        $created = $this->db->connection()->transaction(function () use ($rows, $translationMap, $now): Collection {
             $maxIdBefore = (int) (Eav::$attributeModel::query()->withTrashed()->max('id') ?? 0);
 
             foreach (array_chunk($rows, 500) as $chunk) {
@@ -58,7 +60,7 @@ class AttributeBatchSchema
         });
 
         if ($fireEvents) {
-            $created->each(fn (Attribute $attribute) => Event::dispatch(new AttributeCreated($attribute)));
+            $created->each(fn (Attribute $attribute) => $this->events->dispatch(new AttributeCreated($attribute)));
         }
 
         return $created;

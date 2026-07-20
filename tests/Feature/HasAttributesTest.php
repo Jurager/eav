@@ -93,17 +93,17 @@ class HasAttributesTest extends FeatureTestCase
     }
 
     // -----------------------------------------------------------------------
-    // attribute_relation() relation
+    // assignedAttributes() relation
     // -----------------------------------------------------------------------
 
-    public function test_attribute_relation_returns_attributes_with_pivot(): void
+    public function test_assigned_attributes_returns_attributes_with_pivot(): void
     {
         $attr = $this->createAttribute($this->textType, ['code' => 'title']);
         $product = $this->createProduct();
 
         $product->eav()->set('title', 'My Title')->save('title');
 
-        $pivot = $product->fresh()->attribute_relation->first();
+        $pivot = $product->fresh()->assignedAttributes->first();
 
         $this->assertNotNull($pivot);
         $this->assertSame($attr->id, $pivot->id);

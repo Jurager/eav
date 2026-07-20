@@ -4,7 +4,8 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Managers\Schema;
 
-use Illuminate\Support\Facades\Event;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\ConnectionResolverInterface;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted;
 use Jurager\Eav\Events\AttributeUpdated;
@@ -16,9 +17,11 @@ class AttributeSchema extends BaseSchema
 {
     public function __construct(
         TranslationManager $translations,
+        ConnectionResolverInterface $db,
+        Dispatcher $events,
         private AttributeBatchSchema $batchSchema,
     ) {
-        parent::__construct($translations);
+        parent::__construct($translations, $db, $events);
     }
 
     /** Find an attribute by ID. */
@@ -59,7 +62,7 @@ class AttributeSchema extends BaseSchema
         /** @var Attribute $attribute */
         $attribute = $this->createRecord(fn () => $this->query()->create($data), $translations);
 
-        Event::dispatch(new AttributeCreated($attribute));
+        $this->events->dispatch(new AttributeCreated($attribute));
 
         return $attribute;
     }
@@ -75,7 +78,7 @@ class AttributeSchema extends BaseSchema
         /** @var Attribute $attribute */
         $attribute = $this->updateRecord($attribute, $data, $translations);
 
-        Event::dispatch(new AttributeUpdated($attribute->fresh()));
+        $this->events->dispatch(new AttributeUpdated($attribute->fresh()));
 
         return $attribute;
     }
@@ -83,7 +86,7 @@ class AttributeSchema extends BaseSchema
     /** Delete an attribute. */
     public function delete(Attribute $attribute): void
     {
-        Event::dispatch(new AttributeDeleted($this->deleteRecord($attribute)));
+        $this->events->dispatch(new AttributeDeleted($this->deleteRecord($attribute)));
     }
 
     /** Sort an attribute within its group or entity scope. */

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Fields;
 
-use Jurager\Eav\Fields\BooleanField;
+use Jurager\Eav\Fields\Boolean;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -44,9 +44,9 @@ class BooleanFieldTest extends TestCase
         ], $attributes));
     }
 
-    private function makeField(array $attributes = []): BooleanField
+    private function makeField(array $attributes = []): Boolean
     {
-        return new BooleanField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new Boolean($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------

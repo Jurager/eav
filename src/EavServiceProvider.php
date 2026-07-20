@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Jurager\Eav;
 
 use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
@@ -112,7 +112,7 @@ class EavServiceProvider extends ServiceProvider
     /** Register Scout hook for automatic filterable sync. */
     private function registerScoutHook(): void
     {
-        Event::listen(CommandFinished::class, static function (CommandFinished $event) {
+        $this->app->make(Dispatcher::class)->listen(CommandFinished::class, static function (CommandFinished $event) {
             if ($event->command !== 'scout:sync-index-settings' || $event->exitCode !== 0) {
                 return;
             }

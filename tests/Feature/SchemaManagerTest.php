@@ -126,7 +126,6 @@ class SchemaManagerTest extends FeatureTestCase
             'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'upd',
         ]);
 
-        Event::fake(); // Reset — only capture the update event
         $this->schema->attribute()->update($attr, ['required' => true]);
 
         Event::assertDispatched(AttributeUpdated::class);
@@ -151,7 +150,6 @@ class SchemaManagerTest extends FeatureTestCase
             'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'del2',
         ]);
 
-        Event::fake();
         $this->schema->attribute()->delete($attr);
 
         Event::assertDispatched(AttributeDeleted::class);
@@ -232,8 +230,6 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
 
-        Event::fake();
-
         $this->schema->attribute()->batch()->execute([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev1'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev2'],
@@ -245,8 +241,6 @@ class SchemaManagerTest extends FeatureTestCase
     public function test_attribute_batch_with_fire_events_false_skips_events(): void
     {
         $type = $this->createAttributeType('text');
-
-        Event::fake();
 
         $this->schema->attribute()->batch()->execute([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'silent'],
@@ -278,7 +272,6 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $group = $this->schema->group()->create(['code' => 'old_code']);
 
-        Event::fake();
         $this->schema->group()->update($group, ['code' => 'new_code']);
 
         $this->assertDatabaseHas('attribute_groups', ['id' => $group->id, 'code' => 'new_code']);
@@ -289,7 +282,6 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $group = $this->schema->group()->create(['code' => 'to_delete']);
 
-        Event::fake();
         $this->schema->group()->delete($group);
 
         $this->assertDatabaseMissing('attribute_groups', ['id' => $group->id]);
@@ -358,7 +350,6 @@ class SchemaManagerTest extends FeatureTestCase
         $attr = $this->createAttribute($type, ['code' => 'status']);
         $enum = $this->schema->enum()->create($attr, ['code' => 'old_val']);
 
-        Event::fake();
         $this->schema->enum()->update($enum, ['code' => 'new_val']);
 
         $this->assertDatabaseHas('attribute_enums', ['id' => $enum->id, 'code' => 'new_val']);
@@ -371,7 +362,6 @@ class SchemaManagerTest extends FeatureTestCase
         $attr = $this->createAttribute($type, ['code' => 'type']);
         $enum = $this->schema->enum()->create($attr, ['code' => 'opt1']);
 
-        Event::fake();
         $this->schema->enum()->delete($enum);
 
         $this->assertDatabaseMissing('attribute_enums', ['id' => $enum->id]);
@@ -382,45 +372,44 @@ class SchemaManagerTest extends FeatureTestCase
     // SchemaManager query helpers
     // -----------------------------------------------------------------------
 
-    public function test_attributes_returns_all_attributes(): void
+    public function test_attributes_query_returns_all_attributes(): void
     {
         $type = $this->createAttributeType('text');
         $this->createAttribute($type, ['code' => 'f1']);
         $this->createAttribute($type, ['code' => 'f2']);
 
-        $result = $this->schema->attributes();
+        $result = $this->schema->attributesQuery()->get();
 
         $this->assertCount(2, $result);
     }
 
-    public function test_attributes_accepts_modifier(): void
+    public function test_attributes_query_can_be_chained(): void
     {
         $type = $this->createAttributeType('text');
         $this->createAttribute($type, ['code' => 'q1']);
         $this->createAttribute($type, ['code' => 'q2']);
 
-        $count = $this->schema->attributes(fn ($q) => $q->count());
+        $count = $this->schema->attributesQuery()->count();
 
         $this->assertSame(2, $count);
     }
 
-    public function test_groups_returns_all_groups(): void
+    public function test_groups_query_returns_all_groups(): void
     {
         $this->schema->group()->create(['code' => 'grp1']);
         $this->schema->group()->create(['code' => 'grp2']);
 
-        Event::fake();
-        $result = $this->schema->groups();
+        $result = $this->schema->groupsQuery()->get();
 
         $this->assertCount(2, $result);
     }
 
-    public function test_types_returns_all_types(): void
+    public function test_types_query_returns_all_types(): void
     {
         $this->createAttributeType('text');
         $this->createAttributeType('number');
 
-        $result = $this->schema->types();
+        $result = $this->schema->typesQuery()->get();
 
         $this->assertGreaterThanOrEqual(2, $result->count());
     }

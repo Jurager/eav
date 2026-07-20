@@ -43,6 +43,7 @@ abstract class FeatureTestCase extends TestCase
     {
         Schema::dropIfExists('products');
         Relation::morphMap([]);
+        Product::$uniqueScopes = [];
 
         parent::tearDown();
     }

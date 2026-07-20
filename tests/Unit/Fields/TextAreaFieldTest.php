@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Fields\TextAreaField;
+use Jurager\Eav\Fields\Textarea;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -43,9 +43,9 @@ class TextAreaFieldTest extends TestCase
         ], $attributes));
     }
 
-    private function makeField(array $attributes = []): TextAreaField
+    private function makeField(array $attributes = []): Textarea
     {
-        return new TextAreaField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new Textarea($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     public function test_column_returns_value_text(): void

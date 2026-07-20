@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
-use Jurager\Eav\Fields\TextField;
+use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Support\AttributePersister;
+use Jurager\Eav\Support\BatchAttributePersister;
 
 class AttributePersisterTest extends FeatureTestCase
 {
@@ -27,10 +28,10 @@ class AttributePersisterTest extends FeatureTestCase
         $this->titleAttr = $this->createAttribute($this->textType, ['code' => 'title']);
     }
 
-    private function makeTextField(Attribute $attribute, string $value): TextField
+    private function makeTextField(Attribute $attribute, string $value): Text
     {
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($attribute, $registry, app(EnumRegistry::class));
+        $field = new Text($attribute, $registry, app(EnumRegistry::class));
         $field->fill($value);
 
         return $field;
@@ -43,7 +44,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_persist_inserts_a_new_row(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $field = $this->makeTextField($this->titleAttr, 'Hello');
         $persister->persist(collect([$field]));
@@ -61,7 +62,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_persist_updates_existing_row(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'First')]));
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'Second')]));
@@ -84,7 +85,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_persist_does_nothing_for_empty_collection(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $persister->persist(collect());
 
@@ -98,7 +99,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_save_persists_single_field(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
         $field = $this->makeTextField($this->titleAttr, 'Saved');
 
         $persister->save($field);
@@ -120,7 +121,7 @@ class AttributePersisterTest extends FeatureTestCase
     {
         $priceAttr = $this->createAttribute($this->textType, ['code' => 'price']);
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         // Persist both
         $persister->persist(collect([
@@ -148,7 +149,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_detach_removes_rows_for_given_attribute_ids(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'To Delete')]));
         $persister->detach([$this->titleAttr->id]);
@@ -162,7 +163,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_detach_does_nothing_when_no_rows_exist(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $persister->detach([$this->titleAttr->id]);
 
@@ -176,7 +177,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_delete_removes_given_row_ids(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'Delete Me')]));
 
@@ -190,7 +191,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_delete_with_empty_array_is_no_op(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $persister->persist(collect([$this->makeTextField($this->titleAttr, 'Keep Me')]));
 
@@ -208,7 +209,7 @@ class AttributePersisterTest extends FeatureTestCase
         $p1 = $this->createProduct('P1');
         $p2 = $this->createProduct('P2');
 
-        $persister = new AttributePersister();
+        $persister = app(BatchAttributePersister::class);
 
         $persister->add($p1, collect([$this->makeTextField($this->titleAttr, 'First')]));
         $persister->add($p2, collect([$this->makeTextField($this->titleAttr, 'Second')]));
@@ -228,7 +229,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_flush_clears_pending_queue(): void
     {
         $p1 = $this->createProduct();
-        $persister = new AttributePersister();
+        $persister = app(BatchAttributePersister::class);
 
         $persister->add($p1, collect([$this->makeTextField($this->titleAttr, 'Once')]));
         $persister->flush();
@@ -242,7 +243,7 @@ class AttributePersisterTest extends FeatureTestCase
     public function test_add_with_empty_fields_is_skipped(): void
     {
         $p1 = $this->createProduct();
-        $persister = new AttributePersister();
+        $persister = app(BatchAttributePersister::class);
 
         $persister->add($p1, collect());
         $persister->flush();
@@ -262,10 +263,10 @@ class AttributePersisterTest extends FeatureTestCase
         ]);
 
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
 
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($multiAttr, $registry, app(EnumRegistry::class));
+        $field = new Text($multiAttr, $registry, app(EnumRegistry::class));
         $field->fill(['tag1', 'tag2', 'tag3']);
 
         $persister->persist(collect([$field]));

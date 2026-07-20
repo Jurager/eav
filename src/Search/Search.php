@@ -6,7 +6,6 @@ namespace Jurager\Eav\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Support\Facades\Log;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\FilterResolver;
@@ -19,6 +18,7 @@ use Jurager\Filterable\Support\ParsedFilters;
 use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
+use Psr\Log\LoggerInterface;
 
 class Search
 {
@@ -43,6 +43,7 @@ class Search
         private readonly FieldFactory $fieldFactory,
         private readonly LocaleRegistry $localeRegistry,
         private readonly Client $meilisearch,
+        private readonly LoggerInterface $logger,
     ) {
         $this->filter = (new FilterParser())->parse([], []);
     }
@@ -239,7 +240,7 @@ class Search
     private function logUnresolved(array $unresolved): void
     {
         foreach (array_keys($unresolved) as $key) {
-            Log::warning("eav.search: filter key [{$key}] has no indexed field, condition dropped", [
+            $this->logger->warning("eav.search: filter key [{$key}] has no indexed field, condition dropped", [
                 'entity_type' => $this->entityType,
             ]);
         }
@@ -249,7 +250,7 @@ class Search
     private function warnIfHybridWindowExceeded(int $total, int $candidateLimit): void
     {
         if ($total > $candidateLimit) {
-            Log::warning('eav.search: hybrid candidate window exceeded', [
+            $this->logger->warning('eav.search: hybrid candidate window exceeded', [
                 'entity_type' => $this->entityType,
                 'limit' => $candidateLimit,
                 'estimated_total' => $total,

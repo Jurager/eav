@@ -9,7 +9,7 @@ use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\FieldTypeRegistry;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Tests\TestCase;
@@ -30,8 +30,8 @@ class EavServiceProviderTest extends TestCase
 
     public function test_field_type_registry_is_singleton(): void
     {
-        $a = app(FieldTypeRegistry::class);
-        $b = app(FieldTypeRegistry::class);
+        $a = app(FieldFactory::class);
+        $b = app(FieldFactory::class);
 
         $this->assertSame($a, $b);
     }

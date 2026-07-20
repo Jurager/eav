@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Support;
 
+use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\Field;
@@ -19,8 +19,10 @@ class AttributePersister
 {
     use ExecutesPersistence;
 
-    public function __construct(private readonly Attributable $entity)
-    {
+    public function __construct(
+        private readonly Attributable $entity,
+        private readonly ConnectionResolverInterface $db,
+    ) {
     }
 
     /** @param  Collection<int, Field>  $fields */
@@ -48,7 +50,7 @@ class AttributePersister
             return;
         }
 
-        $this->withinTimestamp(fn () => DB::transaction(function () use ($fields): void {
+        $this->withinTimestamp(fn () => $this->db->connection()->transaction(function () use ($fields): void {
             $keepIds = $fields->map(fn (Field $f) => $f->attribute()->id)->values()->all();
             $this->delete($this->entityQuery()->whereNotIn('attribute_id', $keepIds)->pluck('id')->all());
             $this->persistGroup($this->entity->getEavEntityType(), [$this->entity->id => $fields]);

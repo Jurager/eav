@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature;
 use Illuminate\Validation\ValidationException;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Support\AttributeValidator;
+use Jurager\Eav\Tests\Fixtures\Product;
 
 class AttributeValidatorTest extends FeatureTestCase
 {
@@ -135,7 +135,7 @@ class AttributeValidatorTest extends FeatureTestCase
 
         $this->expectException(ValidationException::class);
 
-        // Integer is not valid for TextField
+        // Integer is not valid for Text
         $product->validate([
             ['code' => 'name', 'values' => 42],
         ]);
@@ -200,7 +200,7 @@ class AttributeValidatorTest extends FeatureTestCase
     }
 
     // -----------------------------------------------------------------------
-    // AttributeValidator::registerUniqueScope()
+    // Product::attributeUniqueScopes()
     // -----------------------------------------------------------------------
 
     public function test_register_unique_scope_restricts_uniqueness_check(): void
@@ -212,9 +212,11 @@ class AttributeValidatorTest extends FeatureTestCase
 
         // Register a scope that makes the uniqueness check always exclude everything
         // (empty result set = no conflict ever possible)
-        AttributeValidator::registerUniqueScope('product', 'ref', function ($query) {
-            $query->whereRaw('1 = 0');
-        });
+        Product::$uniqueScopes = [
+            'ref' => function ($query) {
+                $query->whereRaw('1 = 0');
+            },
+        ];
 
         $p1 = $this->createProduct('P1');
         $p1->eav()->set('ref', 'REF-001')->save('ref');

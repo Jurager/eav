@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
-use Jurager\Eav\Fields\TextField;
+use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -38,7 +38,7 @@ class LocalizableFieldTest extends FeatureTestCase
         ]);
     }
 
-    private function makeField(bool $multiple = false): TextField
+    private function makeField(bool $multiple = false): Text
     {
         $attr = $multiple
             ? $this->createAttribute(
@@ -49,7 +49,7 @@ class LocalizableFieldTest extends FeatureTestCase
 
         $registry = app(LocaleRegistry::class);
 
-        return new TextField($attr, $registry, app(EnumRegistry::class));
+        return new Text($attr, $registry, app(EnumRegistry::class));
     }
 
     // -----------------------------------------------------------------------
@@ -131,9 +131,9 @@ class LocalizableFieldTest extends FeatureTestCase
     public function test_persister_saves_localizable_field_to_translations_table(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($this->attr, $registry, app(EnumRegistry::class));
+        $field = new Text($this->attr, $registry, app(EnumRegistry::class));
 
         $field->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Color'],
@@ -165,9 +165,9 @@ class LocalizableFieldTest extends FeatureTestCase
     public function test_persister_saves_correct_translation_labels(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($this->attr, $registry, app(EnumRegistry::class));
+        $field = new Text($this->attr, $registry, app(EnumRegistry::class));
 
         $field->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Color'],
@@ -195,9 +195,9 @@ class LocalizableFieldTest extends FeatureTestCase
     public function test_updating_localizable_field_prunes_removed_locale(): void
     {
         $product = $this->createProduct();
-        $persister = new AttributePersister($product);
+        $persister = app(AttributePersister::class, ['entity' => $product]);
         $registry = app(LocaleRegistry::class);
-        $field = new TextField($this->attr, $registry, app(EnumRegistry::class));
+        $field = new Text($this->attr, $registry, app(EnumRegistry::class));
 
         // Persist both EN and FR
         $field->fill([
@@ -207,7 +207,7 @@ class LocalizableFieldTest extends FeatureTestCase
         $persister->persist(collect([$field]));
 
         // Update with only EN — FR should be removed
-        $field2 = new TextField($this->attr, $registry, app(EnumRegistry::class));
+        $field2 = new Text($this->attr, $registry, app(EnumRegistry::class));
         $field2->fill([
             ['locale_id' => $this->enLocaleId, 'values' => 'Colour'],
         ]);

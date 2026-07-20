@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Fields\LinkField;
+use Jurager\Eav\Fields\Link;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -43,9 +43,9 @@ class LinkFieldTest extends TestCase
         ], $attributes));
     }
 
-    private function makeField(array $attributes = []): LinkField
+    private function makeField(array $attributes = []): Link
     {
-        return new LinkField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new Link($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------

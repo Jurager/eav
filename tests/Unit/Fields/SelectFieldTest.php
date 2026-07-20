@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Fields\SelectField;
+use Jurager\Eav\Fields\Select;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -57,9 +57,9 @@ class SelectFieldTest extends TestCase
         return $attr;
     }
 
-    private function makeField(array $attributes = []): SelectField
+    private function makeField(array $attributes = []): Select
     {
-        return new SelectField($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+        return new Select($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
     }
 
     // -----------------------------------------------------------------------
@@ -191,7 +191,7 @@ class SelectFieldTest extends TestCase
 
     public function test_to_storage_is_not_affected_by_localizable_flag(): void
     {
-        // SelectField always ignores localizable for storage — enum IDs are locale-neutral.
+        // Select always ignores localizable for storage — enum IDs are locale-neutral.
         $field = $this->makeField(['localizable' => true]);
         $field->fill(10);
 
