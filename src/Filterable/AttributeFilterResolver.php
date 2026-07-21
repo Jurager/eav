@@ -108,9 +108,15 @@ class AttributeFilterResolver implements FieldResolverInterface, RelationResolve
         foreach ($value as $alias => $operand) {
             $op = FilterOperator::fromAlias((string) $alias);
 
-            if ($op !== null) {
-                $conditions[] = [$op->value, $operand];
+            if ($op === null) {
+                continue;
             }
+
+            if (in_array($op, [FilterOperator::In, FilterOperator::Nin], true) && ! is_array($operand)) {
+                $operand = array_values(array_filter(explode(',', (string) $operand), static fn ($v): bool => $v !== ''));
+            }
+
+            $conditions[] = [$op->value, $operand];
         }
 
         return $conditions;

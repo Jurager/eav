@@ -127,8 +127,8 @@ class MeilisearchFilterCompiler
         }
 
         return match (FilterOperator::fromAlias($alias)) {
-            FilterOperator::Eq         => $this->compileComparison($field, '=', $operand),
-            FilterOperator::Ne         => $this->compileComparison($field, '!=', $operand),
+            FilterOperator::Eq         => $this->compileEquality($field, '=', $operand),
+            FilterOperator::Ne         => $this->compileEquality($field, '!=', $operand),
             FilterOperator::Gt         => $this->compileComparison($field, '>', $operand),
             FilterOperator::Gte        => $this->compileComparison($field, '>=', $operand),
             FilterOperator::Lt         => $this->compileComparison($field, '<', $operand),
@@ -141,6 +141,13 @@ class MeilisearchFilterCompiler
         };
     }
 
+    /** Equality (`eq`/`ne`) — any scalar, e.g. numeric ids or string codes. */
+    private function compileEquality(string $field, string $operator, mixed $value): ?string
+    {
+        return is_scalar($value) ? sprintf('%s %s %s', $field, $operator, $this->escape($value)) : null;
+    }
+
+    /** Ordering comparison (`gt`/`gte`/`lt`/`lte`) — Meilisearch only compares numbers this way. */
     private function compileComparison(string $field, string $operator, mixed $value): ?string
     {
         return is_numeric($value) ? sprintf('%s %s %s', $field, $operator, $this->escape($value)) : null;

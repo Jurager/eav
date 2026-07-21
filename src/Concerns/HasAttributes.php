@@ -34,11 +34,10 @@ trait HasAttributes
 {
     use HasClosureRelations;
 
-    /**
-     * Cached AttributeManager instance — one per model instance.
-     */
+    /** Cached AttributeManager instance for this model. */
     protected ?AttributeManager $attributeManager = null;
 
+    /** Boot trait attributes. */
     public static function bootHasAttributes(): void
     {
         static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
@@ -49,18 +48,7 @@ trait HasAttributes
     }
 
     /**
-     * Override in models to declare scoped uniqueness for specific attributes.
-     *
-     * Return a map of [attributeCode => callable($query, $entity)].
-     * The callable receives the entity_attribute Builder and the model instance,
-     * and should add WHERE conditions to restrict the uniqueness check scope.
-     *
-     * Example:
-     *   return [
-     *       'code' => function ($query, self $entity) {
-     *           $query->whereIn('entity_id', static::query()->whereDescendantOrSelf($entity->id)->select('id'));
-     *       },
-     *   ];
+     * Declare scoped uniqueness for specific attributes.
      *
      * @return array<string, callable>
      */
@@ -70,8 +58,7 @@ trait HasAttributes
     }
 
     /**
-     * Return the FQCN of the model used to resolve relation-scoped attributes.
-     * Override in models that scope attributes by a related model (e.g. Category for Product).
+     * Get model FQCN used to resolve relation-scoped attributes.
      *
      * @return class-string<Attributable>|null
      */
@@ -80,18 +67,61 @@ trait HasAttributes
         return null;
     }
 
-    /**
-     * Return the AttributeManager for this entity (lazy-loaded, cached).
-     */
+    /** Get cached attribute manager instance. */
     public function eav(): AttributeManager
     {
         return $this->attributeManager ??= AttributeManager::for($this);
     }
 
+    /** Fallback to EAV attribute reading for undefined properties. */
+    public function getAttribute($key)
+    {
+        $value = parent::getAttribute($key);
+
+        if ($value !== null || ! is_string($key) || $key === '') {
+            return $value;
+        }
+
+        if ($this->isRealColumn($key) || array_key_exists($key, $this->relations)) {
+            return $value;
+        }
+
+        return $this->eav()->value($key);
+    }
+
+    /** Fallback to EAV attribute assignment for undefined properties. */
+    public function setAttribute($key, $value)
+    {
+        if (
+            is_string($key) && $key !== ''
+            && ! $this->hasSetMutator($key)
+            && ! $this->hasAttributeSetMutator($key)
+            && ! $this->isRelation($key)
+            && ! $this->isRealColumn($key)
+            && $this->eav()->field($key) !== null
+        ) {
+            $this->eav()->set($key, $value);
+
+            return $this;
+        }
+
+        return parent::setAttribute($key, $value);
+    }
+
+    /** Check if key is a real database column. */
+    private function isRealColumn(string $key): bool
+    {
+        static $columns = [];
+
+        $table = $this->getTable();
+
+        return in_array($key, $columns[$table] ??= $this->getConnection()->getSchemaBuilder()->getColumnListing($table), true);
+    }
+
     /**
-     * Validate and fill attribute input, returning filled Field instances keyed by code.
+     * Validate attribute input and return parsed fields.
      *
-     * @param  array<int, array{code: string, values: mixed}>  $input
+     * @param array<int, array{code: string, values: mixed}> $input
      * @return array<string, Field>
      *
      * @throws ValidationException|JsonException|BindingResolutionException
@@ -102,12 +132,10 @@ trait HasAttributes
     }
 
     /**
-     * Return available attribute definitions for this entity.
+     * Get available attribute definitions.
      *
-     * @param  array<int>  $params  Scope-model IDs from getEavScopes().
+     * @param array<int> $params
      * @return Collection<int, mixed>
-     * @throws BindingResolutionException
-     * @throws CircularDependencyException
      */
     public function availableAttributes(array $params = []): Collection
     {
@@ -115,12 +143,9 @@ trait HasAttributes
     }
 
     /**
-     * Return a query builder for available attributes (global or by relation).
+     * Get available attributes query builder.
      *
-     * @param  array<int>  $params  Scope-model IDs from getEavScopes().
-     * @return Builder|null
-     * @throws BindingResolutionException
-     * @throws CircularDependencyException
+     * @param array<int> $params
      */
     public function getAvailableAttributesQuery(array $params = []): ?Builder
     {
@@ -131,40 +156,25 @@ trait HasAttributes
         return $this->globalAttributesQuery();
     }
 
-    /**
-     * Expose the model's available attributes as an eager-loadable relation.
-     *
-     * @param  Closure(Model): (Builder|null)  $resolver
-     */
+    /** Expose available attributes as closure relation. */
     public function availableAttributesRelation(Closure $resolver): ClosureRelation
     {
         return $this->closureRelation(Eav::$attributeModel, $resolver);
     }
 
-    /**
-     * Relation exposing another entity's available attributes, scoped to this model.
-     *
-     * @param  class-string  $entityClass
-     * @param  Closure(static): array<int>|null  $scope  Scope entity ids; defaults to the nested-set subtree.
-     * @param  Closure(Builder): Builder|null  $constrain
-     */
+    /** Define closure relation for scoped attributes. */
     public function closuredAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): ClosureRelation
     {
         $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
 
         return $this->availableAttributesRelation(static function (Model $parent) use ($entityClass, $scope, $constrain): ?Builder {
-
             $query = (new $entityClass())->getAvailableAttributesQuery($scope($parent));
 
             return $query !== null && $constrain !== null ? $constrain($query) : $query;
         });
     }
 
-    /**
-     * Nested-set subtree ids (including self) used as the default attribute scope.
-     *
-     * @return array<int>
-     */
+    /** Get nested-set subtree IDs for attribute scope. */
     public function attributeScopeSubtreeIds(): array
     {
         if (isset($this->_lft, $this->_rgt)) {
@@ -178,23 +188,13 @@ trait HasAttributes
         return [$this->getKey()];
     }
 
-    /**
-     * Builder for attribute-filter subqueries, resolved globally by entity type.
-     *
-     * Filtering must not depend on the instance's scoped schema (which is empty
-     * for a transient/relation-scoped model, e.g. a category-scoped Product) —
-     * otherwise no attribute resolves and the filter silently matches everything.
-     */
+    /** Get attribute filter query builder. */
     protected function attributeFilterBuilder(): AttributeQueryBuilder
     {
         return AttributeManager::for($this->getEavEntityType())->builder();
     }
 
-    /**
-     * Scope: filter by a single attribute value.
-     *
-     * @throws JsonException|BindingResolutionException
-     */
+    /** Filter by single attribute value. */
     public function scopeWhereAttribute(Builder $query, string $code, mixed $value, string $operator = '='): Builder
     {
         if ($operator === 'tree') {
@@ -204,45 +204,25 @@ trait HasAttributes
         return $this->applyAttributeSubquery($query, $code, $value, $operator);
     }
 
-    /**
-     * Scope: filter by a single attribute using LIKE search.
-     *
-     * @throws JsonException|BindingResolutionException
-     */
+    /** Filter by attribute value using LIKE operator. */
     public function scopeWhereAttributeLike(Builder $query, string $code, string $value): Builder
     {
         return $this->scopeWhereAttribute($query, $code, $value, 'like');
     }
 
-    /**
-     * Scope: filter by attribute value range (inclusive).
-     *
-     * @throws JsonException|BindingResolutionException
-     */
+    /** Filter by attribute value range (inclusive). */
     public function scopeWhereAttributeBetween(Builder $query, string $code, float|int $min, float|int $max): Builder
     {
         return $this->applyAttributeSubquery($query, $code, [$min, $max], 'between');
     }
 
-    /**
-     * Scope: filter by attribute value IN a set.
-     *
-     * @throws JsonException|BindingResolutionException
-     */
+    /** Filter by attribute value IN a set. */
     public function scopeWhereAttributeIn(Builder $query, string $code, array $values): Builder
     {
         return $this->applyAttributeSubquery($query, $code, $values, 'in');
     }
 
-    /**
-     * Scope: apply multiple attribute conditions (AND logic).
-     *
-     * Each condition: ['code' => string, 'value' => mixed, 'operator' => string (optional)].
-     *
-     * @param  array<int, array{code: string, value: mixed, operator?: string}>  $conditions
-     *
-     * @throws JsonException|BindingResolutionException
-     */
+    /** Filter by multiple attribute conditions. */
     public function scopeWhereAttributes(Builder $query, array $conditions): Builder
     {
         foreach ($conditions as $condition) {
@@ -252,22 +232,19 @@ trait HasAttributes
         return $query;
     }
 
-    /** Constrain the query to keys matching an attribute-filter subquery, if one is resolvable. */
+    /** Constrain query to keys matching attribute-filter subquery. */
     private function applyAttributeSubquery(Builder $query, string $code, mixed $value, string $operator): Builder
     {
         $sub = $this->attributeFilterBuilder()->subquery($code, $value, $operator);
 
-        return $sub ? $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub) : $query;
+        if (! $sub) {
+            return $query;
+        }
+
+        return $query->whereIn($query->getModel()->getQualifiedKeyName(), $sub);
     }
 
-    /**
-     * Scope: find entities whose attribute equals $value, then expand to all NestedSet descendants.
-     *
-     * Executes two lightweight queries: one to resolve matching root IDs, one to expand the tree.
-     * Falls back to exact-match filtering when the model does not use NodeTrait.
-     *
-     * @throws JsonException|BindingResolutionException
-     */
+    /** Filter by attribute value and expand to NestedSet descendants. */
     public function scopeWhereAttributeTree(Builder $query, string $code, mixed $value): Builder
     {
         $sub = $this->attributeFilterBuilder()->subquery($code, $value, '=');
@@ -285,29 +262,23 @@ trait HasAttributes
 
         $allIds = $this->expandToDescendants($model, $matchingIds);
 
-        return $allIds ? $query->whereIn($model->getQualifiedKeyName(), $allIds) : $query->whereKey([]);
+        if (empty($allIds)) {
+            return $query->whereKey([]);
+        }
+
+        return $query->whereIn($model->getQualifiedKeyName(), $allIds);
     }
 
-    /**
-     * Resolve the entity keys matched by an attribute-filter subquery.
-     *
-     * @return array<int, int|string>
-     */
+    /** Resolve entity keys matched by attribute-filter subquery. */
     private function matchingAttributeIds(Model $model, Builder $sub): array
     {
         return $model->newQuery()
             ->whereIn($model->getQualifiedKeyName(), $sub)
             ->pluck($model->getKeyName())
-            ->toArray();
+            ->all();
     }
 
-    /**
-     * Expand root ids to all NestedSet descendants. Falls back to the root ids
-     * unchanged when the model doesn't use NodeTrait.
-     *
-     * @param  array<int, int|string>  $ids
-     * @return array<int, int|string>
-     */
+    /** Expand root IDs to all NestedSet descendants. */
     private function expandToDescendants(Model $model, array $ids): array
     {
         $treeQuery = $model->newQuery();
@@ -316,50 +287,37 @@ trait HasAttributes
             return $ids;
         }
 
+        $indexedIds = array_values($ids);
+
         return $treeQuery
-            ->where(function (Builder $q) use ($ids): void {
-                foreach (array_values($ids) as $i => $id) {
+            ->where(function (Builder $q) use ($indexedIds): void {
+                foreach ($indexedIds as $i => $id) {
                     $q->whereDescendantOrSelf($id, $i === 0 ? 'and' : 'or');
                 }
             })
             ->pluck($model->getKeyName())
-            ->toArray();
+            ->all();
     }
 
-    /**
-     * Whether this entity should inherit attributes from its parent.
-     * Override in models that support attribute inheritance.
-     */
+    /** Determine if entity should inherit EAV attributes. */
     public function shouldInheritEavAttributes(): bool
     {
         return false;
     }
 
-    /**
-     * Columns needed when loading this entity for inheritance resolution.
-     * Override to add any column that shouldInheritEavAttributes() reads from.
-     *
-     * @return array<string>
-     */
+    /** Get columns required for inheritance resolution. */
     public function getEavInheritanceColumns(): array
     {
         return ['id', 'parent_id'];
     }
 
-    /**
-     * Default filter parameters passed to getAvailableAttributesQuery().
-     * Override in models that use byRelation scope (e.g. return category IDs for Product).
-     *
-     * @return array<int>
-     */
+    /** Get default scope parameters for available attributes query. */
     public function getEavScopes(): array
     {
         return [];
     }
 
-    /**
-     * Raw Eloquent relation to Attribute through entity_attribute pivot (with value columns).
-     */
+    /** Define Eloquent relation to Attribute through pivot. */
     public function assignedAttributes(): MorphToMany
     {
         return $this->morphToMany(Eav::$attributeModel, 'entity', 'entity_attribute')
@@ -367,34 +325,25 @@ trait HasAttributes
             ->withPivot(['id', 'value_text', 'value_integer', 'value_float', 'value_boolean', 'value_date', 'value_datetime']);
     }
 
-    /**
-     * Raw Eloquent relation to entity_attribute rows for this entity.
-     */
+    /** Define Eloquent relation to entity_attribute values. */
     public function attributeValues(): MorphMany
     {
         return $this->morphMany(Eav::$entityAttributeModel, 'entity');
     }
 
-    /**
-     * Pivot relation used to resolve scoped attributes; defaults to {@see assignedAttributes()}.
-     * Override only to decouple the scope pivot from it.
-     */
+    /** Define pivot relation used to resolve scoped attributes. */
     public function attributeScopeRelation(): ?BelongsToMany
     {
         return $this->assignedAttributes();
     }
 
-    /**
-     * Return an AttributeValidator for this entity.
-     */
+    /** Get attribute validator instance. */
     protected function validator(): AttributeValidator
     {
         return new AttributeValidator($this, $this->attributeManager);
     }
 
-    /**
-     * Return a query for all attributes shared globally for this entity type.
-     */
+    /** Get query for globally shared attributes. */
     protected function globalAttributesQuery(): Builder
     {
         return Eav::$attributeModel::query()
@@ -402,15 +351,7 @@ trait HasAttributes
             ->withRelations();
     }
 
-    /**
-     * Return a query for attributes scoped through related entities (e.g. categories for products).
-     *
-     * @param  array<int>  $params  Scope-model IDs from getEavScopes().
-     * @param  class-string<Attributable>  $model
-     *
-     * @throws BindingResolutionException
-     * @throws CircularDependencyException
-     */
+    /** Get query for attributes scoped through related entities. */
     protected function scopedAttributesQuery(array $params, string $model): ?Builder
     {
         if (empty($params)) {
@@ -420,44 +361,44 @@ trait HasAttributes
         $instance = new $model();
         $entities = $this->loadInheritanceEntities($model, $instance, $params);
 
-        if ($entities === null) {
+        if (empty($entities)) {
             return null;
         }
 
         $entityIds = $this->resolveInheritedEntityIds($entities, $model);
 
-        if ($entityIds === null) {
+        if (empty($entityIds)) {
             return null;
         }
 
         $relation = $instance->attributeScopeRelation();
 
-        return $relation === null ? null : $this->attributeScopeSubquery($relation, $entityIds);
+        if ($relation === null) {
+            return null;
+        }
+
+        return $this->attributeScopeSubquery($relation, $entityIds);
     }
 
-    /**
-     * Load the entities named by $params with just the columns inheritance resolution needs.
-     *
-     * @param  array<int>  $params
-     */
+    /** Load entities required for inheritance resolution. */
     private function loadInheritanceEntities(string $model, object $instance, array $params): ?Collection
     {
         $columns = $instance->getEavInheritanceColumns();
 
         if ($instance instanceof Hierarchical) {
-            $columns = array_merge($columns, ['_lft', '_rgt']);
+            array_push($columns, '_lft', '_rgt');
         }
 
         $entities = $model::query()
-            ->whereIn('id', $params)
             ->select(array_unique($columns))
+            ->whereIn('id', $params)
             ->get()
             ->keyBy('id');
 
         return $entities->isEmpty() ? null : $entities;
     }
 
-    /** Resolve inherited entity ids via the configured AttributeInheritanceResolver. */
+    /** Resolve inherited entity IDs via configured resolver. */
     private function resolveInheritedEntityIds(Collection $entities, string $model): ?Collection
     {
         $allEntities = app(AttributeInheritanceResolver::class)->resolve($entities, $model);
@@ -466,23 +407,26 @@ trait HasAttributes
             return null;
         }
 
-        $entityIds = $allEntities instanceof Collection ? $allEntities->pluck('id') : collect($allEntities)->pluck('id');
+        // collect() safely wraps arrays or returns the Collection directly
+        $entityIds = collect($allEntities)->pluck('id');
 
         return $entityIds->isEmpty() ? null : $entityIds;
     }
 
-    /** Build the attribute-scope subquery for the given entities' pivot rows. */
+    /** Build attribute-scope subquery for pivot rows. */
     private function attributeScopeSubquery(BelongsToMany $relation, Collection $entityIds): Builder
     {
         $pivotTable = $relation->getTable();
         $foreignKey = $relation->getForeignPivotKeyName();
         $relatedKey = $relation->getRelatedPivotKeyName();
 
-        return Eav::$attributeModel::query()->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
-            $query->from($pivotTable)
-                ->select($relatedKey)
-                ->whereIn($foreignKey, $entityIds)
-                ->distinct();
-        })->withRelations();
+        return Eav::$attributeModel::query()
+            ->whereIn('id', function ($query) use ($pivotTable, $relatedKey, $foreignKey, $entityIds): void {
+                $query->from($pivotTable)
+                    ->select($relatedKey)
+                    ->whereIn($foreignKey, $entityIds)
+                    ->distinct();
+            })
+            ->withRelations();
     }
 }
