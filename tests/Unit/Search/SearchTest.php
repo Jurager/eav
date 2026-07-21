@@ -61,6 +61,24 @@ class SearchTest extends TestCase
         $property->setValue($this->search, $model);
     }
 
+    /** Resolve a key against a FacetContext carrying the given attribute codes, bypassing the fixed $this->context. */
+    private function resolveWithAttributes(string $key, array $codes): ?string
+    {
+        $context = new FacetContext(
+            new Collection(array_map(static fn ($code) => (new class () extends Model {
+                protected $guarded = [];
+            })->forceFill(['code' => $code]), $codes)),
+            Mockery::mock(FieldFactory::class),
+        );
+
+        $method = (new ReflectionClass($this->search))->getMethod('resolver');
+        $method->setAccessible(true);
+
+        $resolve = $method->invoke($this->search, $context);
+
+        return $resolve($key);
+    }
+
     public function test_id_resolves_by_default_with_no_configuration_at_all(): void
     {
         $this->assertSame('id', $this->resolve('id'));
@@ -108,5 +126,17 @@ class SearchTest extends TestCase
 
         // 'id' is resolved unconditionally before any contract/map lookup runs.
         $this->assertSame('id', $this->resolve('id'));
+    }
+
+    public function test_a_filterable_attribute_resolves_even_when_not_among_the_requested_facets(): void
+    {
+        // No ->facets() call was made, so $this->facets is empty — this key can only
+        // resolve through the entity-type-wide filterable-attribute fallback.
+        $this->assertSame('attributes.00054', $this->resolveWithAttributes('00054', ['00054']));
+    }
+
+    public function test_an_attribute_absent_from_the_filterable_set_does_not_resolve(): void
+    {
+        $this->assertNull($this->resolveWithAttributes('00054', ['00053']));
     }
 }

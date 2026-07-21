@@ -13,7 +13,7 @@ use Meilisearch\Search\SearchResult as MeilisearchResult;
  */
 class TermsFacet extends Facet
 {
-    private const string PREFIX = 'attributes.';
+    private const string PREFIX = self::ATTRIBUTE_PREFIX;
 
     /**
      * @param  string[]  $codes  EAV attribute codes.

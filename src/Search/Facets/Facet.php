@@ -15,6 +15,9 @@ use Meilisearch\Search\SearchResult as MeilisearchResult;
  */
 abstract class Facet
 {
+    /** Meilisearch field prefix EAV attribute values are indexed under. */
+    public const string ATTRIBUTE_PREFIX = 'attributes.';
+
     protected bool $disjunctive = false;
 
     /**

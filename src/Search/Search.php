@@ -287,6 +287,13 @@ class Search
                 return $field;
             }
 
+            // Any attribute flagged filterable for this entity type is a valid filter
+            // key even when it isn't among the facets requested for *this* call — facet
+            // selection (category/site-scoped) and filter eligibility are separate concerns.
+            if ($context->attribute($key) !== null) {
+                return Facet::ATTRIBUTE_PREFIX.$key;
+            }
+
             return $this->map[$key] ?? null;
         };
     }
