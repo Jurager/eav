@@ -177,32 +177,19 @@ class Search
         $this->index = $this->meilisearch->index($this->model->searchableAs());
 
         $resolve = $this->resolver($context);
-        $unresolved = $this->compiler->unresolved($this->filter, $resolve);
 
-        $this->logUnresolved($unresolved);
-
-        $hybrid = $unresolved !== [] && $this->model instanceof InteractsWithIndex;
-        $candidateLimit = (int) config('eav.search.hybrid_candidate_limit', 1000);
+        $this->logUnresolved($this->compiler->unresolved($this->filter, $resolve));
 
         $main = $this->index->search($this->query, array_filter([
             'filter' => $this->compiler->compile($this->filter, $resolve),
             'facets' => $this->facetFields($context) ?: null,
-            'limit'  => $hybrid ? $candidateLimit : $perPage,
-            'offset' => $hybrid ? 0 : ($page - 1) * $perPage,
+            'limit'  => $perPage,
+            'offset' => ($page - 1) * $perPage,
         ]));
 
-        $ids = array_column($main->getHits(), 'id');
-        $total = $main->getEstimatedTotalHits() ?? 0;
-
-        if ($hybrid) {
-            $this->warnIfHybridWindowExceeded($total, $candidateLimit);
-
-            [$ids, $total] = $this->hybridPaginate($ids, $unresolved, $perPage, $page);
-        }
-
         return new SearchResult(
-            ids: $ids,
-            total: $total,
+            ids: array_column($main->getHits(), 'id'),
+            total: $main->getEstimatedTotalHits() ?? 0,
             facets: $this->group($this->collectFacets($main, $context)),
             context: $context,
         );
@@ -244,29 +231,6 @@ class Search
                 'entity_type' => $this->entityType,
             ]);
         }
-    }
-
-    /** Log warning if hybrid search window is exceeded. */
-    private function warnIfHybridWindowExceeded(int $total, int $candidateLimit): void
-    {
-        if ($total > $candidateLimit) {
-            $this->logger->warning('eav.search: hybrid candidate window exceeded', [
-                'entity_type' => $this->entityType,
-                'limit' => $candidateLimit,
-                'estimated_total' => $total,
-            ]);
-        }
-    }
-
-    /** Apply database-level filtering to search results. */
-    private function hybridPaginate(array $ids, array $filter, int $perPage, int $page): array
-    {
-        $order = array_flip(array_map('strval', $ids));
-        $narrowed = $this->model->narrow($ids, $filter);
-
-        usort($narrowed, static fn ($a, $b) => ($order[(string) $a] ?? PHP_INT_MAX) <=> ($order[(string) $b] ?? PHP_INT_MAX));
-
-        return [array_slice($narrowed, ($page - 1) * $perPage, $perPage), count($narrowed)];
     }
 
     /** Perform facet-only search. */
