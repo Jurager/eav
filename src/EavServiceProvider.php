@@ -23,9 +23,10 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Search\MeilisearchFilterCompiler;
+use Jurager\Eav\Search\Engine;
 use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
-use Jurager\Eav\Search\Search;
+use Jurager\Eav\Search\SearchFactory;
+
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
 class EavServiceProvider extends ServiceProvider
@@ -48,8 +49,7 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(AttributeInheritanceResolver::class);
         $this->app->scoped(TranslationManager::class);
         $this->app->scoped(SchemaManager::class);
-        $this->app->singleton(MeilisearchFilterCompiler::class);
-        $this->app->bind(Search::class);
+        $this->app->scoped(Engine::class);
 
         $this->registerFilterResolvers();
     }
@@ -63,6 +63,8 @@ class EavServiceProvider extends ServiceProvider
 
         $this->app->tag([AttributeFilterResolver::class, AttributeSortResolver::class], 'filterable.resolvers');
         $this->app->tag(AttributeRelationFilterResolver::class, 'eav.search.resolvers');
+
+        $this->app->when(SearchFactory::class)->needs('$resolvers')->giveTagged('eav.search.resolvers');
     }
 
     /** Configure package models from config. */

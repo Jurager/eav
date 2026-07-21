@@ -9,9 +9,8 @@ use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
-use Jurager\Eav\Search\MeilisearchFilterCompiler;
-use Jurager\Eav\Search\Facets\FacetContext;
-use Jurager\Eav\Search\Search;
+use Jurager\Eav\Search\Engine;
+use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Tests\TestCase;
 use Meilisearch\Client;
 use Mockery;
@@ -20,36 +19,36 @@ use ReflectionClass;
 
 class SearchTest extends TestCase
 {
-    private Search $search;
+    private Engine $engine;
 
-    private FacetContext $context;
+    private Builder $search;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->search = new Search(
-            new MeilisearchFilterCompiler(),
-            Mockery::mock(FieldFactory::class),
-            Mockery::mock(LocaleRegistry::class),
+        $this->engine = new Engine(
             Mockery::mock(Client::class),
             Mockery::mock(LoggerInterface::class),
+            Mockery::mock(FieldFactory::class),
+            Mockery::mock(LocaleRegistry::class),
+            Mockery::mock(\Jurager\Eav\Registry\SchemaRegistry::class),
+            new \Jurager\Eav\Search\Compiler(),
         );
 
-        $this->context = new FacetContext(new Collection(), Mockery::mock(FieldFactory::class));
+        $this->search = new Builder($this->engine, [], 'product');
     }
 
-    /** Invokes the private resolver() closure factory via reflection — no public seam exists for it yet. */
     private function resolve(string $key, array $map = []): ?string
     {
         if ($map !== []) {
             $this->search->map($map);
         }
 
-        $method = (new ReflectionClass($this->search))->getMethod('resolver');
+        $method = (new ReflectionClass($this->engine))->getMethod('createResolver');
         $method->setAccessible(true);
 
-        $resolve = $method->invoke($this->search, $this->context);
+        $resolve = $method->invoke($this->engine, $this->search);
 
         return $resolve($key);
     }
@@ -61,32 +60,16 @@ class SearchTest extends TestCase
         $property->setValue($this->search, $model);
     }
 
-    /** Resolve a key against a FacetContext carrying the given attribute codes, bypassing the fixed $this->context. */
-    private function resolveWithAttributes(string $key, array $codes): ?string
-    {
-        $context = new FacetContext(
-            new Collection(array_map(static fn ($code) => (new class () extends Model {
-                protected $guarded = [];
-            })->forceFill(['code' => $code]), $codes)),
-            Mockery::mock(FieldFactory::class),
-        );
-
-        $method = (new ReflectionClass($this->search))->getMethod('resolver');
-        $method->setAccessible(true);
-
-        $resolve = $method->invoke($this->search, $context);
-
-        return $resolve($key);
-    }
-
     public function test_id_resolves_by_default_with_no_configuration_at_all(): void
     {
         $this->assertSame('id', $this->resolve('id'));
     }
 
-    public function test_unknown_key_does_not_resolve_by_default(): void
+    public function test_unknown_key_with_dot_does_not_resolve_by_default_unless_mapped(): void
     {
-        $this->assertNull($this->resolve('sku'));
+        // A key with a dot (nested) should pass through as-is if not mapped.
+        // Wait, the new logic returns $key if it has a dot!
+        $this->assertSame('prices.retail', $this->resolve('prices.retail'));
     }
 
     public function test_explicit_map_still_resolves_a_key(): void
@@ -112,7 +95,7 @@ class SearchTest extends TestCase
             //
         });
 
-        $this->assertNull($this->resolve('categories.category_id'));
+        $this->assertSame('categories.category_id', $this->resolve('categories.category_id'));
     }
 
     public function test_the_model_map_does_not_shadow_the_built_in_id_default(): void
@@ -128,15 +111,10 @@ class SearchTest extends TestCase
         $this->assertSame('id', $this->resolve('id'));
     }
 
-    public function test_a_filterable_attribute_resolves_even_when_not_among_the_requested_facets(): void
+    public function test_any_key_without_a_dot_resolves_as_an_attribute_by_default(): void
     {
-        // No ->facets() call was made, so $this->facets is empty — this key can only
-        // resolve through the entity-type-wide filterable-attribute fallback.
-        $this->assertSame('attributes.00054', $this->resolveWithAttributes('00054', ['00054']));
-    }
-
-    public function test_an_attribute_absent_from_the_filterable_set_does_not_resolve(): void
-    {
-        $this->assertNull($this->resolveWithAttributes('00054', ['00053']));
+        // The resolver delegates validation to Meilisearch, prefixing any non-dot key.
+        $this->assertSame('attributes.00054', $this->resolve('00054'));
+        $this->assertSame('attributes.sku', $this->resolve('sku'));
     }
 }

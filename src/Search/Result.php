@@ -7,14 +7,14 @@ namespace Jurager\Eav\Search;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Pagination\Paginator;
-use Jurager\Eav\Search\Facets\FacetContext;
+
 
 /**
- * Value object returned by {@see Search::search()}.
+ * Value object returned by {@see Builder::search()}.
  *
  * Holds raw search output. Call {@see paginate()} to hydrate Eloquent models.
  */
-class SearchResult
+class Result
 {
     /**
      * @param  (int|string)[]  $ids  Hit IDs in Meilisearch relevance order.
@@ -24,14 +24,10 @@ class SearchResult
         public readonly array $ids,
         public readonly int $total,
         public readonly array $facets,
-        private readonly ?FacetContext $context = null,
     ) {
     }
 
-    public function context(): ?FacetContext
-    {
-        return $this->context;
-    }
+
 
     /**
      * Hydrate Eloquent models and wrap them in a LengthAwarePaginator.

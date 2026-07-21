@@ -7,7 +7,7 @@ namespace Jurager\Eav\Search;
 use Jurager\Filterable\Support\FilterOperator;
 use Jurager\Filterable\Support\ParsedFilters;
 
-class MeilisearchFilterCompiler
+class Compiler
 {
     public function compile(ParsedFilters $parsed, callable $resolve): ?string
     {
@@ -51,13 +51,11 @@ class MeilisearchFilterCompiler
 
         foreach ($filter as $key => $value) {
             $field = $resolve((string) $key);
-
             if ($field === null) {
                 continue;
             }
 
             $expression = $this->compileField($field, $value);
-
             if ($expression !== null) {
                 $parts[] = $expression;
             }
@@ -72,7 +70,6 @@ class MeilisearchFilterCompiler
 
         foreach ($group as $sub) {
             $conditions = $this->compileBlock($sub, $resolve);
-
             if (empty($conditions)) {
                 continue;
             }
@@ -93,7 +90,6 @@ class MeilisearchFilterCompiler
                 }
             }
         }
-
         return true;
     }
 
@@ -104,10 +100,8 @@ class MeilisearchFilterCompiler
         }
 
         $parts = [];
-
         foreach ($value as $alias => $operand) {
             $part = $this->compileOperand($field, (string) $alias, $operand);
-
             if ($part !== null) {
                 $parts[] = $part;
             }
@@ -119,11 +113,11 @@ class MeilisearchFilterCompiler
     private function compileOperand(string $field, string $alias, mixed $operand): ?string
     {
         if ($alias === 'exists') {
-            return $this->compileExists($field, $operand, negate: false);
+            return $this->compileExists($field, $operand, false);
         }
 
         if ($alias === 'not_exists') {
-            return $this->compileExists($field, $operand, negate: true);
+            return $this->compileExists($field, $operand, true);
         }
 
         return match (FilterOperator::fromAlias($alias)) {
@@ -133,21 +127,19 @@ class MeilisearchFilterCompiler
             FilterOperator::Gte        => $this->compileComparison($field, '>=', $operand),
             FilterOperator::Lt         => $this->compileComparison($field, '<', $operand),
             FilterOperator::Lte        => $this->compileComparison($field, '<', $operand),
-            FilterOperator::In         => $this->compileIn($field, $operand, negate: false),
-            FilterOperator::Nin        => $this->compileIn($field, $operand, negate: true),
-            FilterOperator::Between    => $this->compileRange($field, $operand, negate: false),
-            FilterOperator::NotBetween => $this->compileRange($field, $operand, negate: true),
+            FilterOperator::In         => $this->compileIn($field, $operand, false),
+            FilterOperator::Nin        => $this->compileIn($field, $operand, true),
+            FilterOperator::Between    => $this->compileRange($field, $operand, false),
+            FilterOperator::NotBetween => $this->compileRange($field, $operand, true),
             default                    => null,
         };
     }
 
-    /** Equality (`eq`/`ne`) — any scalar, e.g. numeric ids or string codes. */
     private function compileEquality(string $field, string $operator, mixed $value): ?string
     {
         return is_scalar($value) ? sprintf('%s %s %s', $field, $operator, $this->escape($value)) : null;
     }
 
-    /** Ordering comparison (`gt`/`gte`/`lt`/`lte`) — Meilisearch only compares numbers this way. */
     private function compileComparison(string $field, string $operator, mixed $value): ?string
     {
         return is_numeric($value) ? sprintf('%s %s %s', $field, $operator, $this->escape($value)) : null;
@@ -180,9 +172,7 @@ class MeilisearchFilterCompiler
     private function compileExists(string $field, mixed $value, bool $negate): string
     {
         $truthy = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
-        $present = $truthy xor $negate;
-
-        return $present ? "$field EXISTS" : "NOT $field EXISTS";
+        return ($truthy xor $negate) ? "$field EXISTS" : "NOT $field EXISTS";
     }
 
     private function escape(mixed $value): string
