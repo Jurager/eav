@@ -17,8 +17,10 @@ use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 use Meilisearch\Client;
 use Meilisearch\Endpoints\Indexes;
+use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
 class Search
 {
@@ -180,12 +182,16 @@ class Search
 
         $this->logUnresolved($this->compiler->unresolved($this->filter, $resolve));
 
-        $main = $this->index->search($this->query, array_filter([
-            'filter' => $this->compiler->compile($this->filter, $resolve),
-            'facets' => $this->facetFields($context) ?: null,
-            'limit'  => $perPage,
-            'offset' => ($page - 1) * $perPage,
-        ]));
+        try {
+            $main = $this->index->search($this->query, array_filter([
+                'filter' => $this->compiler->compile($this->filter, $resolve),
+                'facets' => $this->facetFields($context) ?: null,
+                'limit'  => $perPage,
+                'offset' => ($page - 1) * $perPage,
+            ]));
+        } catch (ApiException $e) {
+            throw new BadRequestHttpException("Invalid search request: {$e->message}", $e);
+        }
 
         return new SearchResult(
             ids: array_column($main->getHits(), 'id'),
@@ -236,11 +242,15 @@ class Search
     /** Perform facet-only search. */
     public function facetOnlySearch(string $excludeKey, array $fields, FacetContext $context): MeilisearchResult
     {
-        return $this->index->search($this->query, array_filter([
-            'filter' => $this->compiler->compile($this->filter, $this->resolver($context, exclude: $excludeKey)),
-            'facets' => $fields,
-            'limit'  => 0,
-        ]));
+        try {
+            return $this->index->search($this->query, array_filter([
+                'filter' => $this->compiler->compile($this->filter, $this->resolver($context, exclude: $excludeKey)),
+                'facets' => $fields,
+                'limit'  => 0,
+            ]));
+        } catch (ApiException $e) {
+            throw new BadRequestHttpException("Invalid search request: {$e->message}", $e);
+        }
     }
 
     /** Load filterable attributes context. */
