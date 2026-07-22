@@ -13,6 +13,7 @@ use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Meilisearch\Client;
+use Meilisearch\Contracts\SearchQuery;
 use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
 use Psr\Log\LoggerInterface;
@@ -78,22 +79,21 @@ class Engine
             $facetFields[] = $this->formatFacetField($facet);
         }
 
-        $mainRequest = [
-            'indexUid' => $uid,
-            'limit'    => $limit,
-            'offset'   => ($page - 1) * $limit,
-        ];
+        $mainRequest = (new SearchQuery())
+            ->setIndexUid($uid)
+            ->setLimit($limit)
+            ->setOffset(($page - 1) * $limit);
 
         if (($query = $builder->getQuery()) !== null) {
-            $mainRequest['q'] = $query;
+            $mainRequest->setQuery($query);
         }
 
         if (($filter = $this->compiler->compile($builder->getFilter(), $resolver)) !== null) {
-            $mainRequest['filter'] = $filter;
+            $mainRequest->setFilter([$filter]);
         }
 
         if (! empty($facetFields)) {
-            $mainRequest['facets'] = $facetFields;
+            $mainRequest->setFacets($facetFields);
         }
 
         $requests = ['main' => $mainRequest];
@@ -102,13 +102,20 @@ class Engine
             if ($builder->hasFilter($key)) {
                 $excludeResolver = $this->createResolver($builder, $key);
 
-                $requests["facet_{$key}"] = [
-                    'indexUid' => $uid,
-                    'q'        => $builder->getQuery(),
-                    'filter'   => $this->compiler->compile($builder->getFilter(), $excludeResolver),
-                    'facets'   => [$this->formatFacetField($key)],
-                    'limit'    => 0,
-                ];
+                $facetRequest = (new SearchQuery())
+                    ->setIndexUid($uid)
+                    ->setLimit(0)
+                    ->setFacets([$this->formatFacetField($key)]);
+
+                if (($query = $builder->getQuery()) !== null) {
+                    $facetRequest->setQuery($query);
+                }
+
+                if (($filter = $this->compiler->compile($builder->getFilter(), $excludeResolver)) !== null) {
+                    $facetRequest->setFilter([$filter]);
+                }
+
+                $requests["facet_{$key}"] = $facetRequest;
             }
         }
 
