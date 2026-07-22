@@ -10,31 +10,60 @@ use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
-use Jurager\Eav\Search\Engine;
 
+/** Build search queries for EAV entities. */
 class Builder
 {
+    /**
+     * Current search query string.
+     *
+     * @var string|null
+     */
     private ?string $query = null;
 
+    /**
+     * Parsed filters.
+     *
+     * @var ParsedFilters
+     */
     private ParsedFilters $filter;
 
-    /** @var array<string, string> */
+    /**
+     * Map of filter keys to indexed fields.
+     *
+     * @var array<string, string>
+     */
     private array $map = [];
 
-    /** @var array<int, string> */
+    /**
+     * Configured search facets.
+     *
+     * @var array<int, string>
+     */
     private array $facets = [];
 
+    /**
+     * Eloquent model instance for the entity type.
+     *
+     * @var Model|null
+     */
     private ?Model $model = null;
 
+    /**
+     * @param iterable<FilterResolver> $resolvers
+     */
     public function __construct(
         private readonly Engine $engine,
         private readonly iterable $resolvers,
-        private readonly string $entityType
+        private readonly string $entityType,
     ) {
         $this->filter = (new FilterParser())->parse([], []);
 
-        $modelClass = Relation::getMorphedModel($entityType);
-        $this->model = $modelClass ? new $modelClass() : null;
+        $model = Relation::getMorphedModel($entityType) ?? $entityType;
+
+        if (class_exists($model)) {
+            $this->model = new $model();
+        }
     }
 
     /** Set search query string. */
@@ -45,7 +74,7 @@ class Builder
         return $this;
     }
 
-    /** Parse and resolve filters. */
+    /** Parse and resolve JSON:API filters. */
     public function filter(array $filter): static
     {
         $parsed = (new FilterParser())->parse($filter, []);
@@ -63,6 +92,7 @@ class Builder
         return $this;
     }
 
+    /** Resolve filters unhandled by search index. */
     private function resolveFilters(array $filters, Model $model): array
     {
         $result = [];
@@ -78,7 +108,6 @@ class Builder
             $resolved = null;
 
             foreach ($this->resolvers as $resolver) {
-                /** @var FilterResolver $resolver */
                 if (($resolved = $resolver->resolve($key, $value, $model)) !== null) {
                     break;
                 }
@@ -118,8 +147,17 @@ class Builder
         }
 
         $items = is_array($value) ? $value : explode(',', (string) $value);
+        $result = [];
 
-        return array_values(array_filter(array_map('intval', $items), static fn ($id) => $id > 0));
+        foreach ($items as $item) {
+            $id = (int) $item;
+
+            if ($id > 0) {
+                $result[] = $id;
+            }
+        }
+
+        return $result;
     }
 
     /** Set filter keys mapping. */
@@ -138,36 +176,43 @@ class Builder
         return $this;
     }
 
+    /** Execute search via engine. */
     public function search(int $perPage = 15, int $page = 1): Result
     {
         return $this->engine->search($this, $perPage, $page);
     }
 
+    /** Get entity type. */
     public function getEntityType(): string
     {
         return $this->entityType;
     }
 
+    /** Get Eloquent model instance. */
     public function getModel(): ?Model
     {
         return $this->model;
     }
 
+    /** Get current search query. */
     public function getQuery(): ?string
     {
         return $this->query;
     }
 
+    /** Get parsed filters. */
     public function getFilter(): ParsedFilters
     {
         return $this->filter;
     }
 
+    /** Get configured facets. */
     public function getFacets(): array
     {
         return $this->facets;
     }
 
+    /** Get filter map. */
     public function getMap(): array
     {
         return $this->map;

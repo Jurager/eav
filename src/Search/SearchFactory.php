@@ -11,11 +11,11 @@ class SearchFactory
      */
     public function __construct(
         private readonly Engine $engine,
-        private readonly iterable $resolvers
+        private readonly iterable $resolvers,
     ) {
     }
 
-    /** Create a new search builder instance for the given entity type. */
+    /** Create search builder for entity type. */
     public function for(string $entityType): Builder
     {
         return new Builder($this->engine, $this->resolvers, $entityType);

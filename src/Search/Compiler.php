@@ -9,21 +9,32 @@ use Jurager\Filterable\Support\ParsedFilters;
 
 class Compiler
 {
+    /** Compile parsed filters into a filter string. */
     public function compile(ParsedFilters $parsed, callable $resolve): ?string
     {
         $parts = $this->compileBlock($parsed->filters, $resolve);
 
-        foreach (['AND' => $parsed->andGroups, 'OR' => $parsed->orGroups] as $glue => $groups) {
-            $group = $this->compileGroup($groups, $resolve, $glue);
+        $groups = [
+            'AND' => $parsed->andGroups,
+            'OR'  => $parsed->orGroups,
+        ];
+
+        foreach ($groups as $glue => $conditions) {
+            if (empty($conditions)) {
+                continue;
+            }
+
+            $group = $this->compileGroup($conditions, $resolve, $glue);
 
             if ($group !== null) {
-                $parts[] = "($group)";
+                $parts[] = "({$group})";
             }
         }
 
-        return ! empty($parts) ? implode(' AND ', $parts) : null;
+        return empty($parts) ? null : implode(' AND ', $parts);
     }
 
+    /** Get unresolved filter rules. */
     public function unresolved(ParsedFilters $parsed, callable $resolve): array
     {
         $result = [];
@@ -45,17 +56,20 @@ class Compiler
         return $result;
     }
 
+    /** Compile a flat block of filter conditions. */
     private function compileBlock(array $filter, callable $resolve): array
     {
         $parts = [];
 
         foreach ($filter as $key => $value) {
             $field = $resolve((string) $key);
+
             if ($field === null) {
                 continue;
             }
 
             $expression = $this->compileField($field, $value);
+
             if ($expression !== null) {
                 $parts[] = $expression;
             }
@@ -64,23 +78,26 @@ class Compiler
         return $parts;
     }
 
+    /** Compile nested group of conditions. */
     private function compileGroup(array $group, callable $resolve, string $glue): ?string
     {
         $parts = [];
 
         foreach ($group as $sub) {
             $conditions = $this->compileBlock($sub, $resolve);
+
             if (empty($conditions)) {
                 continue;
             }
 
             $expr = implode(' AND ', $conditions);
-            $parts[] = count($conditions) > 1 ? "($expr)" : $expr;
+            $parts[] = count($conditions) > 1 ? "({$expr})" : $expr;
         }
 
-        return ! empty($parts) ? implode(" $glue ", $parts) : null;
+        return empty($parts) ? null : implode(" {$glue} ", $parts);
     }
 
+    /** Check if all fields in a group can be resolved. */
     private function groupResolves(array $group, callable $resolve): bool
     {
         foreach ($group as $sub) {
@@ -90,9 +107,11 @@ class Compiler
                 }
             }
         }
+
         return true;
     }
 
+    /** Compile single field expression. */
     private function compileField(string $field, mixed $value): ?string
     {
         if (! is_array($value)) {
@@ -100,16 +119,19 @@ class Compiler
         }
 
         $parts = [];
+
         foreach ($value as $alias => $operand) {
             $part = $this->compileOperand($field, (string) $alias, $operand);
+
             if ($part !== null) {
                 $parts[] = $part;
             }
         }
 
-        return ! empty($parts) ? implode(' AND ', $parts) : null;
+        return empty($parts) ? null : implode(' AND ', $parts);
     }
 
+    /** Compile operator-based expression. */
     private function compileOperand(string $field, string $alias, mixed $operand): ?string
     {
         if ($alias === 'exists') {
@@ -126,7 +148,7 @@ class Compiler
             FilterOperator::Gt         => $this->compileComparison($field, '>', $operand),
             FilterOperator::Gte        => $this->compileComparison($field, '>=', $operand),
             FilterOperator::Lt         => $this->compileComparison($field, '<', $operand),
-            FilterOperator::Lte        => $this->compileComparison($field, '<', $operand),
+            FilterOperator::Lte        => $this->compileComparison($field, '<=', $operand), // Был баг! Исправлено на '<='
             FilterOperator::In         => $this->compileIn($field, $operand, false),
             FilterOperator::Nin        => $this->compileIn($field, $operand, true),
             FilterOperator::Between    => $this->compileRange($field, $operand, false),
@@ -135,25 +157,42 @@ class Compiler
         };
     }
 
+    /** Compile equality condition. */
     private function compileEquality(string $field, string $operator, mixed $value): ?string
     {
-        return is_scalar($value) ? sprintf('%s %s %s', $field, $operator, $this->escape($value)) : null;
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        return sprintf('%s %s %s', $field, $operator, $this->escape($value));
     }
 
+    /** Compile numeric comparison condition. */
     private function compileComparison(string $field, string $operator, mixed $value): ?string
     {
-        return is_numeric($value) ? sprintf('%s %s %s', $field, $operator, $this->escape($value)) : null;
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        return sprintf('%s %s %s', $field, $operator, $this->escape($value));
     }
 
+    /** Compile in and not in condition. */
     private function compileIn(string $field, mixed $value, bool $negate): string
     {
-        $values = is_array($value) ? $value : explode(',', (string) $value);
-        $escaped = array_map(fn ($v) => $this->escape($v), $values);
+        $items = is_array($value) ? $value : explode(',', (string) $value);
+        $escaped = [];
+
+        foreach ($items as $item) {
+            $escaped[] = $this->escape($item);
+        }
+
         $prefix = $negate ? 'NOT ' : '';
 
         return sprintf('%s%s IN [%s]', $prefix, $field, implode(', ', $escaped));
     }
 
+    /** Compile between and not between condition. */
     private function compileRange(string $field, mixed $value, bool $negate): ?string
     {
         $pair = is_array($value) ? array_values($value) : explode(',', (string) $value, 2);
@@ -162,19 +201,25 @@ class Compiler
             return null;
         }
 
-        [$minE, $maxE] = [$this->escape($pair[0]), $this->escape($pair[1])];
+        $min = $this->escape($pair[0]);
+        $max = $this->escape($pair[1]);
 
-        return $negate
-            ? sprintf('(%s < %s OR %s > %s)', $field, $minE, $field, $maxE)
-            : sprintf('(%s >= %s AND %s <= %s)', $field, $minE, $field, $maxE);
+        if ($negate) {
+            return sprintf('(%s < %s OR %s > %s)', $field, $min, $field, $max);
+        }
+
+        return sprintf('(%s >= %s AND %s <= %s)', $field, $min, $field, $max);
     }
 
+    /** Compile exists and not exists condition. */
     private function compileExists(string $field, mixed $value, bool $negate): string
     {
         $truthy = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
-        return ($truthy xor $negate) ? "$field EXISTS" : "NOT $field EXISTS";
+
+        return ($truthy !== $negate) ? "{$field} EXISTS" : "NOT {$field} EXISTS";
     }
 
+    /** Escape value for query. */
     private function escape(mixed $value): string
     {
         if (is_bool($value)) {

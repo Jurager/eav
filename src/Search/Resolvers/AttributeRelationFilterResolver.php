@@ -13,19 +13,24 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Filterable\Support\FilterOperator;
 
+/** Resolve a relation filter key into a concrete foreign key ID list. */
 class AttributeRelationFilterResolver implements FilterResolver
 {
-    /** Resolve a relation filter key into a concrete foreign key ID list. */
+    /** Resolve filter key. */
     public function resolve(string $name, mixed $value, Model $model): ?array
     {
-        [$relation, $attribute] = array_pad(explode('.', $name, 2), 2, null);
-
-        if ($attribute === null || ! preg_match('/^\w+$/', $relation) || ! method_exists($model, $relation)) {
+        if (! str_contains($name, '.')) {
             return null;
         }
 
-        $rel = $model->{$relation}();
-        $related = $rel->getRelated();
+        [$relation, $attribute] = explode('.', $name, 2);
+
+        if (! preg_match('/^\w+$/', $relation) || ! method_exists($model, $relation)) {
+            return null;
+        }
+
+        $instance = $model->{$relation}();
+        $related = $instance->getRelated();
 
         if (! $related instanceof Attributable) {
             return null;
@@ -38,11 +43,12 @@ class AttributeRelationFilterResolver implements FilterResolver
             ->pluck($related->getKeyName())
             ->all();
 
-        // If no results found, return a non-matching ID to ensure empty result set
-        $idString = ! empty($ids) ? implode(',', $ids) : '0';
+        // If no results found, return '0' to ensure an empty result set
+        $idString = empty($ids) ? '0' : implode(',', $ids);
+        $resolvedKey = "{$relation}.{$this->foreignKey($instance, $relation)}";
 
         return [
-            "{$relation}.{$this->foreignKey($rel, $relation)}",
+            $resolvedKey,
             [FilterOperator::In->value => $idString],
         ];
     }
@@ -64,15 +70,16 @@ class AttributeRelationFilterResolver implements FilterResolver
      */
     private function parseCondition(mixed $value): array
     {
-        if (! is_array($value)) {
+        if (! is_array($value) || empty($value)) {
             return [FilterOperator::Eq->value, $value];
         }
 
-        $alias = array_key_first($value);
+        foreach ($value as $alias => $operand) {
+            $operator = FilterOperator::fromAlias((string) $alias)?->value ?? FilterOperator::Eq->value;
 
-        return [
-            FilterOperator::fromAlias((string) $alias)?->value ?? FilterOperator::Eq->value,
-            reset($value),
-        ];
+            return [$operator, $operand];
+        }
+
+        return [FilterOperator::Eq->value, null];
     }
 }
