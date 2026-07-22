@@ -7,11 +7,11 @@ namespace Jurager\Eav\Filterable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Contracts\Attributable;
-use Jurager\Filterable\Contracts\FieldResolverInterface;
-use Jurager\Filterable\Contracts\RelationResolverInterface;
+use Jurager\Filterable\Contracts\FieldResolver;
+use Jurager\Filterable\Contracts\RelationResolver;
 use Jurager\Filterable\Support\FilterOperator;
 
-class AttributeFilterResolver implements FieldResolverInterface, RelationResolverInterface
+class AttributeFilterResolver implements FieldResolver, RelationResolver
 {
     /** Resolve a field filter for EAV attributes. */
     public function resolve(Builder $query, string $name, mixed $value, Model $model): bool

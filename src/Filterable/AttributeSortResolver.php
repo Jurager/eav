@@ -11,9 +11,9 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Filterable\Contracts\SortResolverInterface;
+use Jurager\Filterable\Contracts\SortResolver;
 
-class AttributeSortResolver implements SortResolverInterface
+class AttributeSortResolver implements SortResolver
 {
     /** Resolve sort order for EAV attributes. */
     public function resolve(Builder $query, string $field, string $direction, Model $model): bool
