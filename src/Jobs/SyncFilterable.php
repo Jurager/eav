@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Registry\FilterableRegistry;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\MeilisearchEngine;
 use Meilisearch\Client;
@@ -29,8 +30,13 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         return $this->entityType;
     }
 
-    public function handle(FieldFactory $fieldFactory, EngineManager $engineManager, Client $client): void
-    {
+    /** Execute the job. */
+    public function handle(
+        FieldFactory $fieldFactory,
+        EngineManager $engineManager,
+        Client $client,
+        FilterableRegistry $registry,
+    ): void {
         if (! $this->isMeilisearchEngine($engineManager)) {
             return;
         }
@@ -43,21 +49,25 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
 
         $indexName = (new $modelClass())->searchableAs();
         $paths = $this->getFilterablePaths($fieldFactory);
+        $extra = $registry->resolve($modelClass);
+        $configured = $this->getConfiguredFilterableAttributes($modelClass);
 
-        $client->index($indexName)->updateFilterableAttributes(
-            array_values(array_unique(array_merge($this->getConfiguredFilterableAttributes($modelClass), $paths)))
-        );
+        $attributes = array_values(array_unique(array_merge($configured, $paths, $extra)));
+
+        $client->index($indexName)->updateFilterableAttributes($attributes);
     }
 
     /** Determine if the current Scout engine is Meilisearch. */
     protected function isMeilisearchEngine(EngineManager $engineManager): bool
     {
-        return class_exists(EngineManager::class)
-            && class_exists(Client::class)
-            && $engineManager->driver() instanceof MeilisearchEngine;
+        return class_exists(EngineManager::class) && class_exists(Client::class) && $engineManager->driver() instanceof MeilisearchEngine;
     }
 
-    /** Map filterable attributes to their indexable paths. */
+    /**
+     * Map filterable attributes to their indexable paths.
+     *
+     * @return list<string>
+     */
     protected function getFilterablePaths(FieldFactory $fieldFactory): array
     {
         return Eav::$attributeModel::query()
@@ -72,7 +82,11 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
             ->all();
     }
 
-    /** Get non-EAV filterable attributes declared in config. */
+    /**
+     * Get non-EAV filterable attributes declared in config.
+     *
+     * @return list<string>
+     */
     protected function getConfiguredFilterableAttributes(string $modelClass): array
     {
         $settings = config('scout.meilisearch.index-settings', []);
