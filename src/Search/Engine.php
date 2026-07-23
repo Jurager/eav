@@ -128,7 +128,7 @@ class Engine
         $map = $builder->getMap();
         $model = $builder->getModel();
 
-        $fields = $model instanceof InteractsWithIndex ? $model->indexed() : [];
+        $fields = $model instanceof InteractsWithIndex ? $model->indexAliases() : [];
 
         return function (string $key) use ($exclude, $fields, $map): ?string {
             if ($exclude !== null && $key === $exclude) {

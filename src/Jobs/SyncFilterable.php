@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\FilterableRegistry;
+use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\MeilisearchEngine;
 use Meilisearch\Client;
@@ -35,7 +35,6 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         FieldFactory $fieldFactory,
         EngineManager $engineManager,
         Client $client,
-        FilterableRegistry $registry,
     ): void {
         if (! $this->isMeilisearchEngine($engineManager)) {
             return;
@@ -47,9 +46,10 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $indexName = (new $modelClass())->searchableAs();
+        $model = new $modelClass();
+        $indexName = $model->searchableAs();
         $paths = $this->getFilterablePaths($fieldFactory);
-        $extra = $registry->resolve($modelClass);
+        $extra = $model instanceof InteractsWithIndex ? $model->indexFilters() : [];
         $configured = $this->getConfiguredFilterableAttributes($modelClass);
 
         $attributes = array_values(array_unique(array_merge($configured, $paths, $extra)));

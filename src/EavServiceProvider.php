@@ -21,7 +21,6 @@ use Jurager\Eav\Observers\AttributeGroupObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\FilterableRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Search\Engine;
@@ -44,7 +43,6 @@ class EavServiceProvider extends ServiceProvider
         $this->app->scoped(LocaleRegistry::class);
         $this->app->scoped(EnumRegistry::class);
         $this->app->singleton(SchemaRegistry::class);
-        $this->app->singleton(FilterableRegistry::class);
         $this->app->scoped(FieldFactory::class);
 
         // Managers & Support

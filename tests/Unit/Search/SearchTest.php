@@ -80,9 +80,14 @@ class SearchTest extends TestCase
     public function test_a_model_implementing_interacts_with_index_supplies_its_own_map(): void
     {
         $this->withModel(new class () extends Model implements InteractsWithIndex {
-            public function indexed(): array
+            public function indexAliases(): array
             {
                 return ['categories.category_id' => 'category_ids'];
+            }
+
+            public function indexFilters(): array
+            {
+                return [];
             }
         });
 
@@ -101,9 +106,14 @@ class SearchTest extends TestCase
     public function test_the_model_map_does_not_shadow_the_built_in_id_default(): void
     {
         $this->withModel(new class () extends Model implements InteractsWithIndex {
-            public function indexed(): array
+            public function indexAliases(): array
             {
                 return ['id' => 'something_else'];
+            }
+
+            public function indexFilters(): array
+            {
+                return [];
             }
         });
 

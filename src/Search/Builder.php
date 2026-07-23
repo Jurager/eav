@@ -124,7 +124,7 @@ class Builder
     /** Check if filter key is directly indexed. */
     private function directlyIndexed(string $key, Model $model): bool
     {
-        return $model instanceof InteractsWithIndex && array_key_exists($key, $model->indexed());
+        return $model instanceof InteractsWithIndex && array_key_exists($key, $model->indexAliases());
     }
 
     /** Check if filter is active for key. */
