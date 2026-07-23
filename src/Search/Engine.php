@@ -97,33 +97,44 @@ class Engine
         }
 
         $requests = ['main' => $mainRequest];
+        $allFacetKeys = $builder->getFacets();
 
-        foreach ($builder->getFacets() as $key) {
-            if ($builder->hasFilter($key)) {
-                $excludeResolver = $this->createResolver($builder, $key);
+        foreach ($allFacetKeys as $key) {
+            // Stats (numeric range) facets remain stable and exclude all facets.
+            // Distribution facets use classic disjunctive behavior.
+            $isStats = str_contains($key, '.');
 
-                $facetRequest = (new SearchQuery())
-                    ->setIndexUid($uid)
-                    ->setLimit(0)
-                    ->setFacets([$this->formatFacetField($key)]);
-
-                if (($query = $builder->getQuery()) !== null) {
-                    $facetRequest->setQuery($query);
-                }
-
-                if (($filter = $this->compiler->compile($builder->getFilter(), $excludeResolver)) !== null) {
-                    $facetRequest->setFilter([$filter]);
-                }
-
-                $requests["facet_{$key}"] = $facetRequest;
+            if (! $isStats && ! $builder->hasFilter($key)) {
+                continue;
             }
+
+            $excludeResolver = $this->createResolver($builder, $isStats ? $allFacetKeys : [$key]);
+
+            $facetRequest = (new SearchQuery())
+                ->setIndexUid($uid)
+                ->setLimit(0)
+                ->setFacets([$this->formatFacetField($key)]);
+
+            if (($query = $builder->getQuery()) !== null) {
+                $facetRequest->setQuery($query);
+            }
+
+            if (($filter = $this->compiler->compile($builder->getFilter(), $excludeResolver)) !== null) {
+                $facetRequest->setFilter([$filter]);
+            }
+
+            $requests["facet_{$key}"] = $facetRequest;
         }
 
         return $requests;
     }
 
-    /** Create field resolver closure. */
-    private function createResolver(Builder $builder, ?string $exclude = null): Closure
+    /**
+     * Create field resolver closure.
+     *
+     * @param  list<string>  $exclude  Filter keys to drop from the compiled filter (e.g. for disjunctive facets).
+     */
+    private function createResolver(Builder $builder, array $exclude = []): Closure
     {
         $map = $builder->getMap();
         $model = $builder->getModel();
@@ -131,7 +142,7 @@ class Engine
         $fields = $model instanceof InteractsWithIndex ? $model->indexAliases() : [];
 
         return function (string $key) use ($exclude, $fields, $map): ?string {
-            if ($exclude !== null && $key === $exclude) {
+            if (in_array($key, $exclude, true)) {
                 return null;
             }
 
@@ -175,11 +186,12 @@ class Engine
 
         foreach ($builder->getFacets() as $key) {
             $indexField = $this->formatFacetField($key);
+            $isStats = str_contains($key, '.');
 
-            $scopedResult = $builder->hasFilter($key) ? ($results["facet_{$key}"] ?? $mainResult) : $mainResult;
+            $scopedResult = ($isStats || $builder->hasFilter($key)) ? ($results["facet_{$key}"] ?? $mainResult) : $mainResult;
             $isMainResult = $scopedResult === $mainResult;
 
-            if (str_contains($key, '.')) {
+            if ($isStats) {
                 $stats = $isMainResult ? $baseStats : ($scopedResult->getFacetStats() ?? []);
                 $facet = $this->hydrateStats($stats, $indexField);
             } else {
