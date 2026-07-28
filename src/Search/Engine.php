@@ -241,7 +241,6 @@ class Engine
             return Eav::$attributeModel::query()
                 ->forEntity($builder->getEntityType())
                 ->where('filterable', true)
-                ->with('type')
                 ->get()
                 ->keyBy('code');
         });

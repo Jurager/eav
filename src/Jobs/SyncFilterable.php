@@ -73,7 +73,6 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         return Eav::$attributeModel::query()
             ->forEntity($this->entityType)
             ->where('filterable', true)
-            ->with('type')
             ->get()
             ->flatMap(fn ($attribute) => $fieldFactory->make($attribute)->filterableKeys())
             ->map(fn (string $key) => "attributes.{$key}")
