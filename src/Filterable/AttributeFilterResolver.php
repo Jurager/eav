@@ -7,6 +7,7 @@ namespace Jurager\Eav\Filterable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Filterable\Contracts\FieldResolver;
 use Jurager\Filterable\Contracts\RelationResolver;
 use Jurager\Filterable\Support\FilterOperator;
@@ -17,6 +18,10 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
     public function resolve(Builder $query, string $name, mixed $value, Model $model): bool
     {
         if (! $model instanceof Attributable || ! preg_match('/^[\w\-]+$/', $name)) {
+            return false;
+        }
+
+        if (! $this->hasAttribute($model, $name)) {
             return false;
         }
 
@@ -47,7 +52,7 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
 
         $related = $model->{$relation}()->getRelated();
 
-        if (! $related instanceof Attributable) {
+        if (! $related instanceof Attributable || ! $this->hasAttribute($related, $attribute)) {
             return false;
         }
 
@@ -62,6 +67,14 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
         });
 
         return true;
+    }
+
+    /**
+     * Determine whether the entity actually declares the given attribute.
+     */
+    private function hasAttribute(Attributable $entity, string $code): bool
+    {
+        return AttributeManager::for($entity->getEavEntityType())->field($code) !== null;
     }
 
     /**

@@ -6,7 +6,6 @@ namespace Jurager\Eav\Concerns;
 
 use Closure;
 use Illuminate\Contracts\Container\BindingResolutionException;
-use Illuminate\Contracts\Container\CircularDependencyException;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;

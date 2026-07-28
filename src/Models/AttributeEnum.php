@@ -53,4 +53,28 @@ class AttributeEnum extends Model
             ?->pivot
             ?->label;
     }
+
+    /**
+     * Restrict enum options to those actually selected by the given entities.
+     *
+     * @param  Builder  $entities  Entity query, kept as a subquery so ids are never materialised.
+     */
+    public function scopeUsedBy(Builder $query, Builder $entities): Builder
+    {
+        $enum   = $query->getModel();
+        $values = new Eav::$entityAttributeModel();
+
+        return $query->whereExists(
+            fn ($sub) => $sub
+                ->from($values->getTable())
+                ->whereColumn($values->qualifyColumn('value_integer'), $enum->getQualifiedKeyName())
+                ->whereColumn($values->qualifyColumn('attribute_id'), $enum->qualifyColumn('attribute_id'))
+                ->where($values->qualifyColumn('entity_type'), $entities->getModel()->getMorphClass())
+                ->whereIn(
+                    $values->qualifyColumn('entity_id'),
+                    // Cloned because the select would otherwise narrow the caller's own query
+                    $entities->clone()->select($entities->getModel()->getQualifiedKeyName())
+                )
+        );
+    }
 }

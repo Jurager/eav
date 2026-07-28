@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
+use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Managers\SchemaManager;
@@ -26,7 +27,6 @@ use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Search\Engine;
 use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
 use Jurager\Eav\Search\SearchFactory;
-
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
 class EavServiceProvider extends ServiceProvider
@@ -59,9 +59,10 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->app->singleton(AttributeFilterResolver::class);
         $this->app->singleton(AttributeSortResolver::class);
+        $this->app->singleton(AttributeEnumUsageResolver::class);
         $this->app->singleton(AttributeRelationFilterResolver::class);
 
-        $this->app->tag([AttributeFilterResolver::class, AttributeSortResolver::class], 'filterable.resolvers');
+        $this->app->tag([AttributeFilterResolver::class, AttributeSortResolver::class, AttributeEnumUsageResolver::class], 'filterable.resolvers');
         $this->app->tag(AttributeRelationFilterResolver::class, 'eav.search.resolvers');
 
         $this->app->when(SearchFactory::class)->needs('$resolvers')->giveTagged('eav.search.resolvers');

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Search;
 
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
