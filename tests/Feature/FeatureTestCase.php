@@ -13,6 +13,7 @@ use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -41,6 +42,7 @@ abstract class FeatureTestCase extends TestCase
         app(EnumRegistry::class)->forget();
         app(AttributeTypeRegistry::class)->forget();
         app(AttributeGroupRegistry::class)->forget();
+        app(AttributeRegistry::class)->forget();
     }
 
     protected function tearDown(): void

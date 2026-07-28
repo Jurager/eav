@@ -22,6 +22,7 @@ use Jurager\Eav\Observers\AttributeGroupObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Observers\AttributeTypeObserver;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -43,6 +44,7 @@ class EavServiceProvider extends ServiceProvider
         // Registries
         $this->app->singleton(AttributeTypeRegistry::class);
         $this->app->singleton(AttributeGroupRegistry::class);
+        $this->app->singleton(AttributeRegistry::class);
         $this->app->scoped(LocaleRegistry::class);
         $this->app->scoped(EnumRegistry::class);
         $this->app->singleton(SchemaRegistry::class);

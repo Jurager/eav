@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\Concerns\HasScopedRelations;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\BelongsToScoped;
 use Jurager\Eav\Eav;
 
@@ -48,6 +49,12 @@ class EntityAttribute extends Model
     {
         static::deleting(static function (EntityAttribute $entityAttribute) {
             $entityAttribute->translations()->delete();
+        });
+
+        static::retrieved(function (EntityAttribute $entityAttribute) {
+            if (! $entityAttribute->relationLoaded('attribute') && $entityAttribute->attribute_id !== null) {
+                $entityAttribute->setRelation('attribute', app(AttributeRegistry::class)->get($entityAttribute->attribute_id));
+            }
         });
     }
 

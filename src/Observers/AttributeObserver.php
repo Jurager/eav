@@ -11,6 +11,7 @@ use Jurager\Eav\Jobs\PruneAttribute;
 use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Eav;
@@ -20,6 +21,7 @@ class AttributeObserver
     public function __construct(
         protected SchemaRegistry $schema,
         protected EnumRegistry $enums,
+        protected AttributeRegistry $registry,
     ) {
     }
 
@@ -27,6 +29,7 @@ class AttributeObserver
     public function created(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
+        $this->registry->forget();
         $this->syncAttributeStates($attribute);
 
         AttributeCreated::dispatch($attribute);
@@ -36,6 +39,7 @@ class AttributeObserver
     public function updated(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
+        $this->registry->forget();
 
         if ($attribute->wasChanged('searchable')) {
             $this->syncSearchable($attribute);
@@ -57,6 +61,7 @@ class AttributeObserver
         }
 
         $this->schema->forget($attribute->entity_type);
+        $this->registry->forget();
         $this->syncAttributeStates($attribute);
 
         Eav::$entityAttributeModel::query()
@@ -71,6 +76,7 @@ class AttributeObserver
     {
         $this->schema->forget($attribute->entity_type);
         $this->enums->forget($attribute->id);
+        $this->registry->forget();
 
         $this->syncAttributeStates($attribute);
         PruneAttribute::dispatch($attribute->id);
@@ -82,6 +88,7 @@ class AttributeObserver
     public function restored(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
+        $this->registry->forget();
         $this->syncAttributeStates($attribute);
     }
 
