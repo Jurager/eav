@@ -36,13 +36,21 @@ class AttributeTypeRegistryTest extends TestCase
     public function test_all_is_cached_after_first_call(): void
     {
         $first = $this->registry->all();
+        $second = $this->registry->all();
+
+        $this->assertSame($first, $second);
+    }
+
+    public function test_creating_a_type_automatically_invalidates_the_cache(): void
+    {
+        $first = $this->registry->all();
 
         AttributeType::create(['code' => 'date']);
 
         $second = $this->registry->all();
 
-        $this->assertSame($first, $second);
-        $this->assertFalse($second->has('date'));
+        $this->assertNotSame($first, $second);
+        $this->assertTrue($second->has('date'));
     }
 
     public function test_codes_returns_array_of_type_codes(): void
@@ -76,6 +84,21 @@ class AttributeTypeRegistryTest extends TestCase
         $this->assertNull($this->registry->find('nonexistent'));
     }
 
+    public function test_get_returns_attribute_type_model_by_id(): void
+    {
+        $id = $this->registry->find('text')->id;
+
+        $type = $this->registry->get($id);
+
+        $this->assertInstanceOf(AttributeType::class, $type);
+        $this->assertSame('text', $type->code);
+    }
+
+    public function test_get_returns_null_for_missing_id(): void
+    {
+        $this->assertNull($this->registry->get(9999));
+    }
+
     public function test_forget_clears_cache(): void
     {
         $this->registry->all();
@@ -85,5 +108,17 @@ class AttributeTypeRegistryTest extends TestCase
         AttributeType::create(['code' => 'date']);
 
         $this->assertTrue($this->registry->has('date'));
+    }
+
+    public function test_forget_clears_id_index_too(): void
+    {
+        $id = $this->registry->find('text')->id;
+        $this->registry->get($id);
+
+        $this->registry->forget();
+
+        AttributeType::whereKey($id)->delete();
+
+        $this->assertNull($this->registry->get($id));
     }
 }
