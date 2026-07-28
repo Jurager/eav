@@ -20,6 +20,8 @@ use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeGroupObserver;
 use Jurager\Eav\Observers\AttributeObserver;
+use Jurager\Eav\Observers\AttributeTypeObserver;
+use Jurager\Eav\Registry\AttributeGroupRegistry;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -40,6 +42,7 @@ class EavServiceProvider extends ServiceProvider
 
         // Registries
         $this->app->singleton(AttributeTypeRegistry::class);
+        $this->app->singleton(AttributeGroupRegistry::class);
         $this->app->scoped(LocaleRegistry::class);
         $this->app->scoped(EnumRegistry::class);
         $this->app->singleton(SchemaRegistry::class);
@@ -136,6 +139,7 @@ class EavServiceProvider extends ServiceProvider
             Eav::$attributeModel       => AttributeObserver::class,
             Eav::$attributeEnumModel   => AttributeEnumObserver::class,
             Eav::$attributeGroupModel  => AttributeGroupObserver::class,
+            Eav::$attributeTypeModel   => AttributeTypeObserver::class,
         ];
 
         foreach ($observers as $model => $observer) {

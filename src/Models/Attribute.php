@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Registry\AttributeGroupRegistry;
+use Jurager\Eav\Registry\AttributeTypeRegistry;
 
 /**
  * @property int $id
@@ -56,7 +58,22 @@ class Attribute extends Model
 
         static::saving(function (Attribute $attribute) {
             if ($attribute->type?->code === 'select') {
-                $attribute->setAttribute('localizable', false);
+                $attribute->localizable = false;
+            }
+        });
+
+        // Load type and group from the request cache to avoid redundant database queries
+        static::retrieved(function (Attribute $attribute) {
+            if (! $attribute->relationLoaded('type')) {
+                $attribute->setRelation('type', $attribute->attribute_type_id !== null
+                    ? app(AttributeTypeRegistry::class)->get($attribute->attribute_type_id)
+                    : null);
+            }
+
+            if (! $attribute->relationLoaded('group')) {
+                $attribute->setRelation('group', $attribute->attribute_group_id !== null
+                    ? app(AttributeGroupRegistry::class)->get($attribute->attribute_group_id)
+                    : null);
             }
         });
 

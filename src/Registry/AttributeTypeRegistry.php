@@ -13,6 +13,9 @@ class AttributeTypeRegistry
     /** @var Collection<string, AttributeType>|null */
     private ?Collection $types = null;
 
+    /** @var Collection<int, AttributeType>|null */
+    private ?Collection $typesById = null;
+
     /** Get all cached attribute types. */
     public function all(): Collection
     {
@@ -37,9 +40,16 @@ class AttributeTypeRegistry
         return $this->all()->get($code);
     }
 
+    /** Get an attribute type by its ID. */
+    public function get(int $id): ?AttributeType
+    {
+        return ($this->typesById ??= $this->all()->values()->keyBy('id'))->get($id);
+    }
+
     /** Clear the internal cache. */
     public function forget(): void
     {
         $this->types = null;
+        $this->typesById = null;
     }
 }
