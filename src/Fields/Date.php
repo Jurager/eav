@@ -8,15 +8,16 @@ use Carbon\Carbon;
 use Carbon\Exceptions\InvalidFormatException;
 use Exception;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\AttributeStorage;
 
 /**
  * Date/time field stored as datetime and exposed as Carbon instances.
  */
 class Date extends Field
 {
-    public function column(): string
+    public function column(): AttributeStorage
     {
-        return self::STORAGE_DATETIME;
+        return AttributeStorage::Datetime;
     }
 
     /**

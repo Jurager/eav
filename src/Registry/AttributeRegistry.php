@@ -44,9 +44,18 @@ class AttributeRegistry
         return $this->forEntityType($entityType)->get($id);
     }
 
-    /** Clear the internal cache for all entity types. */
-    public function forget(): void
+    /**
+     * Clear the internal cache.
+     *
+     * If an entity type is provided, only that type's cache is cleared.
+     * Otherwise, the entire cache for all entity types is cleared.
+     */
+    public function forget(?string $entityType = null): void
     {
-        $this->byEntityType = [];
+        if ($entityType !== null) {
+            unset($this->byEntityType[$entityType]);
+        } else {
+            $this->byEntityType = [];
+        }
     }
 }

@@ -29,7 +29,7 @@ class AttributeObserver
     public function created(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
-        $this->registry->forget();
+        $this->registry->forget($attribute->entity_type);
         $this->syncAttributeStates($attribute);
 
         AttributeCreated::dispatch($attribute);
@@ -39,7 +39,7 @@ class AttributeObserver
     public function updated(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
-        $this->registry->forget();
+        $this->registry->forget($attribute->entity_type);
 
         if ($attribute->wasChanged('searchable')) {
             $this->syncSearchable($attribute);
@@ -61,7 +61,7 @@ class AttributeObserver
         }
 
         $this->schema->forget($attribute->entity_type);
-        $this->registry->forget();
+        $this->registry->forget($attribute->entity_type);
         $this->syncAttributeStates($attribute);
 
         Eav::$entityAttributeModel::query()
@@ -76,7 +76,7 @@ class AttributeObserver
     {
         $this->schema->forget($attribute->entity_type);
         $this->enums->forget($attribute->id);
-        $this->registry->forget();
+        $this->registry->forget($attribute->entity_type);
 
         $this->syncAttributeStates($attribute);
         PruneAttribute::dispatch($attribute->id);
@@ -88,7 +88,7 @@ class AttributeObserver
     public function restored(Attribute $attribute): void
     {
         $this->schema->forget($attribute->entity_type);
-        $this->registry->forget();
+        $this->registry->forget($attribute->entity_type);
         $this->syncAttributeStates($attribute);
     }
 

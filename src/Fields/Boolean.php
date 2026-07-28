@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\AttributeStorage;
 
 /**
  * Boolean attribute field with tolerant input parsing.
  */
 class Boolean extends Field
 {
-    public function column(): string
+    public function column(): AttributeStorage
     {
-        return self::STORAGE_BOOLEAN;
+        return AttributeStorage::Boolean;
     }
 
     public function cast(mixed $value): mixed

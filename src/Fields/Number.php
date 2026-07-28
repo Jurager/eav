@@ -5,13 +5,14 @@ declare(strict_types=1);
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\AttributeStorage;
 
 class Number extends Field
 {
     /** Get the storage column name. */
-    public function column(): string
+    public function column(): AttributeStorage
     {
-        return self::STORAGE_FLOAT;
+        return AttributeStorage::Float;
     }
 
     /** Validate the field value. */

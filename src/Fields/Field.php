@@ -6,6 +6,7 @@ namespace Jurager\Eav\Fields;
 
 use Illuminate\Support\Collection;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Concerns\Indexable;
 use Jurager\Eav\Fields\Concerns\ValidatesPayload;
 use Jurager\Eav\Models\Attribute;
@@ -19,13 +20,6 @@ abstract class Field
 {
     use ValidatesPayload;
     use Indexable;
-
-    public const string STORAGE_TEXT = 'value_text';
-    public const string STORAGE_INTEGER = 'value_integer';
-    public const string STORAGE_FLOAT = 'value_float';
-    public const string STORAGE_BOOLEAN = 'value_boolean';
-    public const string STORAGE_DATE = 'value_date';
-    public const string STORAGE_DATETIME = 'value_datetime';
 
     /** @var array<int, array{locale_id: int|null, value: mixed}> */
     protected array $values = [];
@@ -42,7 +36,7 @@ abstract class Field
     ) {
     }
 
-    abstract public function column(): string;
+    abstract public function column(): AttributeStorage;
 
     abstract protected function validate(mixed $value, ?Attributable $entity = null): bool;
 
@@ -280,7 +274,7 @@ abstract class Field
 
     public function read(object $model): mixed
     {
-        return $model->{$this->column()};
+        return $model->{$this->column()->value};
     }
     protected function resolveValue(mixed $raw): mixed
     {

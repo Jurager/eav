@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Models\AttributeEnum;
 
 /** Field for enum-backed select, storing selected ID in an integer column. */
 class Select extends Field
 {
     /** Get the storage column name. */
-    public function column(): string
+    public function column(): AttributeStorage
     {
-        return self::STORAGE_INTEGER;
+        return AttributeStorage::Integer;
     }
 
     /** Check if this field supports enums. */

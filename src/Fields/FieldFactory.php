@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Fields;
 
+use Jurager\Eav\Enums\AttributeType;
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -22,29 +23,31 @@ class FieldFactory
     }
 
     /** Register a new field type class. */
-    public function register(string $type, string $class): void
+    public function register(AttributeType|string $type, string $class): void
     {
         if (! is_subclass_of($class, Field::class)) {
             throw InvalidFieldTypeException::notAField($class);
         }
 
-        $this->types[$type] = $class;
+        $this->types[$this->getTypeCode($type)] = $class;
     }
 
     /** Check if a field type is registered. */
-    public function has(string $type): bool
+    public function has(AttributeType|string $type): bool
     {
-        return isset($this->types[$type]);
+        return isset($this->types[$this->getTypeCode($type)]);
     }
 
     /** Resolve a class name for a given field type. */
-    public function resolve(string $type): string
+    public function resolve(AttributeType|string $type): string
     {
-        if (! $this->has($type)) {
-            throw InvalidFieldTypeException::notRegistered($type);
+        $code = $this->getTypeCode($type);
+
+        if (! $this->has($code)) {
+            throw InvalidFieldTypeException::notRegistered($code);
         }
 
-        return $this->types[$type];
+        return $this->types[$code];
     }
 
     /** Make a field instance from an attribute model. */
@@ -63,5 +66,13 @@ class FieldFactory
     public function all(): array
     {
         return $this->types;
+    }
+
+    /**
+     * Get the string code from a type enum or string.
+     */
+    private function getTypeCode(AttributeType|string $type): string
+    {
+        return $type instanceof AttributeType ? $type->value : $type;
     }
 }
