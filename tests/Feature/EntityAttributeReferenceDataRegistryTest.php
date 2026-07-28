@@ -24,7 +24,7 @@ class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
         ]);
 
         // Warm the registry once, outside of the assertion window.
-        app(AttributeRegistry::class)->all();
+        app(AttributeRegistry::class)->forEntityType('product');
 
         DB::enableQueryLog();
 
@@ -55,6 +55,32 @@ class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
         $attributeQueries = array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"'));
 
         $this->assertCount(1, $attributeQueries);
+    }
+
+    public function test_scoping_by_entity_type_does_not_warm_unrelated_attributes(): void
+    {
+        $type = $this->createAttributeType('text');
+        $productAttribute = $this->createAttribute($type, ['code' => 'name']);
+        $this->createAttribute($type, ['entity_type' => 'category', 'code' => 'seo_title']);
+        $product = $this->createProduct();
+
+        EntityAttribute::create([
+            'entity_id' => $product->id,
+            'entity_type' => 'product',
+            'attribute_id' => $productAttribute->id,
+            'value_text' => 'Widget',
+        ]);
+
+        DB::enableQueryLog();
+
+        EntityAttribute::query()->where('entity_type', 'product')->first()->attribute;
+
+        $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
+
+        // The 'category' scope was never touched, so it still triggers its own warm-up query.
+        app(AttributeRegistry::class)->forEntityType('category');
+
+        $this->assertCount(2, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
     }
 
     public function test_updating_attribute_invalidates_the_registry(): void

@@ -10,30 +10,43 @@ use Jurager\Eav\Models\Attribute;
 
 class AttributeRegistry
 {
-    /** @var Collection<int, Attribute>|null */
-    private ?Collection $attributes = null;
+    /**
+     * Cached attributes, keyed by ID, grouped by entity type.
+     *
+     * @var array<string, Collection<int, Attribute>>
+     */
+    private array $byEntityType = [];
 
-    /** Get all cached attributes, keyed by ID. */
-    public function all(): Collection
+    /**
+     * Get all cached attributes for a given entity type, keyed by ID.
+     *
+     * Scoped per entity type (rather than caching the whole `attributes` table) because
+     * a single entity type — e.g. products in a large catalog — can hold thousands of
+     * rows on its own; a request touching only categories shouldn't pay to load those.
+     */
+    public function forEntityType(string $entityType): Collection
     {
-        return $this->attributes ??= Eav::$attributeModel::query()->get()->keyBy('id');
+        return $this->byEntityType[$entityType] ??= Eav::$attributeModel::query()
+            ->forEntity($entityType)
+            ->get()
+            ->keyBy('id');
     }
 
-    /** Determine if the registry has the given attribute. */
-    public function has(int $id): bool
+    /** Determine if the registry has the given attribute for the given entity type. */
+    public function has(int $id, string $entityType): bool
     {
-        return $this->all()->has($id);
+        return $this->forEntityType($entityType)->has($id);
     }
 
-    /** Get an attribute by its ID. */
-    public function get(int $id): ?Attribute
+    /** Get an attribute by its ID, scoped to the given entity type. */
+    public function get(int $id, string $entityType): ?Attribute
     {
-        return $this->all()->get($id);
+        return $this->forEntityType($entityType)->get($id);
     }
 
-    /** Clear the internal cache. */
+    /** Clear the internal cache for all entity types. */
     public function forget(): void
     {
-        $this->attributes = null;
+        $this->byEntityType = [];
     }
 }
