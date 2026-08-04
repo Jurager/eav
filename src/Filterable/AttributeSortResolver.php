@@ -58,7 +58,7 @@ class AttributeSortResolver implements SortResolver
                 ->orderBy('_et.locale_id')
                 ->select('_et.label');
         } else {
-            $subquery->select('_ea.' . $eavField->column());
+            $subquery->select('_ea.' . $eavField->column()->value);
         }
 
         $query->orderBy($subquery, $direction);

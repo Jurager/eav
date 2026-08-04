@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Carbon\Carbon;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Date;
-use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -55,7 +55,7 @@ class DateFieldTest extends TestCase
 
     public function test_column_returns_value_datetime(): void
     {
-        $this->assertSame(Field::STORAGE_DATETIME, $this->makeField()->column());
+        $this->assertSame(AttributeStorage::Datetime, $this->makeField()->column());
     }
 
     // -----------------------------------------------------------------------

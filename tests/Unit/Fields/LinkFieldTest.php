@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Fields;
 
-use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Link;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -54,7 +54,7 @@ class LinkFieldTest extends TestCase
 
     public function test_column_returns_value_text(): void
     {
-        $this->assertSame(Field::STORAGE_TEXT, $this->makeField()->column());
+        $this->assertSame(AttributeStorage::Text, $this->makeField()->column());
     }
 
     // -----------------------------------------------------------------------

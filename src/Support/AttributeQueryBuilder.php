@@ -107,7 +107,7 @@ class AttributeQueryBuilder
     private function applyFieldCondition(Builder $query, Field $field, string $operator, mixed $value, ?int $localeId): void
     {
         if (! $field->isLocalizable()) {
-            $this->applyOperator($query, $field->column(), $operator, $value);
+            $this->applyOperator($query, $field->column()->value, $operator, $value);
 
             return;
         }
@@ -159,7 +159,7 @@ class AttributeQueryBuilder
             return collect();
         }
 
-        $column = $field->column();
+        $column = $field->column()->value;
 
         $rows = Eav::$entityAttributeModel::query()
             ->select(['entity_id', $column])

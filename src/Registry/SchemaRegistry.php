@@ -36,7 +36,7 @@ class SchemaRegistry
 
         $prefix = "{$entityType}:";
 
-        foreach ($this->cache as $key => $_) {
+        foreach ($this->schemas as $key => $_) {
             if (str_starts_with($key, $prefix)) {
                 unset($this->schemas[$key]);
             }

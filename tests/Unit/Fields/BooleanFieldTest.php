@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Fields;
 
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Boolean;
-use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -55,7 +55,7 @@ class BooleanFieldTest extends TestCase
 
     public function test_column_returns_value_boolean(): void
     {
-        $this->assertSame(Field::STORAGE_BOOLEAN, $this->makeField()->column());
+        $this->assertSame(AttributeStorage::Boolean, $this->makeField()->column());
     }
 
     // -----------------------------------------------------------------------

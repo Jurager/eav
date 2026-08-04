@@ -233,13 +233,13 @@ trait ExecutesPersistence
                 $overlap = min($valueCount, $recordCount);
 
                 for ($i = 0; $i < $overlap; $i++) {
-                    $entry = $this->buildEntry($type, $entityId, $attrId, $field->column(), $field->isLocalizable(), $values[$i]);
+                    $entry = $this->buildEntry($type, $entityId, $attrId, $field->column()->value, $field->isLocalizable(), $values[$i]);
                     $entry['row']['id'] = $records[$i]->id;
                     $updates[] = $entry;
                 }
 
                 for ($i = $overlap; $i < $valueCount; $i++) {
-                    $inserts[] = $this->buildEntry($type, $entityId, $attrId, $field->column(), $field->isLocalizable(), $values[$i]);
+                    $inserts[] = $this->buildEntry($type, $entityId, $attrId, $field->column()->value, $field->isLocalizable(), $values[$i]);
                 }
 
                 for ($i = $overlap; $i < $recordCount; $i++) {

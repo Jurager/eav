@@ -195,6 +195,6 @@ class AttributeValidator
             return false;
         }
 
-        return $base->whereNotNull($field->column())->whereIn($field->column(), $values)->exists();
+        return $base->whereNotNull($field->column()->value)->whereIn($field->column()->value, $values)->exists();
     }
 }

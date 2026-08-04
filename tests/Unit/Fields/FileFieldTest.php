@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Fields;
 
-use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\File;
 use Jurager\Eav\Fields\Image;
 use Jurager\Eav\Models\Attribute;
@@ -55,7 +55,7 @@ class FileFieldTest extends TestCase
 
     public function test_column_returns_value_text(): void
     {
-        $this->assertSame(Field::STORAGE_TEXT, $this->makeField()->column());
+        $this->assertSame(AttributeStorage::Text, $this->makeField()->column());
     }
 
     // -----------------------------------------------------------------------
@@ -68,7 +68,7 @@ class FileFieldTest extends TestCase
         $field = new Image($attribute, $this->localeRegistry, $this->enumRegistry);
 
         $this->assertInstanceOf(File::class, $field);
-        $this->assertSame(Field::STORAGE_TEXT, $field->column());
+        $this->assertSame(AttributeStorage::Text, $field->column());
     }
 
     // -----------------------------------------------------------------------

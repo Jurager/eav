@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Fields;
 
-use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Number;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
@@ -54,7 +54,7 @@ class NumberFieldTest extends TestCase
 
     public function test_column_returns_value_float(): void
     {
-        $this->assertSame(Field::STORAGE_FLOAT, $this->makeField()->column());
+        $this->assertSame(AttributeStorage::Float, $this->makeField()->column());
     }
 
     // -----------------------------------------------------------------------
