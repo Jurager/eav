@@ -57,7 +57,8 @@ class AttributeSchema extends BaseSchema
         $type = Eav::$attributeTypeModel::query()->findOrFail($data['attribute_type_id']);
 
         $data = $type->constrain($data);
-        $data['sort'] ??= $this->nextSort($data['attribute_group_id'] ?? null);
+        $groupId = $data['attribute_group_id'] ?? null;
+        $data['sort'] ??= $this->nextSort($groupId !== null ? (int) $groupId : null);
 
         /** @var Attribute $attribute */
         $attribute = $this->createRecord(fn () => $this->query()->create($data), $translations);

@@ -85,6 +85,9 @@ class Attribute extends Model
     protected function casts(): array
     {
         return [
+            'attribute_type_id'  => 'integer',
+            'attribute_group_id' => 'integer',
+            'sort'        => 'integer',
             'validations' => 'array',
             'meta'        => 'array',
             'required'    => 'boolean',

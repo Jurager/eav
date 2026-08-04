@@ -78,6 +78,23 @@ class SchemaManagerTest extends FeatureTestCase
         $this->assertGreaterThan($a1->sort, $a2->sort);
     }
 
+    public function test_attribute_create_accepts_string_group_id(): void
+    {
+        // Simulates raw request input (e.g. JSON body) where numeric fields
+        // arrive as strings — request validation doesn't cast them.
+        $type = $this->createAttributeType('text');
+        $group = $this->schema->group()->create(['code' => 'general']);
+
+        $attr = $this->schema->attribute()->create([
+            'entity_type' => 'product',
+            'attribute_type_id' => (string) $type->id,
+            'attribute_group_id' => (string) $group->id,
+            'code' => 'color',
+        ]);
+
+        $this->assertSame($group->id, $attr->attribute_group_id);
+    }
+
     public function test_attribute_create_applies_type_constraints(): void
     {
         // Create a type that does NOT support localizable
