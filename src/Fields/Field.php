@@ -176,7 +176,10 @@ abstract class Field
 
     public function set(mixed $value, ?int $localeId = null): void
     {
-        $normalized = $this->normalize($value);
+        $normalized = $this->isMultiple() && is_array($value)
+            ? array_map(fn ($v) => $this->normalize($v), $value)
+            : $this->normalize($value);
+
         $localeId = $this->isLocalizable()
             ? ($localeId ?? $this->localeRegistry->default())
             : null;
@@ -190,6 +193,36 @@ abstract class Field
         }
 
         $this->values[] = ['locale_id' => $localeId, 'value' => $normalized];
+    }
+
+    /**
+     * Append one or more values to a `multiple: true` field without disturbing the rest.
+     * Accepts a single value or an array of values.
+     */
+    public function add(mixed $value, ?int $localeId = null): void
+    {
+        if (! $this->isMultiple()) {
+            $this->set($value, $localeId);
+
+            return;
+        }
+
+        $localeId = $this->isLocalizable()
+            ? ($localeId ?? $this->localeRegistry->default())
+            : null;
+
+        $additions = array_map(fn ($v) => $this->normalize($v), is_array($value) ? $value : [$value]);
+
+        $key = array_search($localeId, array_column($this->values, 'locale_id'), true);
+
+        if ($key !== false) {
+            $current = (array) $this->values[$key]['value'];
+            $this->values[$key]['value'] = [...$current, ...$additions];
+
+            return;
+        }
+
+        $this->values[] = ['locale_id' => $localeId, 'value' => $additions];
     }
 
     /** Remove the value for a specific locale, or all values for non-localized fields. */

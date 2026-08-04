@@ -108,6 +108,38 @@ class AttributeManagerTest extends FeatureTestCase
     }
 
     // -----------------------------------------------------------------------
+    // add() — append to a multiple-value field without overwriting
+    // -----------------------------------------------------------------------
+
+    public function test_add_appends_to_an_already_set_multiple_field(): void
+    {
+        $this->createAttribute($this->textType, ['code' => 'tags', 'multiple' => true]);
+
+        $product = $this->createProduct();
+        $manager = AttributeManager::for($product);
+
+        $manager->set('tags', ['sale', 'new']);
+        $manager->add('tags', 'featured');
+
+        $this->assertSame(['sale', 'new', 'featured'], $manager->value('tags'));
+    }
+
+    public function test_add_persists_the_appended_value(): void
+    {
+        $this->createAttribute($this->textType, ['code' => 'tags', 'multiple' => true]);
+
+        $product = $this->createProduct();
+        $manager = AttributeManager::for($product);
+
+        $manager->set('tags', ['sale']);
+        $manager->add('tags', 'new')->save('tags');
+
+        $product->refresh();
+
+        $this->assertSame(['sale', 'new'], AttributeManager::for($product)->value('tags'));
+    }
+
+    // -----------------------------------------------------------------------
     // fill() — batch fill from array
     // -----------------------------------------------------------------------
 

@@ -10,6 +10,9 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Builders\Attributes\AttributesFactory;
+use Jurager\Eav\Builders\Schema\SchemaFactory;
+use Jurager\Eav\Builders\Translator\TranslatorFactory;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
 use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
@@ -55,6 +58,9 @@ class EavServiceProvider extends ServiceProvider
         $this->app->scoped(TranslationManager::class);
         $this->app->scoped(SchemaManager::class);
         $this->app->scoped(Engine::class);
+        $this->app->scoped(SchemaFactory::class);
+        $this->app->scoped(TranslatorFactory::class);
+        $this->app->scoped(AttributesFactory::class);
 
         $this->registerFilterResolvers();
     }

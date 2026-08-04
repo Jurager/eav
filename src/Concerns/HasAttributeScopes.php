@@ -14,7 +14,7 @@ trait HasAttributeScopes
     /** Get attribute filter query builder. */
     protected function attributeFilterBuilder(): AttributeQueryBuilder
     {
-        return AttributeManager::for($this->getEavEntityType())->builder();
+        return AttributeManager::for($this->getEntityType())->builder();
     }
 
     /** Filter by single attribute value. */

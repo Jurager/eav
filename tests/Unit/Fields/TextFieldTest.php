@@ -158,7 +158,7 @@ class TextFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // set() / has() / forget()
+    // set() / add() / has() / forget()
     // -----------------------------------------------------------------------
 
     public function test_set_stores_and_value_retrieves(): void
@@ -167,6 +167,41 @@ class TextFieldTest extends TestCase
         $field->set('new value');
 
         $this->assertSame('new value', $field->value());
+    }
+
+    public function test_add_on_non_multiple_field_behaves_like_set(): void
+    {
+        $field = $this->makeField(['multiple' => false]);
+        $field->add('first');
+        $field->add('second');
+
+        $this->assertSame('second', $field->value());
+    }
+
+    public function test_add_appends_to_existing_values_on_multiple_field(): void
+    {
+        $field = $this->makeField(['multiple' => true]);
+        $field->fill(['foo', 'bar']);
+        $field->add('baz');
+
+        $this->assertSame(['foo', 'bar', 'baz'], $field->value());
+    }
+
+    public function test_add_accepts_an_array_of_values(): void
+    {
+        $field = $this->makeField(['multiple' => true]);
+        $field->fill(['foo']);
+        $field->add(['bar', 'baz']);
+
+        $this->assertSame(['foo', 'bar', 'baz'], $field->value());
+    }
+
+    public function test_add_on_empty_multiple_field_creates_the_values(): void
+    {
+        $field = $this->makeField(['multiple' => true]);
+        $field->add('foo');
+
+        $this->assertSame(['foo'], $field->value());
     }
 
     public function test_has_returns_false_when_empty(): void

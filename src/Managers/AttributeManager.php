@@ -119,7 +119,7 @@ class AttributeManager
             return $this;
         }
 
-        ($this->query($this->entity?->getEavScopes() ?? [])?->get() ?? collect())
+        ($this->query($this->entity?->attributeScopeIds() ?? [])?->get() ?? collect())
             ->reject(fn ($attr) => isset($this->fields[$attr->code]))
             ->each(fn ($attr) => $this->fields[$attr->code] = $this->makeField($attr));
 
@@ -137,7 +137,7 @@ class AttributeManager
             return;
         }
 
-        $attributes = $this->query($this->entity?->getEavScopes() ?? [])?->whereIn('code', $codes)->get() ?? collect();
+        $attributes = $this->query($this->entity?->attributeScopeIds() ?? [])?->whereIn('code', $codes)->get() ?? collect();
 
         if ($attributes->isNotEmpty()) {
             $this->hydrate($attributes);
@@ -170,6 +170,14 @@ class AttributeManager
     public function set(string $code, mixed $value, ?int $localeId = null): static
     {
         $this->field($code)?->set($value, $localeId);
+
+        return $this;
+    }
+
+    /** Append a value (or array of values) to a multi-value field in memory, keeping existing values. */
+    public function add(string $code, mixed $value, ?int $localeId = null): static
+    {
+        $this->field($code)?->add($value, $localeId);
 
         return $this;
     }
@@ -276,7 +284,7 @@ class AttributeManager
         return $this->builder ??= new AttributeQueryBuilder(
             $this->enumRegistry,
             fn (string $code) => $this->field($code),
-            fn (string $code) => $this->entity?->getEavEntityType()
+            fn (string $code) => $this->entity?->getEntityType()
                 ?? ($this->fields[$code] ?? null)?->attribute()->entity_type,
         );
     }
@@ -297,12 +305,12 @@ class AttributeManager
 
     protected static function buildFromAttributable(Attributable $entity, SchemaRegistry $registry): static
     {
-        $parameters = $entity->getEavScopes();
+        $parameters = $entity->attributeScopeIds();
         $sorted = $parameters;
         sort($sorted);
 
         $parametersKey = empty($parameters) ? 'default' : md5(json_encode($sorted, JSON_THROW_ON_ERROR));
-        $registryKey = "{$entity->getEavEntityType()}:{$parametersKey}";
+        $registryKey = "{$entity->getEntityType()}:{$parametersKey}";
 
         $attributes = $registry->resolve(
             $registryKey,
@@ -332,7 +340,7 @@ class AttributeManager
     protected function entityQuery(): Builder
     {
         return Eav::$entityAttributeModel::query()
-            ->where('entity_type', $this->resolveEntity()->getEavEntityType())
+            ->where('entity_type', $this->resolveEntity()->getEntityType())
             ->where('entity_id', $this->resolveEntity()->id);
     }
 

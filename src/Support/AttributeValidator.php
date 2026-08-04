@@ -45,7 +45,7 @@ class AttributeValidator
         $this->manager = $manager ?? AttributeManager::for($entity);
         $this->manager->ensureSchema();
 
-        $this->entityType = $entity->getEavEntityType();
+        $this->entityType = $entity->getEntityType();
         $this->entityId = $entity->id ?? null;
 
         $modelClass = Relation::getMorphedModel($this->entityType);

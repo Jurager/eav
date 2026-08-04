@@ -74,7 +74,7 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
      */
     private function hasAttribute(Attributable $entity, string $code): bool
     {
-        return AttributeManager::for($entity->getEavEntityType())->field($code) !== null;
+        return AttributeManager::for($entity->getEntityType())->field($code) !== null;
     }
 
     /**

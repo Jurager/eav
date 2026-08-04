@@ -33,7 +33,7 @@ class AttributePersister
         }
 
         $this->withinTimestamp(fn () => $this->persistGroup(
-            $this->entity->getEavEntityType(),
+            $this->entity->getEntityType(),
             [$this->entity->id => $fields],
         ));
     }
@@ -53,7 +53,7 @@ class AttributePersister
         $this->withinTimestamp(fn () => $this->db->connection()->transaction(function () use ($fields): void {
             $keepIds = $fields->map(fn (Field $f) => $f->attribute()->id)->values()->all();
             $this->delete($this->entityQuery()->whereNotIn('attribute_id', $keepIds)->pluck('id')->all());
-            $this->persistGroup($this->entity->getEavEntityType(), [$this->entity->id => $fields]);
+            $this->persistGroup($this->entity->getEntityType(), [$this->entity->id => $fields]);
         }));
     }
 
@@ -76,7 +76,7 @@ class AttributePersister
     private function entityQuery(): Builder
     {
         return Eav::$entityAttributeModel::query()
-            ->where('entity_type', $this->entity->getEavEntityType())
+            ->where('entity_type', $this->entity->getEntityType())
             ->where('entity_id', $this->entity->id);
     }
 }

@@ -37,7 +37,7 @@ class BatchAttributePersister
             return;
         }
 
-        $type = $entity->getEavEntityType();
+        $type = $entity->getEntityType();
         $entityId = $entity->getKey();
 
         $this->pending[$type][$entityId] = ($this->pending[$type][$entityId] ?? collect())

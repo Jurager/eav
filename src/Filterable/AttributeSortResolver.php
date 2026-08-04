@@ -22,7 +22,7 @@ class AttributeSortResolver implements SortResolver
             return false;
         }
 
-        $entityType = $model->getEavEntityType();
+        $entityType = $model->getEntityType();
         $eavField   = AttributeManager::for($entityType)->field($field);
 
         // Not an attribute of this entity — leave the field to the remaining resolvers.

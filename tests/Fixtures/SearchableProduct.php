@@ -10,7 +10,7 @@ class SearchableProduct extends Product
 {
     use HasSearchableAttributes;
 
-    public function getEavEntityType(): string
+    public function getEntityType(): string
     {
         return 'searchable_product';
     }

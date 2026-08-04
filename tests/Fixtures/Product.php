@@ -19,7 +19,7 @@ class Product extends Model implements Attributable
     /** @var array<string, callable> Test-only hook for AttributeValidatorTest. */
     public static array $uniqueScopes = [];
 
-    public function getEavEntityType(): string
+    public function getEntityType(): string
     {
         return 'product';
     }

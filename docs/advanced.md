@@ -48,14 +48,14 @@ foreach ($products as $product) {
 
 Entities arranged in a hierarchy may inherit the attribute schema of their ancestors. A common use case is a category tree where a subcategory exposes every attribute from its parent categories.
 
-To enable inheritance, override `shouldInheritEavAttributes()` on the scope model:
+To enable inheritance, override `shouldInheritAttributes()` on the scope model:
 
 ```php
 class Category extends Model implements Attributable
 {
     use HasAttributes, NodeTrait;
 
-    public function shouldInheritEavAttributes(): bool
+    public function shouldInheritAttributes(): bool
     {
         return $this->is_inherits_properties && $this->parent_id !== null;
     }
@@ -71,7 +71,7 @@ The inheritance resolver detects the tree strategy automatically:
 - **Nested set** (`_lft`/`_rgt` columns, for example via `kalnoy/nestedset`) — every ancestor is resolved in a single bounds query.
 - **Parent ID chain** — walks `parent_id` level by level, up to the configured limit.
 
-Inheritance stops at the first ancestor where `shouldInheritEavAttributes()` returns `false`.
+Inheritance stops at the first ancestor where `shouldInheritAttributes()` returns `false`.
 
 Given the following tree:
 
@@ -91,6 +91,40 @@ The parent-ID strategy walks up to `eav.max_inheritance_depth` levels (default `
 // config/eav.php
 'max_inheritance_depth' => 20,
 ```
+
+## Scoping Attributes via a Related Model
+
+By default, every entity shares one global attribute schema per entity type. To give each product its own schema based on its categories instead, override `attributeScopeModel()`:
+
+```php
+protected static function attributeScopeModel(): ?string
+{
+    return Category::class;
+}
+```
+
+That alone is enough if the product's relation to its scope entities follows Laravel's own pluralized, camelCase naming convention — `attributeScopeModel()` returning `Category::class` resolves to a `categories()` relation. The package resolves the schema through those categories, following [attribute inheritance](#attribute-inheritance) if enabled.
+
+If your relation isn't named that way, override `attributeScopeRelationName()`:
+
+```php
+protected function attributeScopeRelationName(): ?string
+{
+    return 'productCategories';
+}
+```
+
+The scope model exposes its attributes through `attributeScopeRelation()`, which defaults to the standard `entity_attribute` relation. Override it with a dedicated pivot table to keep attribute assignment separate from any EAV values stored on the category itself:
+
+```php
+// Category.php
+public function attributeScopeRelation(): BelongsToMany
+{
+    return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id');
+}
+```
+
+`$product->availableAttributes()` now resolves to the union of attributes assigned to every category the product belongs to.
 
 ## Scoped Uniqueness
 
@@ -115,39 +149,28 @@ public static function attributeUniqueScopes(): array
 
 The array key is the attribute code. The closure receives the `entity_attribute` Builder and the entity being validated; add `where` conditions to limit the uniqueness scope. Attributes not listed in the array use global uniqueness.
 
-## Events
 
-Observers dispatch a domain event after every successful mutation. All events live in the `Jurager\Eav\Events\` namespace:
+## Scout Integration
 
-| Event | Property | When |
-|---|---|---|
-| `AttributeCreated` | `Attribute $attribute` | Attribute created |
-| `AttributeUpdated` | `Attribute $attribute` | Attribute updated |
-| `AttributeDeleted` | `Attribute $attribute` | Attribute soft-deleted or force-deleted |
-| `AttributeGroupCreated` | `AttributeGroup $group` | Group created |
-| `AttributeGroupUpdated` | `AttributeGroup $group` | Group updated |
-| `AttributeGroupDeleted` | `AttributeGroup $group` | Group deleted |
-| `AttributeEnumCreated` | `AttributeEnum $enum` | Enum value created |
-| `AttributeEnumUpdated` | `AttributeEnum $enum` | Enum value updated |
-| `AttributeEnumDeleted` | `AttributeEnum $enum` | Enum value deleted |
-
-Laravel auto-discovers listeners by type-hint on `handle()`, so no manual registration is needed:
+To include EAV values in your Laravel Scout search index, add the `HasSearchableAttributes` trait to your model. You must also use `Laravel\Scout\Searchable` and resolve the trait method conflict explicitly:
 
 ```php
-namespace App\Listeners;
+use Jurager\Eav\Concerns\HasAttributes;
+use Jurager\Eav\Concerns\HasSearchableAttributes;
+use Jurager\Eav\Contracts\Attributable;
+use Laravel\Scout\Searchable;
 
-use Jurager\Eav\Events\AttributeCreated;
-
-class AttachAttributeToDefaultCategory
+class Product extends Model implements Attributable
 {
-    public function handle(AttributeCreated $event): void
-    {
-        if ($event->attribute->entity_type === 'product') {
-            // attach to default category…
-        }
+    use HasAttributes, HasSearchableAttributes, Searchable {
+        HasSearchableAttributes::toSearchableArray insteadof Searchable;
+        HasSearchableAttributes::shouldBeSearchable insteadof Searchable;
     }
+    // ...
 }
 ```
+
+This setup is the first step. The package also provides automatic index syncing when attributes change. See the **Search Indexing** section below for the full workflow.
 
 ## Search Indexing
 
@@ -162,7 +185,7 @@ To add model-specific fields alongside attribute data, override `toSearchableArr
 ```php
 public function toSearchableArray(): array
 {
-    $data = $this->eav()?->indexData() ?? [];
+    $data = $this->eav()->indexData();
 
     return ['id' => (string) $this->getScoutKey(), 'code' => $this->code, ...$data];
 }
@@ -212,4 +235,38 @@ All jobs are queued, so you should ensure a queue worker is running:
 
 ```bash
 php artisan queue:work
+```
+
+## Events
+
+Observers dispatch a domain event after every successful mutation. All events live in the `Jurager\Eav\Events\` namespace:
+
+| Event | Property | When |
+|---|---|---|
+| `AttributeCreated` | `Attribute $attribute` | Attribute created |
+| `AttributeUpdated` | `Attribute $attribute` | Attribute updated |
+| `AttributeDeleted` | `Attribute $attribute` | Attribute soft-deleted or force-deleted |
+| `AttributeGroupCreated` | `AttributeGroup $group` | Group created |
+| `AttributeGroupUpdated` | `AttributeGroup $group` | Group updated |
+| `AttributeGroupDeleted` | `AttributeGroup $group` | Group deleted |
+| `AttributeEnumCreated` | `AttributeEnum $enum` | Enum value created |
+| `AttributeEnumUpdated` | `AttributeEnum $enum` | Enum value updated |
+| `AttributeEnumDeleted` | `AttributeEnum $enum` | Enum value deleted |
+
+Laravel auto-discovers listeners by type-hint on `handle()`, so no manual registration is needed:
+
+```php
+namespace App\Listeners;
+
+use Jurager\Eav\Events\AttributeCreated;
+
+class AttachAttributeToDefaultCategory
+{
+    public function handle(AttributeCreated $event): void
+    {
+        if ($event->attribute->entity_type === 'product') {
+            // attach to default category…
+        }
+    }
+}
 ```

@@ -37,7 +37,7 @@ trait HasAttributes
         static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
 
         static::resolveRelationUsing('available_attributes', fn (Model $model) => $model->availableAttributesRelation(
-            fn (Model $entity) => $entity->getAvailableAttributesQuery($entity->getEavScopes()),
+            fn (Model $entity) => $entity->getAvailableAttributesQuery($entity->attributeScopeIds()),
         ));
     }
 
@@ -55,6 +55,16 @@ trait HasAttributes
     public function eav(): AttributeManager
     {
         return $this->attributeManager ??= AttributeManager::for($this);
+    }
+
+    /**
+     * Get the entity type identifier — defaults to the model's Eloquent morph
+     * class, so registering a `morphMap()` alias is enough. Override when you
+     * need a value independent of the morph map.
+     */
+    public function getEntityType(): string
+    {
+        return $this->getMorphClass();
     }
 
     /** Fallback to EAV attribute reading for undefined properties. */

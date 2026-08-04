@@ -49,71 +49,60 @@ When no locale is specified, the default locale from `LocaleRegistry::default()`
 
 ## Managing Locales
 
-`TranslationManager` handles locale CRUD. Each write method flushes the `LocaleRegistry` cache automatically:
+The `Translator` facade creates, edits, and deletes locales. Pass a code to create a new one, or an existing `Locale` to edit it:
 
 ```php
-use Jurager\Eav\Managers\TranslationManager;
+use Jurager\Eav\Facades\Translator;
 
-$manager = app(TranslationManager::class);
+$locale = Translator::locale('de')->name('German')->create();
 
-$locales = $manager->locales();                              // Collection
-$locales = $manager->locales(fn ($q) => $q->paginate(15));  // Paginator
-$locale  = $manager->locale(1);                             // throws ModelNotFoundException if missing
-
-$locale = $manager->create(['code' => 'de', 'name' => 'German']);
-$locale = $manager->update($locale, ['name' => 'Deutsch']);
-$manager->delete($locale);
+Translator::locale($locale)->name('Deutsch')->update();
+Translator::locale($locale)->delete();
 ```
 
-## Saving Translations
+```php
+Translator::findLocale(1);  // throws ModelNotFoundException if missing
+Translator::locales();      // Collection
+Translator::locales(fn ($q) => $q->paginate(15)); // Paginator
+```
 
-The `save` method syncs translated labels for any model with a `translations()` MorphToMany relation:
+## Setting Labels for a Model
+
+A translation doesn't exist on its own — it always belongs to a model. `Translator::for()` starts a builder scoped to that model; nothing is persisted until you call `save()`:
 
 ```php
-$manager->save($attribute, [
-    ['locale_id' => 1, 'label' => 'Color'],
-    ['locale_id' => 2, 'label' => 'Цвет'],
+Translator::for($attribute)
+    ->label('Color', 'en')
+    ->label('Цвет', 'ru')
+    ->save();
+```
+
+`label()` resolves a locale code to an ID and throws `FluentBuilderException` when it doesn't exist. Saving replaces every translation on the model — locales not queued are removed. To update only the locales you queued and leave the rest alone, call `partial()`:
+
+```php
+Translator::for($attribute)->label('Farbe', 'de')->partial()->save();
+```
+
+When you create or edit attributes, groups, or enums via the [`Schema` facade](schema.md), call `->label()` on that builder instead — it saves translations the same way, in the same `create()`/`update()` call.
+
+To fill a builder from an already-validated array — a controller's `$request->validated()['translations']`, for example — use `fill()`. Each entry may include the optional `hint`, `placeholder`, and `short_name` display fields alongside `label`:
+
+```php
+Translator::for($attribute)->fill([
+    ['locale_id' => 1, 'label' => 'Color', 'hint' => 'Choose the primary color', 'placeholder' => 'e.g. red'],
+])->save();
+```
+
+## Batch Setting Labels
+
+To persist labels for many models in a single upsert, collect builders without saving them and pass them to `Translator::batch()`. This is significantly faster than calling `save()` in a loop during imports:
+
+```php
+Translator::batch([
+    Translator::for($attribute1)->label('Color', 'en')->label('Цвет', 'ru'),
+    Translator::for($attribute2)->label('Size', 'en')->label('Размер', 'ru'),
 ]);
 ```
-
-Locales not present in the array are removed; entries without a `label` are discarded.
-
-You may also store optional display fields in the `params` JSON column:
-
-```php
-$manager->save($attribute, [
-    [
-        'locale_id'   => 1,
-        'label'       => 'Color',
-        'hint'        => 'Choose the primary color',
-        'placeholder' => 'e.g. red',
-        'short_name'  => 'Clr',
-    ],
-]);
-```
-
-To update only specific locales without removing existing translations for others, pass `partial: true`:
-
-```php
-$manager->save($attribute, [
-    ['locale_id' => 3, 'label' => 'Farbe'],
-], partial: true);
-```
-
-When you use `SchemaManager` to create or update attributes, translations are handled automatically — pass the `translations` array in the data payload. Reach for `TranslationManager::save()` directly only for non-EAV models or standalone locale management.
-
-## Batch Saving Translations
-
-To sync translations for many models in a single upsert, use `batch()`. This is significantly faster than calling `save()` in a loop during imports:
-
-```php
-app(TranslationManager::class)->batch([
-    [$attribute1, [['locale_id' => 1, 'label' => 'Color'], ['locale_id' => 2, 'label' => 'Цвет']]],
-    [$attribute2, [['locale_id' => 1, 'label' => 'Size'],  ['locale_id' => 2, 'label' => 'Размер']]],
-]);
-```
-
-Each element is a two-item tuple of `[Model, translations]`. The second element uses the same format as `save()`. Entries without a `label` are discarded.
 
 ## Translating Non-EAV Models
 
@@ -135,11 +124,11 @@ class Region extends Model
 }
 ```
 
-The `active()` scope restricts the relation to the locales set for the current request. Once the relation is in place, call `save()` exactly as you would for an EAV model:
+The `active()` scope restricts the relation to the locales set for the current request. Once the relation is in place, `Translator::for()` works exactly as it does for an EAV model:
 
 ```php
-app(TranslationManager::class)->save($region, [
-    ['locale_id' => 1, 'label' => 'Europe'],
-    ['locale_id' => 2, 'label' => 'Европа'],
-]);
+Translator::for($region)
+    ->label('Europe', 'en')
+    ->label('Европа', 'ru')
+    ->save();
 ```

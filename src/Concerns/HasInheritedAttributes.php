@@ -9,7 +9,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
-use Jurager\Eav\Contracts\Hierarchical;
+use Illuminate\Support\Str;
+use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Relations\ClosureRelation;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
@@ -17,13 +18,40 @@ use Jurager\Eav\Support\AttributeInheritanceResolver;
 trait HasInheritedAttributes
 {
     /**
-     * Get model FQCN used to resolve relation-scoped attributes.
+     * Get the model class used to resolve relation-scoped attributes.
      *
      * @return class-string<\Jurager\Eav\Contracts\Attributable>|null
      */
     protected static function attributeScopeModel(): ?string
     {
         return null;
+    }
+
+    /**
+     * Name of the relation whose related IDs scope this entity's available
+     * attributes. Defaults to the pluralized, camelCase basename of
+     * `attributeScopeModel()` (`Category` → `categories`) — override when the
+     * relation isn't named by that convention.
+     */
+    protected function attributeScopeRelationName(): ?string
+    {
+        $model = static::attributeScopeModel();
+
+        return $model !== null ? Str::camel(Str::plural(class_basename($model))) : null;
+    }
+
+    /** Get the IDs of the related scope entities used to resolve inherited attributes. */
+    public function attributeScopeIds(): array
+    {
+        $relation = $this->attributeScopeRelationName();
+
+        if ($relation === null) {
+            return [];
+        }
+
+        $this->loadMissing($relation);
+
+        return $this->{$relation}->pluck('id')->toArray();
     }
 
     /**
@@ -83,24 +111,18 @@ trait HasInheritedAttributes
         return [$this->getKey()];
     }
 
-    /** Determine if entity should inherit EAV attributes. */
-    public function shouldInheritEavAttributes(): bool
+    /** Determine if entity should inherit attributes. */
+    public function shouldInheritAttributes(): bool
     {
         return false;
     }
 
     /** Get columns required for inheritance resolution. */
-    public function getEavInheritanceColumns(): array
+    public function getInheritanceColumns(): array
     {
         return ['id', 'parent_id'];
     }
 
-    /** Get default scope parameters for available attributes query. */
-    public function getEavScopes(): array
-    {
-        return [];
-    }
-    
     /** Define pivot relation used to resolve scoped attributes. */
     public function attributeScopeRelation(): ?BelongsToMany
     {
@@ -111,7 +133,7 @@ trait HasInheritedAttributes
     protected function globalAttributesQuery(): Builder
     {
         return Eav::$attributeModel::query()
-            ->forEntity($this->getEavEntityType())
+            ->forEntity($this->getEntityType())
             ->withRelations();
     }
 
@@ -147,9 +169,9 @@ trait HasInheritedAttributes
     /** Load entities required for inheritance resolution. */
     private function loadInheritanceEntities(string $model, object $instance, array $params): ?Collection
     {
-        $columns = $instance->getEavInheritanceColumns();
+        $columns = $instance->getInheritanceColumns();
 
-        if ($instance instanceof Hierarchical) {
+        if ($instance instanceof ShouldUseNestedSet) {
             array_push($columns, '_lft', '_rgt');
         }
 

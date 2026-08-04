@@ -5,7 +5,7 @@ weight: 30
 
 ## Introduction
 
-Every attributable model exposes an `eav()` accessor for reading and writing attribute values, persisting single attributes or full sets, and batch-syncing large collections.
+Every attributable model exposes an `eav()` accessor for reading and writing attribute values, persisting single attributes or full sets, and batch-syncing large collections. The manager it returns is cached on the entity itself, so repeated calls within a request share state.
 
 ## Reading Values
 
@@ -47,6 +47,15 @@ For multi-value attributes (`multiple: true`), pass an array of values:
 ```php
 $product->eav()->set('tags', ['sale', 'new', 'featured'])->save('tags');
 ```
+
+`set` always replaces the whole list. To append instead — without first reading the existing values back — use `add`, with either a single value or an array:
+
+```php
+$product->eav()->add('tags', 'featured')->save('tags');
+$product->eav()->add('tags', ['sale', 'new'])->save('tags');
+```
+
+On a non-multiple field, `add` behaves exactly like `set` — there is only one slot to fill.
 
 ## Persisting a Full Set
 
@@ -96,12 +105,12 @@ The `validate` method throws `ValidationException` on failure — Laravel render
 
 ## Batch Import
 
-For bulk operations, use `AttributeManager::sync()`. It loads the schema once per unique entity type and persists every entity in chunked transactions:
+For bulk operations spanning many entities, use the `Attributes` facade instead of `eav()` — there's no single entity to cache a manager on. `Attributes::sync()` loads the schema once per unique entity type and persists every entity in chunked transactions:
 
 ```php
-use Jurager\Eav\Managers\AttributeManager;
+use Jurager\Eav\Facades\Attributes;
 
-AttributeManager::sync(collect([
+Attributes::sync(collect([
     ['entity' => $product1, 'data' => ['color' => 'red',  'weight' => 1.5]],
     ['entity' => $product2, 'data' => ['color' => 'blue', 'weight' => 2.0]],
 ]));
@@ -110,9 +119,9 @@ AttributeManager::sync(collect([
 When every entity in the batch shares the same schema, you may build it once and pass it in to avoid repeated lookups:
 
 ```php
-$schema = AttributeManager::schema(Product::first());
+$schema = Attributes::schema(Product::first());
 
-AttributeManager::sync($batch, prebuiltSchema: $schema, chunkSize: 200);
+Attributes::sync($batch, prebuiltSchema: $schema, chunkSize: 200);
 ```
 
 The default chunk size is 500 entities per transaction.
@@ -122,7 +131,7 @@ The default chunk size is 500 entities per transaction.
 By default, a failing chunk re-throws and halts processing. Pass `onError` to retry a failed chunk entity-by-entity instead — bad entities are skipped and passed to the callback, and the rest of the batch continues:
 
 ```php
-AttributeManager::sync($batch, onError: function (\Throwable $e, Attributable $entity): void {
+Attributes::sync($batch, onError: function (\Throwable $e, Attributable $entity): void {
     Log::error("Sync failed for #{$entity->id}", ['error' => $e->getMessage()]);
 });
 ```
@@ -131,10 +140,12 @@ Persistence is upsert-based, so entities already saved before a chunk failed are
 
 ## Finding Entities by Attribute Value
 
-To look up an entity by an attribute value, use the `builder()` accessor:
+To look up an entity by an attribute value, there's no entity to call `eav()` on yet — pass the entity type instead, an FQCN implementing `Attributable` or its morph-map key, to `Attributes::for()`, and use the `builder()` accessor:
 
 ```php
-$manager = AttributeManager::for(Product::class);
+use Jurager\Eav\Facades\Attributes;
+
+$manager = Attributes::for(Product::class);
 
 $product  = $manager->builder()->findBy('sku', 'ABC-123');        // ?Model
 $product  = $manager->builder()->findBy('price', 100.0, '<=');    // ?Model with operator

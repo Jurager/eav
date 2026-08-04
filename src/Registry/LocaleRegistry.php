@@ -13,7 +13,7 @@ class LocaleRegistry
     /** @var Collection<int, string>|null id → code */
     private ?Collection $locales = null;
 
-    private ?int $defaultId = null;
+    private ?int $default = null;
 
     /** @var array<string>|null Active locales for the current request. */
     private ?array $active = null;
@@ -74,14 +74,13 @@ class LocaleRegistry
      */
     public function default(): int
     {
-        if ($this->defaultId !== null) {
-            return $this->defaultId;
+        if ($this->default !== null) {
+            return $this->default;
         }
 
         $code = config('app.locale', 'en');
 
-        return $this->defaultId = $this->find($code)
-            ?? throw InvalidConfigurationException::localeNotFound($code);
+        return $this->default = $this->find($code) ?? throw InvalidConfigurationException::localeNotFound($code);
     }
 
     /** Set the active locales for the request context. */
@@ -100,7 +99,7 @@ class LocaleRegistry
     public function forget(): void
     {
         $this->locales = null;
-        $this->defaultId = null;
+        $this->default = null;
         $this->active = null;
     }
 }

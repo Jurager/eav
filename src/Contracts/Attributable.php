@@ -8,17 +8,17 @@ use Illuminate\Database\Eloquent\Builder;
 
 interface Attributable
 {
-    /** Get the EAV entity type identifier. */
-    public function getEavEntityType(): string;
+    /** Get the entity type identifier. */
+    public function getEntityType(): string;
 
     /** Get the scope IDs that determine available attributes. */
-    public function getEavScopes(): array;
+    public function attributeScopeIds(): array;
 
     /** Determine if the entity inherits attributes from its parent. */
-    public function shouldInheritEavAttributes(): bool;
+    public function shouldInheritAttributes(): bool;
 
     /** Get the columns required for inheritance resolution. */
-    public function getEavInheritanceColumns(): array;
+    public function getInheritanceColumns(): array;
 
     /** Get the query builder for available attributes. */
     public function getAvailableAttributesQuery(array $scopes = []): ?Builder;

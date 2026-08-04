@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Support;
 
 use Illuminate\Support\Collection;
-use Jurager\Eav\Contracts\Hierarchical;
+use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Exceptions\CircularInheritanceException;
 
 /**
@@ -23,7 +23,7 @@ class AttributeInheritanceResolver
     public function resolve(Collection $entities, string $model): Collection
     {
         $base = $entities->values();
-        $toInherit = $entities->filter(fn ($e) => $e->shouldInheritEavAttributes());
+        $toInherit = $entities->filter(fn ($e) => $e->shouldInheritAttributes());
 
         if ($toInherit->isEmpty()) {
             return $base;
@@ -31,7 +31,7 @@ class AttributeInheritanceResolver
 
         $first = $toInherit->first();
 
-        return $first instanceof Hierarchical
+        return $first instanceof ShouldUseNestedSet
             ? $this->resolveWithNestedSet($toInherit, $base, $model)
             : $this->resolveWithParentId($toInherit, $base, $model);
     }
@@ -46,7 +46,7 @@ class AttributeInheritanceResolver
         }
 
         $instance = new $model();
-        $columns = array_unique(array_merge($instance->getEavInheritanceColumns(), ['_lft', '_rgt']));
+        $columns = array_unique(array_merge($instance->getInheritanceColumns(), ['_lft', '_rgt']));
 
         $ancestors = $model::query()
             ->where(function ($query) use ($valid) {
@@ -94,7 +94,7 @@ class AttributeInheritanceResolver
         while ($currentIds->isNotEmpty() && $remaining-- > 0) {
             $parents = $model::query()
                 ->whereIn('id', $currentIds)
-                ->select((new $model())->getEavInheritanceColumns())
+                ->select((new $model())->getInheritanceColumns())
                 ->get()
                 ->keyBy('id');
 
@@ -105,7 +105,7 @@ class AttributeInheritanceResolver
             $allParents = $allParents->merge($parents);
 
             $currentIds = $parents
-                ->filter(fn ($p) => $p->shouldInheritEavAttributes() && $p->parent_id)
+                ->filter(fn ($p) => $p->shouldInheritAttributes() && $p->parent_id)
                 ->pluck('parent_id')
                 ->unique()
                 ->diff($allParents->keys());
@@ -128,7 +128,7 @@ class AttributeInheritanceResolver
             $ancestor = $ancestors->get($currentId);
             $result->push($ancestor);
 
-            if (! $ancestor->shouldInheritEavAttributes()) {
+            if (! $ancestor->shouldInheritAttributes()) {
                 break;
             }
 

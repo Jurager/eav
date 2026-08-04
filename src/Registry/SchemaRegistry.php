@@ -8,10 +8,18 @@ use Illuminate\Support\Collection;
 
 class SchemaRegistry
 {
-    /** @var array<string, Collection> */
+    /**
+     * @template TKey of array-key
+     * @template TValue
+     *
+     * @var array<string, Collection<TKey, TValue>>
+     */
     private array $schemas = [];
 
-    /** Resolve the cached schema or load it if not present. */
+    /**
+     * @return Collection<TKey, TValue>
+     * @param callable(): Collection<TKey, TValue> $loader
+     */
     public function resolve(string $key, callable $loader): Collection
     {
         return $this->schemas[$key] ??= $loader();
@@ -22,11 +30,14 @@ class SchemaRegistry
     {
         if ($entityType === null) {
             $this->schemas = [];
+
             return;
         }
 
-        foreach (array_keys($this->schemas) as $key) {
-            if (str_starts_with((string) $key, "{$entityType}:")) {
+        $prefix = "{$entityType}:";
+
+        foreach ($this->cache as $key => $_) {
+            if (str_starts_with($key, $prefix)) {
                 unset($this->schemas[$key]);
             }
         }
