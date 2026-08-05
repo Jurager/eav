@@ -13,6 +13,13 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 /** Read-only relation whose results are resolved per-parent via a closure. */
 class ClosureRelation extends Relation
 {
+    /**
+     * Query resolved for parent.
+     */
+    private ?Builder $resolvedQuery = null;
+
+    private bool $resolvedQuerySet = false;
+
     /** @param Closure(Model): (Builder|null) $resolver */
     public function __construct(Builder $query, Model $parent, protected Closure $resolver)
     {
@@ -54,7 +61,7 @@ class ClosureRelation extends Relation
     /** Get the results of the relationship. */
     public function getResults(): Collection
     {
-        return $this->resolveFor($this->parent);
+        return $this->queryForParent()?->get() ?? $this->related->newCollection();
     }
 
     /** Get the relationship for eager loading (not applicable). */
@@ -63,13 +70,33 @@ class ClosureRelation extends Relation
         return $this->related->newCollection();
     }
 
-    /** Forward calls to the resolved per-parent query. */
+    /**
+     * Forward calls to the query resolved for parent.
+     */
     public function __call($method, $parameters): mixed
     {
-        $query = self::scopedQuery($this->resolver, $this->parent)
-            ?? $this->related->newQuery()->whereKey([]);
+        $query = $this->queryForParent() ?? $this->related->newQuery()->whereKey([]);
 
-        return $query->$method(...$parameters);
+        $result = $query->$method(...$parameters);
+
+        if ($result instanceof Builder) {
+            $this->resolvedQuery = $result;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Resolve and memoize the query scoped to parent.
+     */
+    private function queryForParent(): ?Builder
+    {
+        if (! $this->resolvedQuerySet) {
+            $this->resolvedQuery = self::scopedQuery($this->resolver, $this->parent);
+            $this->resolvedQuerySet = true;
+        }
+
+        return $this->resolvedQuery;
     }
 
     /** Resolve the query for a specific parent. */
