@@ -6,17 +6,19 @@ namespace Jurager\Eav;
 
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
 use Jurager\Eav\Builders\Attributes\AttributesFactory;
 use Jurager\Eav\Builders\Schema\SchemaFactory;
 use Jurager\Eav\Builders\Translator\TranslatorFactory;
+use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
-use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
-use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Jobs\SyncFilterable;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
@@ -30,6 +32,7 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Jurager\Eav\Search\Engine;
 use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
 use Jurager\Eav\Search\SearchFactory;
@@ -127,17 +130,41 @@ class EavServiceProvider extends ServiceProvider
     private function registerScoutHook(): void
     {
         $this->app->make(Dispatcher::class)->listen(CommandFinished::class, static function (CommandFinished $event) {
+
             if ($event->command !== 'scout:sync-index-settings' || $event->exitCode !== 0) {
                 return;
             }
 
-            Eav::$attributeModel::query()
-                ->withoutGlobalScopes()
-                ->where('filterable', true)
-                ->distinct()
-                ->pluck('entity_type')
-                ->each(fn (string $entityType) => SyncFilterable::dispatchSync($entityType));
+            self::syncableEntityTypes()->each(static fn (string $entityType) => SyncFilterable::dispatchSync($entityType));
         });
+    }
+
+    /**
+     * Entity types whose filterable attributes must be restored after scout rewrites index settings from config.
+     *
+     * @return Collection<int, string>
+     */
+    private static function syncableEntityTypes(): Collection
+    {
+        return Eav::$attributeModel::query()
+            ->withoutGlobalScopes()
+            ->distinct()
+            ->pluck('entity_type')
+            ->merge(self::entityTypesWithIndexPaths())
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * Morph aliases of the models declaring additional index paths.
+     *
+     * @return Collection<int, string>
+     */
+    private static function entityTypesWithIndexPaths(): Collection
+    {
+        return (new Collection(Relation::morphMap()))
+            ->filter(static fn (mixed $modelClass) => is_string($modelClass) && is_subclass_of($modelClass, InteractsWithIndex::class))
+            ->keys();
     }
 
     /** Register model observers. */
