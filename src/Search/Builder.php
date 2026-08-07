@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
+use Jurager\Filterable\Contracts\SortResolver;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 
@@ -50,6 +51,20 @@ class Builder
     private ?Model $model = null;
 
     /**
+     * Condition splitting the result set into a leading and a trailing group.
+     *
+     * @var ParsedFilters|null
+     */
+    private ?ParsedFilters $partition = null;
+
+    /**
+     * Whether documents matching the partition come first.
+     *
+     * @var bool
+     */
+    private bool $partitionFirst = true;
+
+    /**
      * @param iterable<FilterResolver> $resolvers
      */
     public function __construct(
@@ -88,6 +103,75 @@ class Builder
         }
 
         $this->filter = $parsed;
+
+        return $this;
+    }
+
+    /**
+     * Apply a sort specification through the model's Filterable sort resolvers.
+     */
+    public function sort(?string $sort): static
+    {
+        if ($sort === null || $sort === '' || $this->model === null) {
+            return $this;
+        }
+
+        $descending = str_starts_with($sort, '-');
+        $field      = $descending ? substr($sort, 1) : $sort;
+
+        foreach ($this->sortResolvers() as $resolver) {
+            if ($resolver->resolve($this, $field, $descending ? 'desc' : 'asc', $this->model, $this->filter->included)) {
+                break;
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Sort resolvers declared on the model, resolved through the container.
+     *
+     * @return list<SortResolver>
+     */
+    private function sortResolvers(): array
+    {
+        if (! method_exists($this->model, 'filterableResolvers')) {
+            return [];
+        }
+
+        $resolvers = [];
+
+        foreach ($this->model->filterableResolvers() as $resolver) {
+            $resolver = is_string($resolver) ? app($resolver) : $resolver;
+
+            if ($resolver instanceof SortResolver) {
+                $resolvers[] = $resolver;
+            }
+        }
+
+        return $resolvers;
+    }
+
+    /**
+     * Order the result set by whether documents match a condition.
+     *
+     * @param array<string, mixed> $condition
+     * @param bool $first Whether matches lead the result set.
+     */
+    public function partition(array $condition, bool $first = true): static
+    {
+        $parsed = (new FilterParser())->parse($condition, []);
+
+        if ($this->model !== null) {
+            $parsed = $parsed->withSanitized(
+                filters:   $this->resolveFilters($parsed->filters, $this->model),
+                orGroups:  $parsed->orGroups,
+                andGroups: $parsed->andGroups,
+            );
+        }
+
+        $this->partition      = $parsed;
+        $this->partitionFirst = $first;
 
         return $this;
     }
@@ -216,5 +300,17 @@ class Builder
     public function getMap(): array
     {
         return $this->map;
+    }
+
+    /** Get the partition condition, if the result set is to be split. */
+    public function getPartition(): ?ParsedFilters
+    {
+        return $this->partition;
+    }
+
+    /** Whether documents matching the partition lead the result set. */
+    public function partitionsFirst(): bool
+    {
+        return $this->partitionFirst;
     }
 }

@@ -64,10 +64,73 @@ class Engine
         $main = $results['main'];
 
         return new Result(
-            ids: array_column($main->getHits(), 'id'),
+            ids: $this->collectIds($results, $builder, $indexUid, $resolver, $limit, $page),
             total: $main->getEstimatedTotalHits() ?? 0,
             facets: Arr::undot($this->hydrateFacets($results, $builder))
         );
+    }
+
+    /**
+     * Collect the ids for the page, honouring a partition when one is set.
+     *
+     * @return list<int|string>
+     */
+    private function collectIds(array $results, Builder $builder, string $uid, Closure $resolver, int $limit, int $page): array
+    {
+        if (! isset($results['leading'])) {
+            return array_column($results['main']->getHits(), 'id');
+        }
+
+        $leading = $results['leading'];
+        $ids     = array_column($leading->getHits(), 'id');
+        $missing = $limit - count($ids);
+
+        if ($missing <= 0) {
+            return $ids;
+        }
+
+        $offset = ($page - 1) * $limit - ($leading->getTotalHits() ?? 0);
+
+        $trailing = $this->partitionRequest($builder, $uid, $resolver, ! $builder->partitionsFirst())
+            ->setLimit($missing)
+            ->setOffset(max(0, $offset));
+
+        try {
+            $response = $this->meilisearch->multiSearch([$trailing]);
+        } catch (ApiException $e) {
+            throw new BadRequestHttpException("Invalid search request: {$e->getMessage()}", $e);
+        }
+
+        return [...$ids, ...array_column((new MeilisearchResult($response['results'][0]))->getHits(), 'id')];
+    }
+
+    /**
+     * Build one side of a partitioned search — matches of the condition, or everything else.
+     */
+    private function partitionRequest(Builder $builder, string $uid, Closure $resolver, bool $matching): SearchQuery
+    {
+        $request = (new SearchQuery())->setIndexUid($uid);
+
+        if (($query = $builder->getQuery()) !== null) {
+            $request->setQuery($query);
+        }
+
+        $partition = $builder->getPartition();
+
+        $base      = $this->compiler->compile($builder->getFilter(), $resolver);
+        $condition = $partition !== null ? $this->compiler->compile($partition, $resolver) : null;
+
+        if ($condition !== null && ! $matching) {
+            $condition = "NOT ({$condition})";
+        }
+
+        $filter = implode(' AND ', array_filter([$base, $condition]));
+
+        if ($filter !== '') {
+            $request->setFilter([$filter]);
+        }
+
+        return $request;
     }
 
     /** Build Meilisearch multi-search requests. */
@@ -97,11 +160,17 @@ class Engine
         }
 
         $requests = ['main' => $mainRequest];
+
+        if ($builder->getPartition() !== null) {
+            $requests['leading'] = $this->partitionRequest($builder, $uid, $resolver, $builder->partitionsFirst())
+                ->setHitsPerPage($limit)
+                ->setPage($page);
+        }
+
         $allFacetKeys = $builder->getFacets();
 
         foreach ($allFacetKeys as $key) {
-            // Stats (numeric range) facets remain stable and exclude all facets.
-            // Distribution facets use classic disjunctive behavior.
+
             $isStats = str_contains($key, '.');
 
             if (! $isStats && ! $builder->hasFilter($key)) {

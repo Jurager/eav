@@ -16,9 +16,9 @@ use Jurager\Filterable\Contracts\SortResolver;
 class AttributeSortResolver implements SortResolver
 {
     /** Resolve sort order for EAV attributes. */
-    public function resolve(Builder $query, string $field, string $direction, Model $model): bool
+    public function resolve(object $query, string $field, string $direction, Model $model, array $context = []): bool
     {
-        if (str_contains($field, '.') || ! $model instanceof Attributable) {
+        if (! $query instanceof Builder || str_contains($field, '.') || ! $model instanceof Attributable) {
             return false;
         }
 
