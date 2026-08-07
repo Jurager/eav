@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Bus;
-use Jurager\Eav\Jobs\SyncFilterable;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Tests\Fixtures\IndexedProduct;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
@@ -28,7 +28,7 @@ class ScoutFilterableSyncTest extends FeatureTestCase
 
     private function assertDispatchedFor(string $entityType): void
     {
-        Bus::assertDispatchedSync(SyncFilterable::class, static fn (SyncFilterable $job) => $job->uniqueId() === $entityType);
+        Bus::assertDispatchedSync(SyncIndexSettings::class, static fn (SyncIndexSettings $job) => $job->uniqueId() === $entityType);
     }
 
     public function test_settings_sync_dispatches_for_entity_types_with_filterable_attributes(): void
@@ -70,7 +70,7 @@ class ScoutFilterableSyncTest extends FeatureTestCase
 
         $this->finishCommand();
 
-        Bus::assertDispatchedSyncTimes(SyncFilterable::class, 1);
+        Bus::assertDispatchedSyncTimes(SyncIndexSettings::class, 1);
     }
 
     public function test_other_commands_do_not_trigger_sync(): void
@@ -80,7 +80,7 @@ class ScoutFilterableSyncTest extends FeatureTestCase
 
         $this->finishCommand('scout:import');
 
-        Bus::assertNotDispatchedSync(SyncFilterable::class);
+        Bus::assertNotDispatchedSync(SyncIndexSettings::class);
     }
 
     public function test_failed_command_does_not_trigger_sync(): void
@@ -90,6 +90,6 @@ class ScoutFilterableSyncTest extends FeatureTestCase
 
         $this->finishCommand(exitCode: 1);
 
-        Bus::assertNotDispatchedSync(SyncFilterable::class);
+        Bus::assertNotDispatchedSync(SyncIndexSettings::class);
     }
 }

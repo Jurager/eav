@@ -10,13 +10,14 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\IndexCapability;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\MeilisearchEngine;
 use Meilisearch\Client;
 
-class SyncFilterable implements ShouldBeUnique, ShouldQueue
+class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
@@ -47,14 +48,31 @@ class SyncFilterable implements ShouldBeUnique, ShouldQueue
         }
 
         $model = new $modelClass();
-        $indexName = $model->searchableAs();
-        $paths = $this->getFilterablePaths($fieldFactory);
-        $extra = $model instanceof InteractsWithIndex ? $model->indexFilters() : [];
-        $configured = $this->getConfiguredFilterableAttributes($modelClass);
+        $fields = $model instanceof InteractsWithIndex ? $model->indexFields() : [];
 
-        $attributes = array_values(array_unique(array_merge($configured, $paths, $extra)));
+        $index = $client->index($model->searchableAs());
 
-        $client->index($indexName)->updateFilterableAttributes($attributes);
+        $index->updateFilterableAttributes(array_values(array_unique(array_merge(
+            $this->getConfiguredFilterableAttributes($modelClass),
+            $this->getFilterablePaths($fieldFactory),
+            $this->pathsFor($fields, IndexCapability::Filter),
+        ))));
+
+        $index->updateSortableAttributes($this->pathsFor($fields, IndexCapability::Sort));
+    }
+
+    /**
+     * Index paths the model allows the given capability on.
+     *
+     * @param array<string, list<IndexCapability>> $fields
+     * @return list<string>
+     */
+    protected function pathsFor(array $fields, IndexCapability $capability): array
+    {
+        return array_values(array_keys(array_filter(
+            $fields,
+            static fn (array $capabilities): bool => in_array($capability, $capabilities, true),
+        )));
     }
 
     /** Determine if the current Scout engine is Meilisearch. */

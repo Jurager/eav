@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Jurager\Filterable\Contracts\SortResolver;
+use Jurager\Filterable\FilterableServiceProvider;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 
@@ -63,6 +64,13 @@ class Builder
      * @var bool
      */
     private bool $partitionFirst = true;
+
+    /**
+     * Native engine ordering, as `field:direction` pairs.
+     *
+     * @var list<string>
+     */
+    private array $order = [];
 
     /**
      * @param iterable<FilterResolver> $resolvers
@@ -129,19 +137,17 @@ class Builder
     }
 
     /**
-     * Sort resolvers declared on the model, resolved through the container.
+     * Sort resolvers from the container tag and from the model, matching how Filterable collects them.
      *
      * @return list<SortResolver>
      */
     private function sortResolvers(): array
     {
-        if (! method_exists($this->model, 'filterableResolvers')) {
-            return [];
-        }
+        $declared = method_exists($this->model, 'filterableResolvers') ? $this->model->filterableResolvers() : [];
 
         $resolvers = [];
 
-        foreach ($this->model->filterableResolvers() as $resolver) {
+        foreach ([...app()->tagged(FilterableServiceProvider::RESOLVER_TAG), ...$declared] as $resolver) {
             $resolver = is_string($resolver) ? app($resolver) : $resolver;
 
             if ($resolver instanceof SortResolver) {
@@ -150,6 +156,16 @@ class Builder
         }
 
         return $resolvers;
+    }
+
+    /**
+     * Order the result set by an indexed field.
+     */
+    public function orderBy(string $field, string $direction = 'asc'): static
+    {
+        $this->order[] = $field . ':' . ($direction === 'desc' ? 'desc' : 'asc');
+
+        return $this;
     }
 
     /**
@@ -312,5 +328,15 @@ class Builder
     public function partitionsFirst(): bool
     {
         return $this->partitionFirst;
+    }
+
+    /**
+     * Native engine ordering, as `field:direction` pairs.
+     *
+     * @return list<string>
+     */
+    public function getOrder(): array
+    {
+        return $this->order;
     }
 }

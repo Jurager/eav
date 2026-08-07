@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Observers;
 
 use Illuminate\Database\Eloquent\Model;
-use Jurager\Eav\Jobs\SyncFilterable;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 
 /**
  * Re-syncs an entity's filterable index paths when the rows they are built from come and go.
@@ -19,7 +19,7 @@ class SyncsIndexFilters
      */
     public static function watch(string $source, string $entityType): void
     {
-        $sync = static fn () => SyncFilterable::dispatch($entityType)->afterCommit();
+        $sync = static fn () => SyncIndexSettings::dispatch($entityType)->afterCommit();
 
         $source::created($sync);
         $source::deleted($sync);

@@ -130,6 +130,10 @@ class Engine
             $request->setFilter([$filter]);
         }
 
+        if ($builder->getOrder() !== []) {
+            $request->setSort($builder->getOrder());
+        }
+
         return $request;
     }
 
@@ -157,6 +161,10 @@ class Engine
 
         if (! empty($facetFields)) {
             $mainRequest->setFacets($facetFields);
+        }
+
+        if ($builder->getOrder() !== []) {
+            $mainRequest->setSort($builder->getOrder());
         }
 
         $requests = ['main' => $mainRequest];

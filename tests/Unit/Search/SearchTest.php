@@ -84,9 +84,12 @@ class SearchTest extends TestCase
                 return ['categories.category_id' => 'category_ids'];
             }
 
-            public function indexFilters(): array
+            public function indexFields(): array
+
             {
+
                 return [];
+
             }
         });
 
@@ -110,9 +113,12 @@ class SearchTest extends TestCase
                 return ['id' => 'something_else'];
             }
 
-            public function indexFilters(): array
+            public function indexFields(): array
+
             {
+
                 return [];
+
             }
         });
 

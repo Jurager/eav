@@ -8,7 +8,7 @@ use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted as AttributeDeletedEvent;
 use Jurager\Eav\Events\AttributeUpdated;
 use Jurager\Eav\Jobs\PruneAttribute;
-use Jurager\Eav\Jobs\SyncFilterable;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\AttributeRegistry;
@@ -113,6 +113,6 @@ class AttributeObserver
     /** Dispatch the job to sync filterable index. */
     protected function syncFilterable(Attribute $attribute): void
     {
-        SyncFilterable::dispatch($attribute->entity_type)->afterCommit();
+        SyncIndexSettings::dispatch($attribute->entity_type)->afterCommit();
     }
 }

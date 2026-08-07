@@ -18,8 +18,11 @@ class IndexedProduct extends Product implements InteractsWithIndex
         return ['categories.category_id' => 'categories.id'];
     }
 
-    public function indexFilters(): array
+    public function indexFields(): array
+
     {
-        return ['prices.1'];
+
+        return [];
+
     }
 }

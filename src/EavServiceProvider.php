@@ -20,7 +20,7 @@ use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
 use Jurager\Eav\Events\EntityValuesChanged;
-use Jurager\Eav\Jobs\SyncFilterable;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Listeners\ReindexChangedEntities;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
@@ -139,7 +139,7 @@ class EavServiceProvider extends ServiceProvider
                 return;
             }
 
-            self::syncableEntityTypes()->each(static fn (string $entityType) => SyncFilterable::dispatchSync($entityType));
+            self::syncableEntityTypes()->each(static fn (string $entityType) => SyncIndexSettings::dispatchSync($entityType));
         });
     }
 
