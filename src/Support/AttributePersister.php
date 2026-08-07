@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Support\Concerns\ExecutesPersistence;
 
@@ -60,17 +61,29 @@ class AttributePersister
     /** @param  array<int>  $attributeIds */
     public function deleteExcluding(array $attributeIds): void
     {
-        $this->delete(
-            $this->entityQuery()->whereNotIn('attribute_id', $attributeIds)->pluck('id')->all(),
-        );
+        $this->dropValues($this->entityQuery()->whereNotIn('attribute_id', $attributeIds)->pluck('id')->all());
     }
 
     /** @param  array<int>  $attributeIds */
     public function detach(array $attributeIds): void
     {
-        $this->delete(
-            $this->entityQuery()->whereIn('attribute_id', $attributeIds)->pluck('id')->all(),
-        );
+        $this->dropValues($this->entityQuery()->whereIn('attribute_id', $attributeIds)->pluck('id')->all());
+    }
+
+    /**
+     * Drop the given values and reindex — losing a value changes the document just as writing one does.
+     *
+     * @param array<int> $ids
+     */
+    private function dropValues(array $ids): void
+    {
+        if ($ids === []) {
+            return;
+        }
+
+        $this->delete($ids);
+
+        EntityValuesChanged::dispatch($this->entity->getEntityType(), [$this->entity->id]);
     }
 
     private function entityQuery(): Builder

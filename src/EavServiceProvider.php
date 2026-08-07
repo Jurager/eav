@@ -19,7 +19,9 @@ use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
+use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Jobs\SyncFilterable;
+use Jurager\Eav\Listeners\ReindexChangedEntities;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Observers\AttributeEnumObserver;
@@ -129,6 +131,8 @@ class EavServiceProvider extends ServiceProvider
     /** Register Scout hook for automatic filterable sync. */
     private function registerScoutHook(): void
     {
+        $this->app->make(Dispatcher::class)->listen(EntityValuesChanged::class, ReindexChangedEntities::class);
+
         $this->app->make(Dispatcher::class)->listen(CommandFinished::class, static function (CommandFinished $event) {
 
             if ($event->command !== 'scout:sync-index-settings' || $event->exitCode !== 0) {

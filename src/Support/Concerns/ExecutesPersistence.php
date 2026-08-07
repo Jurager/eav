@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Events\EntityValuesChanged;
 
 trait ExecutesPersistence
 {
@@ -79,7 +80,10 @@ trait ExecutesPersistence
         $this->delete($deletes);
         $this->applyUpdates($updates);
         $this->applyInserts($inserts, $type);
+
+        EntityValuesChanged::dispatch($type, array_keys($grouped));
     }
+
 
     /** @param  array<int, array{row: array, translations: array|null}>  $updates */
     private function applyUpdates(array $updates): void

@@ -28,6 +28,28 @@ trait HasSearchableAttributes
     }
 
     /**
+     * Columns whose change alters the index document.
+     *
+     * @return list<string>
+     */
+    protected function searchableColumns(): array
+    {
+        return [];
+    }
+
+    /** Skip reindexing a save that cannot have changed the document. */
+    public function searchIndexShouldBeUpdated(): bool
+    {
+        if ($this->wasRecentlyCreated) {
+            return true;
+        }
+
+        $columns = $this->searchableColumns();
+
+        return $columns !== [] && $this->wasChanged($columns);
+    }
+
+    /**
      * Relations this entity needs beyond its attribute values, on top of what EAV loads itself.
      *
      * @return list<string>
