@@ -44,6 +44,7 @@ class AttributeManager
         protected ?Attributable $entity = null,
         private readonly ?FieldFactory $fieldFactory = null,
         private readonly ?EnumRegistry $enumRegistry = null,
+        private readonly ?SchemaRegistry $schemaRegistry = null,
     ) {
     }
 
@@ -137,11 +138,30 @@ class AttributeManager
             return;
         }
 
-        $attributes = $this->query($this->entity?->attributeScopeIds() ?? [])?->whereIn('code', $codes)->get() ?? collect();
+        $attributes = $this->attributesFor($codes);
 
         if ($attributes->isNotEmpty()) {
             $this->hydrate($attributes);
         }
+    }
+
+    /**
+     * Attributes for the given codes, resolved once per entity type and scope.
+     *
+     * Entities of a type share their schema, so reading one attribute off a thousand of them would
+     * otherwise be a thousand identical queries.
+     *
+     * @param list<string> $codes
+     */
+    private function attributesFor(array $codes): Collection
+    {
+        $scope = $this->entity?->attributeScopeIds() ?? [];
+        $key   = $this->resolveEntity()->getEntityType() . ':schema:' . implode(',', $scope);
+
+        return $this->schemaRegistry
+            ->resolve($key, fn (): Collection => $this->query($scope)?->get() ?? collect())
+            ->whereIn('code', $codes)
+            ->values();
     }
 
     /** Return all loaded Field objects. */
@@ -322,19 +342,39 @@ class AttributeManager
 
     protected function hydrate(Collection $attributes): void
     {
-        $records = $this->entity
-            ? $this->entityQuery()
-                ->whereIn('attribute_id', $attributes->pluck('id')->all())
-                ->with('translations')
-                ->get()
-                ->groupBy('attribute_id')
-            : collect();
+        $records = $this->storedValues($attributes->pluck('id')->all())->groupBy('attribute_id');
 
         foreach ($attributes as $attribute) {
             $field = $this->makeField($attribute);
             $field->hydrate($records->get($attribute->id, collect()));
             $this->fields[$attribute->code] = $field;
         }
+    }
+
+    /**
+     * Stored values for the given attributes.
+     *
+     * Reuses `attribute_values` when it is already loaded, so a batch that eager loaded them reads one
+     * attribute off many entities without a query per entity.
+     *
+     * @param list<int> $attributeIds
+     */
+    private function storedValues(array $attributeIds): Collection
+    {
+        if (! $this->entity) {
+            return collect();
+        }
+
+        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
+            return $this->entity->attribute_values
+                ->whereIn('attribute_id', $attributeIds)
+                ->values();
+        }
+
+        return $this->entityQuery()
+            ->whereIn('attribute_id', $attributeIds)
+            ->with('translations')
+            ->get();
     }
 
     protected function entityQuery(): Builder
@@ -365,10 +405,7 @@ class AttributeManager
             return [];
         }
 
-        $attributes = $this->entityQuery()
-            ->whereHas('attribute', fn ($q) => $q->where('searchable', true)->orWhere('filterable', true))
-            ->with(['attribute', 'attribute.enums.translations', 'translations'])
-            ->get()
+        $attributes = $this->indexableValues()
             ->groupBy('attribute_id')
             ->reduce(function (array $carry, Collection $group) {
                 $field = $this->makeField($group->first()->attribute);
@@ -378,5 +415,26 @@ class AttributeManager
             }, []);
 
         return $attributes ? ['attributes' => $attributes] : [];
+    }
+
+    /**
+     * Attribute values that belong in the search index.
+     *
+     * @return Collection<int, Model>
+     */
+    private function indexableValues(): Collection
+    {
+        $indexable = static fn (?Attribute $attribute): bool => (bool) ($attribute?->searchable || $attribute?->filterable);
+
+        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
+            return $this->entity->attribute_values
+                ->filter(fn (Model $value): bool => $indexable($value->attribute))
+                ->values();
+        }
+
+        return $this->entityQuery()
+            ->whereHas('attribute', fn ($q) => $q->where('searchable', true)->orWhere('filterable', true))
+            ->with(['attribute', 'attribute.enums.translations', 'translations'])
+            ->get();
     }
 }
