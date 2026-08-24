@@ -12,9 +12,9 @@ use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Managers\AttributeManager;
-use Jurager\Eav\Models\Attribute;
 
 /**
  * Validates incoming attribute payloads against field rules and uniqueness.
@@ -90,9 +90,8 @@ class AttributeValidator
 
         $this->manager->ensureFields($codes);
 
-        $isVariant = $this->entity->isVariant();
-        $message   = __($isVariant ? 'eav::attributes.validation.held_by_parent' : 'eav::attributes.validation.held_by_child');
-        $holds     = static fn (Attribute $attribute): bool => $isVariant ? $attribute->isHeldByChild() : $attribute->isHeldByParent();
+        $side    = HeldBy::of($this->entity->isVariant());
+        $message = __("eav::attributes.validation.held_by_{$side->opposite()->value}");
 
         $errors = [];
 
@@ -103,7 +102,7 @@ class AttributeValidator
                 continue;
             }
 
-            if (! $holds($field->attribute())) {
+            if (! $field->attribute()->isHeldBy($side)) {
                 $errors[$field->attribute()->code] = [$message];
 
                 continue;

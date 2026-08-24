@@ -14,6 +14,7 @@ use Illuminate\Support\Str;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Relations\ClosureRelation;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
@@ -151,9 +152,7 @@ trait HasInheritedAttributes
      */
     public function getEditableAttributesQuery(array $params = []): ?Builder
     {
-        $query = $this->getAvailableAttributesQuery($params);
-
-        return $this->isVariant() ? $query?->whereHeldByChild() : $query?->whereHeldByParent();
+        return $this->getAvailableAttributesQuery($params)?->whereHeldBy(HeldBy::of($this->isVariant()));
     }
 
     /** Expose available attributes as closure relation. */

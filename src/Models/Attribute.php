@@ -11,6 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 
@@ -27,8 +28,7 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property bool $unique
  * @property bool $filterable
  * @property bool $searchable
- * @property bool $child_only
- * @property bool $overridable
+ * @property HeldBy $held_by
  * @property bool $inherit_from_parent
  * @property array|null $validations
  * @property array|null $meta
@@ -51,8 +51,7 @@ class Attribute extends Model
         'unique',
         'filterable',
         'searchable',
-        'child_only',
-        'overridable',
+        'held_by',
         'inherit_from_parent',
         'validations',
         'meta',
@@ -103,8 +102,7 @@ class Attribute extends Model
             'filterable'  => 'boolean',
             'searchable'  => 'boolean',
 
-            'child_only'          => 'boolean',
-            'overridable'         => 'boolean',
+            'held_by'             => HeldBy::class,
             'inherit_from_parent' => 'boolean',
         ];
     }
@@ -152,16 +150,10 @@ class Attribute extends Model
         return $query->where('filterable', true);
     }
 
-    /** Scope a query to the attributes a parent entity fills in itself. */
-    public function scopeWhereHeldByParent(Builder $query): Builder
+    /** Scope a query to the attributes the given side fills in. */
+    public function scopeWhereHeldBy(Builder $query, HeldBy $side): Builder
     {
-        return $query->where('child_only', false);
-    }
-
-    /** Scope a query to the attributes a variant fills in itself. */
-    public function scopeWhereHeldByChild(Builder $query): Builder
-    {
-        return $query->where(static fn (Builder $q) => $q->where('child_only', true)->orWhere('overridable', true));
+        return $query->whereIn('held_by', [$side, HeldBy::Both]);
     }
 
     /** Scope a query to the attributes a variant takes from its parent when it has no value of its own. */
@@ -170,16 +162,10 @@ class Attribute extends Model
         return $query->where('inherit_from_parent', true);
     }
 
-    /** Determine if the parent entity fills this attribute in itself. */
-    public function isHeldByParent(): bool
+    /** Determine if the given side fills this attribute in. */
+    public function isHeldBy(HeldBy $side): bool
     {
-        return ! $this->child_only;
-    }
-
-    /** Determine if a variant fills this attribute in itself. */
-    public function isHeldByChild(): bool
-    {
-        return $this->child_only || $this->overridable;
+        return $this->held_by === $side || $this->held_by === HeldBy::Both;
     }
 
     /** Scope a query to eager load common attribute relationships. */

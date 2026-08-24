@@ -9,6 +9,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Scout\Jobs\MakeSearchable;
 use Illuminate\Validation\ValidationException;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
@@ -49,7 +50,7 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_own_value_wins_over_the_inherited_one(): void
     {
-        $this->createAttribute($this->type, ['code' => 'title', 'inherit_from_parent' => true, 'overridable' => true]);
+        $this->createAttribute($this->type, ['code' => 'title', 'inherit_from_parent' => true, 'held_by' => HeldBy::Both]);
 
         $parent = $this->createProduct();
         $parent->eav()->set('title', 'Parent title')->save('title');
@@ -62,7 +63,7 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_value_is_not_inherited_when_the_attribute_forbids_it(): void
     {
-        $this->createAttribute($this->type, ['code' => 'sku', 'inherit_from_parent' => false, 'overridable' => true]);
+        $this->createAttribute($this->type, ['code' => 'sku', 'inherit_from_parent' => false, 'held_by' => HeldBy::Both]);
 
         $parent = $this->createProduct();
         $parent->eav()->set('sku', 'parent-sku')->save('sku');
@@ -85,7 +86,7 @@ class ParentInheritanceTest extends FeatureTestCase
     public function test_values_contain_inherited_rows_alongside_own_ones(): void
     {
         $this->createAttribute($this->type, ['code' => 'title', 'inherit_from_parent' => true]);
-        $this->createAttribute($this->type, ['code' => 'sku', 'inherit_from_parent' => false, 'overridable' => true]);
+        $this->createAttribute($this->type, ['code' => 'sku', 'inherit_from_parent' => false, 'held_by' => HeldBy::Both]);
 
         $parent = $this->createProduct();
         $parent->eav()->set('title', 'Parent title')->save('title');
@@ -135,8 +136,8 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_schema_carries_every_attribute_in_scope_on_both_sides(): void
     {
-        $this->createAttribute($this->type, ['code' => 'color', 'child_only' => true]);
-        $this->createAttribute($this->type, ['code' => 'title', 'overridable' => true]);
+        $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
+        $this->createAttribute($this->type, ['code' => 'title', 'held_by' => HeldBy::Both]);
         $this->createAttribute($this->type, ['code' => 'display', 'inherit_from_parent' => true]);
 
         $parent = $this->createProduct();
@@ -149,8 +150,8 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_variant_fills_in_its_own_and_overridable_attributes_only(): void
     {
-        $this->createAttribute($this->type, ['code' => 'color', 'child_only' => true]);
-        $this->createAttribute($this->type, ['code' => 'title', 'overridable' => true]);
+        $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
+        $this->createAttribute($this->type, ['code' => 'title', 'held_by' => HeldBy::Both]);
         $this->createAttribute($this->type, ['code' => 'display', 'inherit_from_parent' => true]);
 
         $parent = $this->createProduct();
@@ -163,8 +164,8 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_root_entity_fills_in_everything_but_child_only_attributes(): void
     {
-        $this->createAttribute($this->type, ['code' => 'color', 'child_only' => true]);
-        $this->createAttribute($this->type, ['code' => 'title', 'overridable' => true]);
+        $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
+        $this->createAttribute($this->type, ['code' => 'title', 'held_by' => HeldBy::Both]);
         $this->createAttribute($this->type, ['code' => 'display', 'inherit_from_parent' => true]);
 
         $this->assertEqualsCanonicalizing(
@@ -179,7 +180,7 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_child_only_attribute_is_rejected_on_the_parent(): void
     {
-        $this->createAttribute($this->type, ['code' => 'color', 'child_only' => true]);
+        $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
 
         $this->expectException(ValidationException::class);
 
@@ -188,7 +189,7 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_attribute_the_variant_may_not_override_is_rejected(): void
     {
-        $this->createAttribute($this->type, ['code' => 'display', 'overridable' => false]);
+        $this->createAttribute($this->type, ['code' => 'display', 'held_by' => HeldBy::Parent]);
 
         $parent = $this->createProduct();
 
@@ -199,8 +200,8 @@ class ParentInheritanceTest extends FeatureTestCase
 
     public function test_replacing_variant_values_leaves_the_parent_untouched(): void
     {
-        $this->createAttribute($this->type, ['code' => 'title', 'overridable' => true, 'inherit_from_parent' => true]);
-        $this->createAttribute($this->type, ['code' => 'sku', 'child_only' => true]);
+        $this->createAttribute($this->type, ['code' => 'title', 'held_by' => HeldBy::Both, 'inherit_from_parent' => true]);
+        $this->createAttribute($this->type, ['code' => 'sku', 'held_by' => HeldBy::Variant]);
 
         $parent = $this->createProduct();
         $parent->eav()->set('title', 'Parent title')->save('title');
