@@ -391,11 +391,13 @@ class AttributeManager
             return $own;
         }
 
-        $parent->loadMissing('attribute_values.attribute');
+        if (! $parent->relationLoaded('attribute_values')) {
+            return null;
+        }
 
         $overridden = $own->pluck('attribute_id')->all();
 
-        return $own->concat($parent->attribute_values->filter(
+        return $own->concat($parent->attribute_values->loadMissing('attribute')->filter(
             static fn (Model $value): bool => (bool) $value->attribute?->inherit_from_parent
                 && ! in_array($value->attribute_id, $overridden, true)
         ));
