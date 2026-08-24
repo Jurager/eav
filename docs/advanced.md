@@ -121,19 +121,20 @@ An entity is a variant while that relation resolves to an entity; everything wit
 
 ### Which Side Holds an Attribute
 
-Three [flags](field-types.md#attribute-flags) split the schema between the two sides:
+The `held_by` column says which side fills an attribute in, and `inherit_from_parent` whether a variant falls back to the parent's value — see [attribute flags](field-types.md#attribute-flags):
 
-| Flag                  | Parent      | Variant                                   |
+| Value                 | Parent      | Variant                                   |
 |-----------------------|-------------|-------------------------------------------|
-| `child_only`          | never       | fills it in                               |
-| `overridable`         | fills it in | may override the parent's value           |
+| `held_by: parent`     | fills it in | never                                     |
+| `held_by: variant`    | never       | fills it in                               |
+| `held_by: both`       | fills it in | may override the parent's value           |
 | `inherit_from_parent` | fills it in | reads the parent's value when it has none |
 
 Reading is transparent — `value()`, `values()` and the search document return the effective value,
 whichever side stores it:
 
 ```php
-$offer->eav()->value('color');   // its own — child_only
+$offer->eav()->value('color');   // its own — held_by: variant
 $offer->eav()->value('name');    // the model's — inherit_from_parent
 ```
 

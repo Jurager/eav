@@ -31,8 +31,7 @@ Flags are set per attribute definition and control how values are stored and val
 | `unique`              | Value must be unique across all entity instances                                                                                     |
 | `filterable`          | Value is included in the Scout index and registered as a Meilisearch `filterableAttribute`; also available for Eloquent query scopes |
 | `searchable`          | Value is included in the Scout search index and available for full-text search                                                       |
-| `child_only`          | Attribute belongs to variants alone — the parent entity never holds it                                                               |
-| `overridable`         | A variant may store its own value instead of the parent's                                                                            |
+| `held_by`             | Which side of a parent/variant pair fills the attribute in: `parent`, `variant` or `both`                                            |
 | `inherit_from_parent` | A variant with no value of its own reads the parent's                                                                                |
 
 The last three describe how an attribute behaves across a [variant and its parent](advanced.md#variants).

@@ -148,7 +148,7 @@ class ParentInheritanceTest extends FeatureTestCase
         );
     }
 
-    public function test_variant_fills_in_its_own_and_overridable_attributes_only(): void
+    public function test_variant_fills_in_the_attributes_held_by_its_side(): void
     {
         $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
         $this->createAttribute($this->type, ['code' => 'title', 'held_by' => HeldBy::Both]);
@@ -162,7 +162,7 @@ class ParentInheritanceTest extends FeatureTestCase
         );
     }
 
-    public function test_root_entity_fills_in_everything_but_child_only_attributes(): void
+    public function test_parent_fills_in_everything_but_the_variant_only_attributes(): void
     {
         $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
         $this->createAttribute($this->type, ['code' => 'title', 'held_by' => HeldBy::Both]);
@@ -178,7 +178,7 @@ class ParentInheritanceTest extends FeatureTestCase
     // Writing values
     // -----------------------------------------------------------------------
 
-    public function test_child_only_attribute_is_rejected_on_the_parent(): void
+    public function test_variant_only_attribute_is_rejected_on_the_parent(): void
     {
         $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
 
