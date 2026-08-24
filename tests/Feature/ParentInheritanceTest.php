@@ -213,6 +213,23 @@ class ParentInheritanceTest extends FeatureTestCase
         $this->assertSame('Parent title', $variant->fresh()->eav()->value('title'));
     }
 
+    public function test_required_inherited_attribute_does_not_need_to_be_resubmitted(): void
+    {
+        $this->createAttribute($this->type, ['code' => 'title', 'required' => true, 'inherit_from_parent' => true]);
+
+        $parent = $this->createProduct();
+        $parent->eav()->set('title', 'Parent title')->save('title');
+
+        $variant = $this->createVariant($parent);
+
+        // The variant never sets its own "title" — it must be validated as filled
+        // via the inherited parent value, not rejected as missing.
+        $fields = $variant->validate([]);
+
+        $this->assertTrue($fields['title']->isFilled());
+        $this->assertSame('Parent title', $fields['title']->value());
+    }
+
     public function test_unknown_codes_stay_silent(): void
     {
         $parent = $this->createProduct();

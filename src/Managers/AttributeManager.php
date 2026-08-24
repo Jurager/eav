@@ -113,16 +113,19 @@ class AttributeManager
         }
     }
 
-    /** Ensure the schema is loaded. */
+    /** Ensure the schema is loaded, hydrated with the entity's stored (and inherited) values. */
     public function ensureSchema(): static
     {
         if ($this->schemaLoaded) {
             return $this;
         }
 
-        ($this->query($this->entity?->attributeScopeIds() ?? [])?->get() ?? collect())
-            ->reject(fn ($attr) => isset($this->fields[$attr->code]))
-            ->each(fn ($attr) => $this->fields[$attr->code] = $this->makeField($attr));
+        $attributes = ($this->query($this->entity?->attributeScopeIds() ?? [])?->get() ?? collect())
+            ->reject(fn ($attr) => isset($this->fields[$attr->code]));
+
+        if ($attributes->isNotEmpty()) {
+            $this->hydrate($attributes);
+        }
 
         $this->schemaLoaded = true;
 

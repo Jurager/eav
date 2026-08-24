@@ -325,6 +325,19 @@ class AttributeManagerTest extends FeatureTestCase
         $this->assertArrayHasKey('price', $fields);
     }
 
+    public function test_fields_are_hydrated_with_stored_values_after_ensure(): void
+    {
+        $this->createAttribute($this->textType, ['code' => 'title']);
+
+        $product = $this->createProduct();
+        AttributeManager::for($product)->set('title', 'Stored Value')->save('title');
+
+        $fields = AttributeManager::for($product)->ensureSchema()->fields();
+
+        $this->assertTrue($fields['title']->isFilled());
+        $this->assertSame('Stored Value', $fields['title']->value());
+    }
+
     // -----------------------------------------------------------------------
     // hydrate — loads DB values into fields
     // -----------------------------------------------------------------------
