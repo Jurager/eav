@@ -92,6 +92,59 @@ The parent-ID strategy walks up to `eav.max_inheritance_depth` levels (default `
 'max_inheritance_depth' => 20,
 ```
 
+## Variants
+
+Entities of the same type may form pairs: a product model and its trade offers, a garment and its sizes.
+
+The variant stores only what makes it different and reads the rest off its parent.
+
+Point the model at the relation holding the parent and the package takes it from there:
+
+```php
+class Product extends Model implements Attributable
+{
+    use HasAttributes;
+
+    protected function attributeParentRelationName(): ?string
+    {
+        return 'parent';
+    }
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(static::class, 'parent_id');
+    }
+}
+```
+
+An entity is a variant while that relation resolves to an entity; everything with an empty foreign key stays a plain entity and behaves exactly as before.
+
+### Which Side Holds an Attribute
+
+Three [flags](field-types.md#attribute-flags) split the schema between the two sides:
+
+| Flag                  | Parent      | Variant                                   |
+|-----------------------|-------------|-------------------------------------------|
+| `child_only`          | never       | fills it in                               |
+| `overridable`         | fills it in | may override the parent's value           |
+| `inherit_from_parent` | fills it in | reads the parent's value when it has none |
+
+Reading is transparent — `value()`, `values()` and the search document return the effective value,
+whichever side stores it:
+
+```php
+$offer->eav()->value('color');   // its own — child_only
+$offer->eav()->value('name');    // the model's — inherit_from_parent
+```
+
+Writing is not: `validate()` rejects an attribute held by the other side, so a value never lands where nothing will read it.
+
+### Scope and Indexing
+
+A variant usually carries no scope of its own — an offer belongs to the categories of its model — so `attributeScopeIds()` falls back to the parent's scope, and both sides resolve the same schema.
+
+Search documents follow suit: a variant is indexed with its inherited values, the relations they come from are eager-loaded for the whole batch, and writing values on a parent re-queues the documents of its variants.
+
 ## Scoping Attributes via a Related Model
 
 By default, every entity shares one global attribute schema per entity type. To give each product its own schema based on its categories instead, override `attributeScopeModel()`:
@@ -241,17 +294,17 @@ php artisan queue:work
 
 Observers dispatch a domain event after every successful mutation. All events live in the `Jurager\Eav\Events\` namespace:
 
-| Event | Property | When |
-|---|---|---|
-| `AttributeCreated` | `Attribute $attribute` | Attribute created |
-| `AttributeUpdated` | `Attribute $attribute` | Attribute updated |
-| `AttributeDeleted` | `Attribute $attribute` | Attribute soft-deleted or force-deleted |
-| `AttributeGroupCreated` | `AttributeGroup $group` | Group created |
-| `AttributeGroupUpdated` | `AttributeGroup $group` | Group updated |
-| `AttributeGroupDeleted` | `AttributeGroup $group` | Group deleted |
-| `AttributeEnumCreated` | `AttributeEnum $enum` | Enum value created |
-| `AttributeEnumUpdated` | `AttributeEnum $enum` | Enum value updated |
-| `AttributeEnumDeleted` | `AttributeEnum $enum` | Enum value deleted |
+| Event                   | Property                | When                                    |
+|-------------------------|-------------------------|-----------------------------------------|
+| `AttributeCreated`      | `Attribute $attribute`  | Attribute created                       |
+| `AttributeUpdated`      | `Attribute $attribute`  | Attribute updated                       |
+| `AttributeDeleted`      | `Attribute $attribute`  | Attribute soft-deleted or force-deleted |
+| `AttributeGroupCreated` | `AttributeGroup $group` | Group created                           |
+| `AttributeGroupUpdated` | `AttributeGroup $group` | Group updated                           |
+| `AttributeGroupDeleted` | `AttributeGroup $group` | Group deleted                           |
+| `AttributeEnumCreated`  | `AttributeEnum $enum`   | Enum value created                      |
+| `AttributeEnumUpdated`  | `AttributeEnum $enum`   | Enum value updated                      |
+| `AttributeEnumDeleted`  | `AttributeEnum $enum`   | Enum value deleted                      |
 
 Laravel auto-discovers listeners by type-hint on `handle()`, so no manual registration is needed:
 

@@ -44,6 +44,44 @@ class Indexer
         $this->model::query()->whereKey(array_unique($entityIds))->searchable();
     }
 
+    /**
+     * Queue reindexing of the given entities together with the variants reading their values.
+     *
+     * A variant's document is built from its parent's values as well, so a change on the parent moves its variants' documents too.
+     *
+     * @param array<int, int|string> $entityIds
+     */
+    public function withVariants(array $entityIds): void
+    {
+        $this->ids([...$entityIds, ...$this->variantIds($entityIds)]);
+    }
+
+    /**
+     * Ids of the entities reading their values off the given ones.
+     *
+     * @param array<int, int|string> $entityIds
+     * @return array<int, int|string>
+     */
+    private function variantIds(array $entityIds): array
+    {
+        if ($entityIds === [] || ! $this->indexable()) {
+            return [];
+        }
+
+        $model = new $this->model();
+
+        $relation = method_exists($model, 'attributeParentRelation') ? $model->attributeParentRelation() : null;
+
+        if ($relation === null) {
+            return [];
+        }
+
+        return $this->model::query()
+            ->whereIn($relation->getForeignKeyName(), array_unique($entityIds))
+            ->pluck($model->getKeyName())
+            ->all();
+    }
+
     /** Queue reindexing of everything touched since a point in time, in ranges of ids. */
     public function since(DateTimeInterface $since, int $chunk = 500): void
     {

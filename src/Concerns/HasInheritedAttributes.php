@@ -7,9 +7,11 @@ namespace Jurager\Eav\Concerns;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
+use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Relations\ClosureRelation;
@@ -40,18 +42,78 @@ trait HasInheritedAttributes
         return $model !== null ? Str::camel(Str::plural(class_basename($model))) : null;
     }
 
-    /** Get the IDs of the related scope entities used to resolve inherited attributes. */
-    public function attributeScopeIds(): array
+    /**
+     * Name of the relation holding the parent entity this one is a variant of.
+     *
+     * Declaring it turns the entity into a child: it resolves its attribute scope through the
+     * parent, inherits the parent's values and keeps only the attributes it may hold itself.
+     */
+    protected function attributeParentRelationName(): ?string
     {
-        $relation = $this->attributeScopeRelationName();
+        return null;
+    }
 
-        if ($relation === null) {
-            return [];
+    /** Get the parent entity this one inherits its scope and values from. */
+    public function attributeParent(): ?Attributable
+    {
+        $relation = $this->attributeParentRelationName();
+
+        // A root entity has no parent — reading the relation for an empty key buys nothing.
+        $foreignKey = $this->attributeParentRelation()?->getForeignKeyName();
+
+        if ($relation === null || ($foreignKey !== null && $this->getAttribute($foreignKey) === null)) {
+            return null;
         }
 
         $this->loadMissing($relation);
 
-        return $this->{$relation}->pluck('id')->toArray();
+        return $this->{$relation} instanceof Attributable ? $this->{$relation} : null;
+    }
+
+    /** Determine if the entity is a variant of a parent entity. */
+    public function isVariant(): bool
+    {
+        return $this->attributeParent() !== null;
+    }
+
+    /** Get the relation pointing at the parent entity, when the model declares one. */
+    public function attributeParentRelation(): ?BelongsTo
+    {
+        $relation = $this->attributeParentRelationName();
+        $instance = $relation !== null && method_exists($this, $relation) ? $this->{$relation}() : null;
+
+        return $instance instanceof BelongsTo ? $instance : null;
+    }
+
+    /**
+     * Get the related entities whose attributes make up this entity's scope.
+     *
+     * A variant carries no scope of its own — a product offer belongs to the categories of its
+     * model — so an empty scope falls back to the parent's.
+     *
+     * @return Collection<int, mixed>
+     */
+    public function attributeScopeEntities(): Collection
+    {
+        $relation = $this->attributeScopeRelationName();
+
+        if ($relation === null) {
+            return collect();
+        }
+
+        $this->loadMissing($relation);
+
+        $entities = Collection::wrap($this->{$relation});
+
+        return $entities->isNotEmpty()
+            ? $entities
+            : ($this->attributeParent()?->attributeScopeEntities() ?? collect());
+    }
+
+    /** Get the IDs of the related scope entities used to resolve inherited attributes. */
+    public function attributeScopeIds(): array
+    {
+        return $this->attributeScopeEntities()->pluck('id')->all();
     }
 
     /**
@@ -77,6 +139,21 @@ trait HasInheritedAttributes
         }
 
         return $this->globalAttributesQuery();
+    }
+
+    /**
+     * Get the query for the attributes the entity fills in itself.
+     *
+     * The schema carries every attribute in scope, including the ones a variant only reads off its
+     * parent; this narrows it down to the side that holds the value.
+     *
+     * @param array<int> $params
+     */
+    public function getEditableAttributesQuery(array $params = []): ?Builder
+    {
+        $query = $this->getAvailableAttributesQuery($params);
+
+        return $this->isVariant() ? $query?->whereHeldByChild() : $query?->whereHeldByParent();
     }
 
     /** Expose available attributes as closure relation. */

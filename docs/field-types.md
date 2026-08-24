@@ -7,30 +7,35 @@ weight: 40
 
 Every attribute has a field type that determines which typed column its values are stored in and how those values are validated. The package ships the following types out of the box:
 
-| Code | Storage column | Notes |
-|---|---|---|
-| `text` | `value_text` | Short string (max 255 characters) |
-| `textarea` | `value_text` | Long text |
-| `number` | `value_float` | Integer or float |
-| `boolean` | `value_boolean` | `true` / `false` |
-| `date` | `value_date` | ISO date |
-| `select` | `value_integer` | Stores the enum option ID from `attribute_enums` |
-| `image` | `value_text` | File path or URL |
-| `file` | `value_text` | File path or URL |
-| `link` | `value_text` | Absolute HTTP/HTTPS URL |
+| Code       | Storage column  | Notes                                            |
+|------------|-----------------|--------------------------------------------------|
+| `text`     | `value_text`    | Short string (max 255 characters)                |
+| `textarea` | `value_text`    | Long text                                        |
+| `number`   | `value_float`   | Integer or float                                 |
+| `boolean`  | `value_boolean` | `true` / `false`                                 |
+| `date`     | `value_date`    | ISO date                                         |
+| `select`   | `value_integer` | Stores the enum option ID from `attribute_enums` |
+| `image`    | `value_text`    | File path or URL                                 |
+| `file`     | `value_text`    | File path or URL                                 |
+| `link`     | `value_text`    | Absolute HTTP/HTTPS URL                          |
 
 ## Attribute Flags
 
 Flags are set per attribute definition and control how values are stored and validated:
 
-| Flag | Behaviour |
-|---|---|
-| `localizable` | Value is stored per locale |
-| `multiple` | Allows storing multiple values for the same attribute |
-| `required` | Value is required on fill |
-| `unique` | Value must be unique across all entity instances |
-| `filterable` | Value is included in the Scout index and registered as a Meilisearch `filterableAttribute`; also available for Eloquent query scopes |
-| `searchable` | Value is included in the Scout search index and available for full-text search |
+| Flag                  | Behaviour                                                                                                                            |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| `localizable`         | Value is stored per locale                                                                                                           |
+| `multiple`            | Allows storing multiple values for the same attribute                                                                                |
+| `required`            | Value is required on fill                                                                                                            |
+| `unique`              | Value must be unique across all entity instances                                                                                     |
+| `filterable`          | Value is included in the Scout index and registered as a Meilisearch `filterableAttribute`; also available for Eloquent query scopes |
+| `searchable`          | Value is included in the Scout search index and available for full-text search                                                       |
+| `child_only`          | Attribute belongs to variants alone — the parent entity never holds it                                                               |
+| `overridable`         | A variant may store its own value instead of the parent's                                                                            |
+| `inherit_from_parent` | A variant with no value of its own reads the parent's                                                                                |
+
+The last three describe how an attribute behaves across a [variant and its parent](advanced.md#variants).
 
 Each field type declares which flags it supports. Flags that the type doesn't support are silently forced to `false` — for example, a `boolean` attribute is never `localizable` no matter what you ask for at the API layer.
 
@@ -48,18 +53,18 @@ Beyond the type-level constraints, you may attach extra validation rules to an a
 
 These map to Laravel's standard validation rules at runtime:
 
-| Rule | Laravel equivalent |
-|---|---|
-| `min_length` | `min:N` |
-| `max_length` | `max:N` |
-| `min` | `min:N` |
-| `max` | `max:N` |
-| `regex` | `regex:pattern` |
-| `email` | `email` |
-| `url` | `url` |
+| Rule          | Laravel equivalent   |
+|---------------|----------------------|
+| `min_length`  | `min:N`              |
+| `max_length`  | `max:N`              |
+| `min`         | `min:N`              |
+| `max`         | `max:N`              |
+| `regex`       | `regex:pattern`      |
+| `email`       | `email`              |
+| `url`         | `url`                |
 | `date_format` | `date_format:format` |
-| `after` | `after:date` |
-| `before` | `before:date` |
+| `after`       | `after:date`         |
+| `before`      | `before:date`        |
 
 ## Working With Select Fields
 

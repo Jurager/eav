@@ -12,6 +12,6 @@ class ReindexChangedEntities
 {
     public function handle(EntityValuesChanged $event): void
     {
-        Indexer::refresh($event->entityType)->ids($event->entityIds);
+        Indexer::refresh($event->entityType)->withVariants($event->entityIds);
     }
 }

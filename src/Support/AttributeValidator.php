@@ -14,6 +14,7 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Managers\AttributeManager;
+use Jurager\Eav\Models\Attribute;
 
 /**
  * Validates incoming attribute payloads against field rules and uniqueness.
@@ -66,42 +67,63 @@ class AttributeValidator
      */
     public function validate(array $input): array
     {
-        $this->fillFields($input);
-        $this->validateFields();
+        $this->validateFields($this->fillFields($input));
 
         return $this->manager->fields();
     }
 
     /**
-     * Fill fields with input data.
+     * Fill fields with input data, refusing the attributes the entity does not hold.
+     *
+     * @return array<string, list<string>> Errors keyed by attribute code
      *
      * @throws JsonException
      * @throws BindingResolutionException
      */
-    private function fillFields(array $input): void
+    private function fillFields(array $input): array
     {
         $codes = array_values(array_filter(array_column($input, 'code')));
 
         if (empty($codes)) {
-            return;
+            return [];
         }
 
         $this->manager->ensureFields($codes);
 
+        $isVariant = $this->entity->isVariant();
+        $message   = __($isVariant ? 'eav::attributes.validation.held_by_parent' : 'eav::attributes.validation.held_by_child');
+        $holds     = static fn (Attribute $attribute): bool => $isVariant ? $attribute->isHeldByChild() : $attribute->isHeldByParent();
+
+        $errors = [];
+
         foreach ($input as $item) {
-            $this->manager->field($item['code'] ?? '')?->fill($item['values'] ?? null);
+            $field = $this->manager->field($item['code'] ?? '');
+
+            if ($field === null) {
+                continue;
+            }
+
+            if (! $holds($field->attribute())) {
+                $errors[$field->attribute()->code] = [$message];
+
+                continue;
+            }
+
+            $field->fill($item['values'] ?? null);
         }
+
+        return $errors;
     }
 
     /**
      * Validate all fields and throw exception if errors found.
      *
+     * @param array<string, list<string>> $errors
+     *
      * @throws ValidationException
      */
-    private function validateFields(): void
+    private function validateFields(array $errors = []): void
     {
-        $errors = [];
-
         foreach ($this->manager->fields() as $field) {
             $attributeCode = $field->attribute()->code;
 

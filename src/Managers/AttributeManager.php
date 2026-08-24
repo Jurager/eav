@@ -256,9 +256,7 @@ class AttributeManager
             $m->value = $this->makeField($m->attribute)->read($m);
         });
 
-        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
-            $collection = $this->entity->attribute_values;
-
+        if (($collection = $this->loadedValues()) !== null) {
             if ($codes !== null) {
                 $collection = $collection->filter(
                     fn ($ea) => $ea->relationLoaded('attribute') && in_array($ea->attribute->code ?? null, $codes, true)
@@ -365,10 +363,8 @@ class AttributeManager
             return collect();
         }
 
-        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
-            return $this->entity->attribute_values
-                ->whereIn('attribute_id', $attributeIds)
-                ->values();
+        if (($loaded = $this->loadedValues()) !== null) {
+            return $loaded->whereIn('attribute_id', $attributeIds)->values();
         }
 
         return $this->entityQuery()
@@ -377,11 +373,37 @@ class AttributeManager
             ->get();
     }
 
+    /**
+     * Rows the entity already carries in memory, extended with the parent rows a variant inherits.
+     *
+     * @return Collection<int, Model>|null Null when nothing is loaded and the database has to be read
+     */
+    private function loadedValues(): ?Collection
+    {
+        if (! $this->entity instanceof Model || ! $this->entity->relationLoaded('attribute_values')) {
+            return null;
+        }
+
+        $own = $this->entity->attribute_values;
+        $parent = $this->entity->attributeParent();
+
+        if (! $parent instanceof Model) {
+            return $own;
+        }
+
+        $parent->loadMissing('attribute_values.attribute');
+
+        $overridden = $own->pluck('attribute_id')->all();
+
+        return $own->concat($parent->attribute_values->filter(
+            static fn (Model $value): bool => (bool) $value->attribute?->inherit_from_parent
+                && ! in_array($value->attribute_id, $overridden, true)
+        ));
+    }
+
     protected function entityQuery(): Builder
     {
-        return Eav::$entityAttributeModel::query()
-            ->where('entity_type', $this->resolveEntity()->getEntityType())
-            ->where('entity_id', $this->resolveEntity()->id);
+        return Eav::$entityAttributeModel::query()->forEntity($this->resolveEntity());
     }
 
     protected function resolveEntity(): Attributable
@@ -426,10 +448,8 @@ class AttributeManager
     {
         $indexable = static fn (?Attribute $attribute): bool => (bool) ($attribute?->searchable || $attribute?->filterable);
 
-        if ($this->entity instanceof Model && $this->entity->relationLoaded('attribute_values')) {
-            return $this->entity->attribute_values
-                ->filter(fn (Model $value): bool => $indexable($value->attribute))
-                ->values();
+        if (($loaded = $this->loadedValues()) !== null) {
+            return $loaded->filter(fn (Model $value): bool => $indexable($value->attribute))->values();
         }
 
         return $this->entityQuery()

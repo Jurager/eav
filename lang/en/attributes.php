@@ -17,5 +17,7 @@ return [
         'invalid_date' => 'Invalid date value.',
         'invalid_url' => 'Value must be a valid absolute URL (http/https).',
         'invalid_enum' => 'Invalid option selected.',
+        'held_by_parent' => 'This attribute is filled in on the parent entity.',
+        'held_by_child' => 'This attribute is filled in on a variant.',
     ],
 ];

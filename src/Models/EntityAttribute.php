@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\Concerns\HasScopedRelations;
+use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\BelongsToScoped;
 use Jurager\Eav\Eav;
@@ -56,6 +58,32 @@ class EntityAttribute extends Model
                 $entityAttribute->setRelation('attribute', app(AttributeRegistry::class)->get($entityAttribute->attribute_id, $entityAttribute->entity_type));
             }
         });
+    }
+
+    /**
+     * Scope the rows an entity reads: its own values, plus the ones a variant inherits.
+     */
+    public function scopeForEntity(Builder $query, Attributable $entity): Builder
+    {
+        $query->where('entity_type', $entity->getEntityType());
+
+        $parent = $entity->attributeParent();
+
+        if ($parent === null) {
+            return $query->where('entity_id', $entity->id);
+        }
+
+        $own = static::query()
+            ->select('attribute_id')
+            ->where('entity_type', $entity->getEntityType())
+            ->where('entity_id', $entity->id);
+
+        return $query->where(fn (Builder $rows) => $rows
+            ->where('entity_id', $entity->id)
+            ->orWhere(fn (Builder $inherited) => $inherited
+                ->where('entity_id', $parent->id)
+                ->whereNotIn('attribute_id', $own)
+                ->whereHas('attribute', static fn (Builder $attribute) => $attribute->whereInheritable())));
     }
 
     public function attribute(): BelongsTo

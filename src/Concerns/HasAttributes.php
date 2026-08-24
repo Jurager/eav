@@ -37,7 +37,7 @@ trait HasAttributes
         static::resolveRelationUsing('attribute_values', fn ($model) => $model->attributeValues());
 
         static::resolveRelationUsing('available_attributes', fn (Model $model) => $model->availableAttributesRelation(
-            fn (Model $entity) => $entity->getAvailableAttributesQuery($entity->attributeScopeIds()),
+            fn (Model $entity) => $entity->getEditableAttributesQuery($entity->attributeScopeIds()),
         ));
     }
 

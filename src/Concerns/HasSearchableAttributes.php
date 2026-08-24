@@ -88,10 +88,21 @@ trait HasSearchableAttributes
      */
     private function indexRelations(): array
     {
-        return [
+        $relations = [
             'attribute_values.attribute.enums.translations',
             'attribute_values.translations',
             ...$this->searchableWith(),
         ];
+        
+        if (($parent = $this->attributeParentRelationName()) !== null) {
+            $relations[] = "{$parent}.attribute_values.attribute.enums.translations";
+            $relations[] = "{$parent}.attribute_values.translations";
+
+            if (($scope = $this->attributeScopeRelationName()) !== null) {
+                $relations[] = "{$parent}.{$scope}";
+            }
+        }
+
+        return $relations;
     }
 }

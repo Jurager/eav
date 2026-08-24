@@ -27,6 +27,9 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property bool $unique
  * @property bool $filterable
  * @property bool $searchable
+ * @property bool $child_only
+ * @property bool $overridable
+ * @property bool $inherit_from_parent
  * @property array|null $validations
  * @property array|null $meta
  *
@@ -48,6 +51,9 @@ class Attribute extends Model
         'unique',
         'filterable',
         'searchable',
+        'child_only',
+        'overridable',
+        'inherit_from_parent',
         'validations',
         'meta',
     ];
@@ -96,6 +102,10 @@ class Attribute extends Model
             'unique'      => 'boolean',
             'filterable'  => 'boolean',
             'searchable'  => 'boolean',
+
+            'child_only'          => 'boolean',
+            'overridable'         => 'boolean',
+            'inherit_from_parent' => 'boolean',
         ];
     }
 
@@ -140,6 +150,36 @@ class Attribute extends Model
     public function scopeWhereFilterable(Builder $query): Builder
     {
         return $query->where('filterable', true);
+    }
+
+    /** Scope a query to the attributes a parent entity fills in itself. */
+    public function scopeWhereHeldByParent(Builder $query): Builder
+    {
+        return $query->where('child_only', false);
+    }
+
+    /** Scope a query to the attributes a variant fills in itself. */
+    public function scopeWhereHeldByChild(Builder $query): Builder
+    {
+        return $query->where(static fn (Builder $q) => $q->where('child_only', true)->orWhere('overridable', true));
+    }
+
+    /** Scope a query to the attributes a variant takes from its parent when it has no value of its own. */
+    public function scopeWhereInheritable(Builder $query): Builder
+    {
+        return $query->where('inherit_from_parent', true);
+    }
+
+    /** Determine if the parent entity fills this attribute in itself. */
+    public function isHeldByParent(): bool
+    {
+        return ! $this->child_only;
+    }
+
+    /** Determine if a variant fills this attribute in itself. */
+    public function isHeldByChild(): bool
+    {
+        return $this->child_only || $this->overridable;
     }
 
     /** Scope a query to eager load common attribute relationships. */
