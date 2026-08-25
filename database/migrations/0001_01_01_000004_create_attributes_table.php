@@ -3,6 +3,7 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
+use Jurager\Eav\Enums\HeldBy;
 
 return new class () extends Migration {
     public function up(): void
@@ -17,6 +18,7 @@ return new class () extends Migration {
 
             $table->boolean('required')->default(false);
             $table->json('validations')->nullable();
+            $table->jsonb('meta')->nullable();
 
             $table->boolean('system')->default(false);
             $table->boolean('localizable')->default(false);
@@ -24,6 +26,9 @@ return new class () extends Migration {
             $table->boolean('unique')->default(false);
             $table->boolean('filterable')->default(false);
             $table->boolean('searchable')->default(false);
+
+            $table->string('held_by')->default(HeldBy::Parent->value);
+            $table->boolean('inherit_from_parent')->default(true);
 
             $table->unique(['entity_type', 'code']);
             $table->index(['entity_type', 'searchable']);
