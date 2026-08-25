@@ -6,6 +6,7 @@ namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Laravel\Scout\Jobs\MakeSearchable;
 use Illuminate\Validation\ValidationException;
@@ -245,6 +246,29 @@ class ParentInheritanceTest extends FeatureTestCase
         $fields = $variant->validate([['code' => 'color', 'values' => 'black']]);
 
         $this->assertSame('shared-sku', $fields['sku']->value());
+    }
+
+    public function test_parent_unique_attribute_does_not_conflict_with_a_stray_row_on_its_own_variant(): void
+    {
+        $attribute = $this->createAttribute($this->type, ['code' => 'code', 'unique' => true, 'held_by' => HeldBy::Parent]);
+
+        $parent = $this->createProduct();
+        $variant = $this->createVariant($parent);
+
+        // A held_by:parent attribute should never have a row on a variant, but legacy/import data
+        // can still leave one behind — it must not be treated as a real duplicate.
+        DB::table('entity_attribute')->insert([
+            'entity_type'   => 'product',
+            'entity_id'     => $variant->id,
+            'attribute_id'  => $attribute->id,
+            'value_text'    => 'shared-code',
+            'created_at'    => now(),
+            'updated_at'    => now(),
+        ]);
+
+        $fields = $parent->validate([['code' => 'code', 'values' => 'shared-code']]);
+
+        $this->assertSame('shared-code', $fields['code']->value());
     }
 
     public function test_unknown_codes_stay_silent(): void

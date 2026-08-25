@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Validation\ValidationException;
 use JsonException;
+use Jurager\Eav\Concerns\HasInheritedAttributes;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
@@ -30,6 +31,9 @@ class AttributeValidator
     private mixed $entityId;
 
     private bool $usesSoftDeletes;
+
+    /** The foreign key naming the parent relation, when the model splits entities into parent/variant. */
+    private ?string $parentForeignKey;
 
     /** @var array<string, callable> */
     private array $uniqueScopes;
@@ -52,6 +56,10 @@ class AttributeValidator
         $modelClass = Relation::getMorphedModel($this->entityType);
 
         $this->usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
+
+        $this->parentForeignKey = $modelClass && in_array(HasInheritedAttributes::class, class_uses_recursive($modelClass))
+            ? (new $modelClass())->attributeParentRelation()?->getForeignKeyName()
+            : null;
 
         $this->uniqueScopes = $modelClass && method_exists($modelClass, 'attributeUniqueScopes')
             ? $modelClass::attributeUniqueScopes()
@@ -170,20 +178,41 @@ class AttributeValidator
     {
         $scopeCallback = $this->uniqueScopes[$field->attribute()->code] ?? null;
 
+        $restrictToSide = $this->parentForeignKey !== null && $field->attribute()->held_by !== HeldBy::Both;
+
         $base = Eav::$entityAttributeModel::query()
             ->where('entity_type', $this->entityType)
             ->where('attribute_id', $field->attribute()->id)
             ->when($this->entityId, fn ($q) => $q->where('entity_id', '!=', $this->entityId))
-            ->when($this->usesSoftDeletes, function ($q) {
-                $modelClass = Relation::getMorphedModel($this->entityType);
-                $q->whereIn('entity_id', $modelClass::query()->select((new $modelClass())->getKeyName()));
-            });
+            ->when(
+                $this->usesSoftDeletes || $restrictToSide,
+                fn ($q) => $q->whereIn('entity_id', $this->eligibleEntityIds($field, $restrictToSide)),
+            );
 
         if ($scopeCallback !== null) {
             $scopeCallback($base, $this->entity);
         }
 
         return $base;
+    }
+
+    /**
+     * IDs of the entities a uniqueness conflict may legitimately come from.
+     *
+     * Always excludes soft-deleted entities. When the attribute is held_by:parent or held_by:variant,
+     * also excludes entities on the other side — a held_by:parent attribute can still have rows on a
+     * variant (stray data left over from before the split existed, or written outside validation),
+     * and those never represent a genuine duplicate.
+     */
+    private function eligibleEntityIds(Field $field, bool $restrictToSide): Builder
+    {
+        $modelClass = Relation::getMorphedModel($this->entityType);
+
+        return $modelClass::query()
+            ->when($restrictToSide, fn ($q) => $field->attribute()->held_by === HeldBy::Variant
+                ? $q->whereNotNull($this->parentForeignKey)
+                : $q->whereNull($this->parentForeignKey))
+            ->select((new $modelClass())->getKeyName());
     }
 
     /** Whether a localizable field's translated labels collide with an existing row. */
