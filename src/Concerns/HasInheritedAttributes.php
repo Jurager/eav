@@ -77,6 +77,37 @@ trait HasInheritedAttributes
         return $this->attributeParent() !== null;
     }
 
+    /**
+     * Relations to eager-load so a variant reads its inherited values in one batch.
+     *
+     * The attribute manager merges the parent's values in memory; when they are not already loaded,
+     * reading values falls back to one merged query per variant. Keyed off the parent relation this
+     * entity declares.
+     *
+     * @return list<string>
+     */
+    public function inheritedValueRelations(): array
+    {
+        $parent = $this->attributeParentRelationName();
+
+        return $parent !== null ? ["{$parent}.attribute_values.attribute.type"] : [];
+    }
+
+    /**
+     * Relations to eager-load alongside the requested includes.
+     *
+     * Reading a variant's values merges the parent's attribute values in memory; when they are not
+     * already loaded, the attribute manager falls back to one merged query per variant. This hook lets
+     * the calling layer batch-load them before it reads the values.
+     *
+     * @param list<string> $included
+     * @return list<string>
+     */
+    public function eagerLoads(array $included): array
+    {
+        return in_array('attribute_values', $included, true) ? $this->inheritedValueRelations() : [];
+    }
+
     /** Get the relation pointing at the parent entity, when the model declares one. */
     public function attributeParentRelation(): ?BelongsTo
     {
