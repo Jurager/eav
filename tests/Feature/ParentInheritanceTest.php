@@ -230,6 +230,23 @@ class ParentInheritanceTest extends FeatureTestCase
         $this->assertSame('Parent title', $fields['title']->value());
     }
 
+    public function test_inherited_unique_attribute_does_not_conflict_with_its_own_parent(): void
+    {
+        $this->createAttribute($this->type, ['code' => 'sku', 'unique' => true, 'inherit_from_parent' => true, 'held_by' => HeldBy::Both]);
+        $this->createAttribute($this->type, ['code' => 'color', 'held_by' => HeldBy::Variant]);
+
+        $parent = $this->createProduct();
+        $parent->eav()->set('sku', 'shared-sku')->save('sku');
+
+        $variant = $this->createVariant($parent);
+
+        // "sku" is never touched by this call — it is only read through inheritance — so it
+        // must not be compared for uniqueness against the very parent row it was read from.
+        $fields = $variant->validate([['code' => 'color', 'values' => 'black']]);
+
+        $this->assertSame('shared-sku', $fields['sku']->value());
+    }
+
     public function test_unknown_codes_stay_silent(): void
     {
         $parent = $this->createProduct();

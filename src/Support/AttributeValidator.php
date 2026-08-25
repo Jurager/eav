@@ -67,7 +67,9 @@ class AttributeValidator
      */
     public function validate(array $input): array
     {
-        $this->validateFields($this->fillFields($input));
+        $touched = array_values(array_filter(array_column($input, 'code')));
+
+        $this->validateFields($this->fillFields($input), $touched);
 
         return $this->manager->fields();
     }
@@ -118,24 +120,26 @@ class AttributeValidator
      * Validate all fields and throw exception if errors found.
      *
      * @param array<string, list<string>> $errors
+     * @param list<string> $touched
      *
      * @throws ValidationException
      */
-    private function validateFields(array $errors = []): void
+    private function validateFields(array $errors, array $touched): void
     {
         foreach ($this->manager->fields() as $field) {
-            $attributeCode = $field->attribute()->code;
+
+            $code = $field->attribute()->code;
 
             if ($field->hasErrors()) {
-                $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $field->errors());
+                $errors[$code] = array_merge($errors[$code] ?? [], $field->errors());
             } elseif ($field->isRequired() && ! $field->isFilled()) {
-                $errors[$attributeCode][] = __('eav::attributes.validation.required');
+                $errors[$code][] = __('eav::attributes.validation.required');
             }
 
-            if ($field->isUnique() && $field->isFilled()) {
+            if (in_array($code, $touched, true) && $field->isUnique() && $field->isFilled()) {
                 $uniqueErrors = $this->validateUniqueness($field);
                 if (! empty($uniqueErrors)) {
-                    $errors[$attributeCode] = array_merge($errors[$attributeCode] ?? [], $uniqueErrors);
+                    $errors[$code] = array_merge($errors[$code] ?? [], $uniqueErrors);
                 }
             }
         }
