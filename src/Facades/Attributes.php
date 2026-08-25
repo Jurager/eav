@@ -27,7 +27,7 @@ use Jurager\Eav\Managers\AttributeManager;
  *
  * @method static AttributeManager for(string $entityType)
  * @method static AttributeManager schema(Attributable|Collection $entityOrAttributes)
- * @method static void sync(Collection $batch, ?AttributeManager $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null)
+ * @method static void sync(Collection $batch, ?AttributeManager $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null, ?callable $onRejected = null)
  *
  * @see AttributesFactory
  */

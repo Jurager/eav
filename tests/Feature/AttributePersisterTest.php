@@ -255,6 +255,61 @@ class AttributePersisterTest extends FeatureTestCase
     // Multiple values (multiple=true)
     // -----------------------------------------------------------------------
 
+    // -----------------------------------------------------------------------
+    // flush(onError) — per-entity retry must not poison a surrounding transaction
+    // -----------------------------------------------------------------------
+
+    public function test_flush_with_onError_keeps_the_connection_usable_after_a_failure(): void
+    {
+        $p1 = $this->createProduct('P1');
+        $p2 = $this->createProduct('P2');
+
+        // An attribute referenced by a field but no longer present in the DB: its
+        // entity_attribute row will fail the attribute_id foreign key at insert time,
+        // forcing the chunk-wide persist to fail and fall back to the per-entity retry.
+        $danglingAttr = $this->createAttribute($this->textType, ['code' => 'temp']);
+        $danglingField = $this->makeTextField($danglingAttr, 'Orphan');
+
+        // The test connection doesn't enable FK enforcement by default; turn it on so the
+        // dangling attribute_id below actually fails at insert time, as it would on the
+        // production pgsql driver. forceDelete() is required — Attribute uses SoftDeletes,
+        // so a plain delete() would leave the row in place and the FK intact.
+        DB::statement('PRAGMA foreign_keys = ON');
+        Attribute::query()->whereKey($danglingAttr->id)->forceDelete();
+
+        $persister = app(BatchAttributePersister::class);
+        $persister->add($p1, collect([$this->makeTextField($this->titleAttr, 'Good')]));
+        $persister->add($p2, collect([$danglingField]));
+
+        $failed = [];
+
+        // Mirrors how ProductImporter now wraps a whole import batch in one transaction:
+        // flush() runs nested inside it, so its internal retry must use savepoints, not
+        // raw autocommit statements, or a real failure here would abort everything above it.
+        //
+        // Note: SQLite (this suite's driver) doesn't poison a transaction after a failed
+        // statement the way pgsql does, so this assertion passes even without the fix —
+        // it documents the intended behavior but can't catch a regression on its own. The
+        // fix was verified directly against pgsql (production driver) via a manual repro.
+        DB::transaction(function () use ($persister, $p1, &$failed): void {
+            $persister->flush(function (\Throwable $e, $entity) use (&$failed): void {
+                $failed[] = $entity->id;
+            });
+
+            // If the failed retry above left the transaction poisoned, this query throws.
+            $this->assertSame(1, DB::table('entity_attribute')
+                ->where('entity_type', 'product')
+                ->where('entity_id', $p1->id)
+                ->count());
+        });
+
+        $this->assertSame([$p2->id], $failed);
+        $this->assertSame('Good', DB::table('entity_attribute')
+            ->where('entity_type', 'product')->where('entity_id', $p1->id)->first()->value_text);
+        $this->assertSame(0, DB::table('entity_attribute')
+            ->where('entity_type', 'product')->where('entity_id', $p2->id)->count());
+    }
+
     public function test_persist_multiple_values_inserts_multiple_rows(): void
     {
         $multiAttr = $this->createAttribute($this->textType, [

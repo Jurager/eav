@@ -32,8 +32,8 @@ class AttributesFactory
      *
      * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
      */
-    public function sync(Collection $batch, ?AttributeManager $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null): void
+    public function sync(Collection $batch, ?AttributeManager $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null, ?callable $onRejected = null): void
     {
-        AttributeManager::sync($batch, $prebuiltSchema, $chunkSize, $onError);
+        AttributeManager::sync($batch, $prebuiltSchema, $chunkSize, $onError, $onRejected);
     }
 }

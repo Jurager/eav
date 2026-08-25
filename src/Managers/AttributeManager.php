@@ -12,6 +12,7 @@ use Illuminate\Support\Collection;
 use JsonException;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\MissingEntityException;
 use Jurager\Eav\Fields\Field;
@@ -22,6 +23,7 @@ use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributePersister;
 use Jurager\Eav\Support\AttributeQueryBuilder;
 use Jurager\Eav\Support\BatchAttributePersister;
+use Throwable;
 
 class AttributeManager
 {
@@ -89,9 +91,13 @@ class AttributeManager
 
     /**
      * Persist attribute values for multiple entities in chunked batches.
+     *
      * @param Collection<int, array{entity: Attributable, data: array<string, mixed>}> $batch
+     * @param callable(Throwable, Attributable): void|null $onError Called when persisting an entity fails.
+     * @param callable(Attributable, string): void|null $onRejected Called for each attribute code silently
+     *  dropped because the entity's side (parent/variant) is not allowed to hold it (held_by mismatch).
      */
-    public static function sync(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null): void
+    public static function sync(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null, ?callable $onRejected = null): void
     {
         if ($batch->isEmpty()) {
             return;
@@ -102,7 +108,11 @@ class AttributeManager
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
-                $fields = ($prebuiltSchema ?? static::schema($entity))->fill($item['data']);
+                $fields = ($prebuiltSchema ?? static::schema($entity))->fill(
+                    $item['data'],
+                    $entity,
+                    $onRejected !== null ? fn (string $code) => $onRejected($entity, $code) : null,
+                );
 
                 if ($fields->isNotEmpty()) {
                     $persister->add($entity, $fields);
@@ -238,13 +248,30 @@ class AttributeManager
         $this->persister()->detach($ids);
     }
 
-    /** Fill fields from raw data. */
-    public function fill(array $data): Collection
+    /**
+     * Fill fields from raw data, restricted to the attributes the entity's side may hold.
+     */
+    public function fill(array $data, ?Attributable $entity = null, ?callable $onRejected = null): Collection
     {
         $this->ensureSchema();
 
+        $resolvedEntity = $entity ?? $this->entity;
+        $side = $resolvedEntity !== null ? HeldBy::of($resolvedEntity->isVariant()) : null;
+
         return collect($data)
-            ->filter(fn ($_, $code) => isset($this->fields[$code]))
+            ->filter(function ($_, $code) use ($side, $onRejected) {
+                if (! isset($this->fields[$code])) {
+                    return false;
+                }
+
+                if ($side !== null && ! $this->fields[$code]->attribute()->isHeldBy($side)) {
+                    $onRejected?->__invoke($code);
+
+                    return false;
+                }
+
+                return true;
+            })
             ->map(function ($value, $code) {
                 $field = clone $this->fields[$code];
                 return $field->fill($value) ? $field : null;

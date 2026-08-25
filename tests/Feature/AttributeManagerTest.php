@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
+use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Fields\Number;
 use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Tests\Fixtures\Product;
 
 class AttributeManagerTest extends FeatureTestCase
 {
@@ -395,5 +398,58 @@ class AttributeManagerTest extends FeatureTestCase
         AttributeManager::sync(collect());
 
         $this->assertSame(0, DB::table('entity_attribute')->count());
+    }
+
+    public function test_sync_does_not_write_a_value_the_entity_is_not_entitled_to_hold(): void
+    {
+        $this->createAttribute($this->textType, ['code' => 'code', 'held_by' => HeldBy::Parent]);
+        $this->createAttribute($this->textType, ['code' => 'color', 'held_by' => HeldBy::Variant]);
+
+        $parent = $this->createProduct('Parent');
+        $variant = Product::create(['name' => 'Variant', 'parent_id' => $parent->id]);
+
+        // Mirrors ProductImporter: one prebuilt schema manager reused across a batch that mixes
+        // parents and variants, exactly as the JSON import pipeline pushes both into the same batch.
+        $batch = collect([
+            ['entity' => $parent, 'data' => ['code' => 'parent-code', 'color' => 'black']],
+            ['entity' => $variant, 'data' => ['code' => 'variant-code', 'color' => 'black']],
+        ]);
+
+        AttributeManager::sync($batch, prebuiltSchema: AttributeManager::for(Product::class));
+
+        $this->assertSame('parent-code', AttributeManager::for($parent)->value('code'));
+        $this->assertSame('black', AttributeManager::for($variant)->value('color'));
+
+        // The variant's write to "code" must never reach the database — checked directly, since
+        // value() alone can't distinguish "no row" from "inherited from parent".
+        $this->assertSame(0, DB::table('entity_attribute')
+            ->where('entity_id', $variant->id)
+            ->whereIn('attribute_id', Attribute::query()->where('code', 'code')->pluck('id'))
+            ->count());
+    }
+
+    public function test_sync_reports_rejected_codes_via_onRejected(): void
+    {
+        $this->createAttribute($this->textType, ['code' => 'code', 'held_by' => HeldBy::Parent]);
+
+        $parent = $this->createProduct('Parent');
+        $variant = Product::create(['name' => 'Variant', 'parent_id' => $parent->id]);
+
+        $batch = collect([
+            ['entity' => $parent, 'data' => ['code' => 'parent-code']],
+            ['entity' => $variant, 'data' => ['code' => 'variant-code']],
+        ]);
+
+        $rejections = [];
+
+        AttributeManager::sync(
+            $batch,
+            prebuiltSchema: AttributeManager::for(Product::class),
+            onRejected: function (Attributable $entity, string $code) use (&$rejections): void {
+                $rejections[] = [$entity->getKey(), $code];
+            },
+        );
+
+        $this->assertSame([[$variant->id, 'code']], $rejections);
     }
 }
