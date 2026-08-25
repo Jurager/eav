@@ -52,11 +52,13 @@ class EavServiceProvider extends ServiceProvider
         // Registries.
         $this->app->scoped(AttributeTypeRegistry::class);
         $this->app->scoped(AttributeGroupRegistry::class);
-        $this->app->scoped(AttributeRegistry::class);
         $this->app->scoped(LocaleRegistry::class);
         $this->app->scoped(EnumRegistry::class);
         $this->app->scoped(SchemaRegistry::class);
         $this->app->scoped(FieldFactory::class);
+        $this->app->scoped(AttributeRegistry::class);
+
+        AttributeRegistry::flush();
 
         // Managers & Support
         $this->app->singleton(AttributeInheritanceResolver::class);
