@@ -85,7 +85,6 @@ class SearchTest extends TestCase
             }
 
             public function indexFields(): array
-
             {
 
                 return [];
@@ -114,7 +113,6 @@ class SearchTest extends TestCase
             }
 
             public function indexFields(): array
-
             {
 
                 return [];

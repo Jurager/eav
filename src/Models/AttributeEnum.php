@@ -49,7 +49,7 @@ class AttributeEnum extends Model
     public function label(int $localeId): ?string
     {
         return $this->translations
-            ->first(fn ($t) => $t->pivot->locale_id === $localeId)
+            ->first(fn ($t) => $t->pivot->getAttribute('locale_id') === $localeId)
             ?->pivot
             ?->label;
     }
@@ -61,8 +61,9 @@ class AttributeEnum extends Model
      */
     public function scopeUsedBy(Builder $query, Builder $entities): Builder
     {
-        $enum   = $query->getModel();
-        $values = new Eav::$entityAttributeModel();
+        $enum       = $query->getModel();
+        $valuesClass = Eav::$entityAttributeModel;
+        $values      = new $valuesClass();
 
         return $query->whereExists(
             fn ($sub) => $sub

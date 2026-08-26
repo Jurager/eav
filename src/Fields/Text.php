@@ -34,8 +34,8 @@ class Text extends Field
     }
 
     /** Normalize the field value to a string. */
-    protected function normalize(mixed $value): string
+    protected function normalize(mixed $value): ?string
     {
-        return (string) $value;
+        return $value === null ? null : (string) $value;
     }
 }

@@ -37,11 +37,7 @@ class EnumRegistry
         return $this->find($attributeId, $id) !== null;
     }
 
-    /**
-     * Coerce a filter value to a stored integer ID.
-     * * Numeric values and null/empty pass through unchanged.
-     * Non-numeric strings are resolved by code; unknown codes return null.
-     */
+    /** Coerce a filter value to a stored integer ID, resolving non-numeric strings by code. */
     public function coerce(int $attributeId, mixed $value): mixed
     {
         if ($value === null || $value === '' || is_numeric($value)) {

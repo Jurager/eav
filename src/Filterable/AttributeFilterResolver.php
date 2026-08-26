@@ -69,19 +69,13 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
         return true;
     }
 
-    /**
-     * Determine whether the entity actually declares the given attribute.
-     */
+    /** Determine whether the entity actually declares the given attribute. */
     private function hasAttribute(Attributable $entity, string $code): bool
     {
         return AttributeManager::for($entity->getEntityType())->field($code) !== null;
     }
 
-    /**
-     * Apply conditions to the query builder.
-     *
-     * @param array<int, array{0: string, 1: mixed}> $conditions
-     */
+    /** @param array<int, array{0: string, 1: mixed}> $conditions */
     private function applyConditions(Builder $query, string $attribute, array $conditions): void
     {
         foreach ($conditions as [$operator, $operand]) {
@@ -101,11 +95,7 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
         }
     }
 
-    /**
-     * Parse raw filter values into operator-operand pairs.
-     *
-     * @return array<int, array{0: string, 1: mixed}>
-     */
+    /** @return array<int, array{0: string, 1: mixed}> */
     private function parseConditions(mixed $value): array
     {
         if (! is_array($value)) {

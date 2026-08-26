@@ -54,10 +54,10 @@ class FieldFactory
     public function make(Attribute $attribute): Field
     {
         if ($attribute->type === null) {
-            throw InvalidFieldTypeException::typeNotLoaded($attribute->code);
+            throw InvalidFieldTypeException::typeNotLoaded($attribute->getAttribute('code'));
         }
 
-        $class = $this->resolve($attribute->type->code);
+        $class = $this->resolve($attribute->type->getAttribute('code'));
 
         return new $class($attribute, $this->localeRegistry, $this->enumRegistry);
     }
@@ -68,9 +68,7 @@ class FieldFactory
         return $this->types;
     }
 
-    /**
-     * Get the string code from a type enum or string.
-     */
+    /** Get the string code from a type enum or string. */
     private function getTypeCode(AttributeType|string $type): string
     {
         return $type instanceof AttributeType ? $type->value : $type;

@@ -28,8 +28,7 @@ class AttributeObserver
     /** Handle the "created" event. */
     public function created(Attribute $attribute): void
     {
-        $this->schema->forget($attribute->entity_type);
-        $this->registry->forget($attribute->entity_type);
+        $this->invalidateCaches($attribute);
         $this->syncAttributeStates($attribute);
 
         AttributeCreated::dispatch($attribute);
@@ -38,8 +37,7 @@ class AttributeObserver
     /** Handle the "updated" event. */
     public function updated(Attribute $attribute): void
     {
-        $this->schema->forget($attribute->entity_type);
-        $this->registry->forget($attribute->entity_type);
+        $this->invalidateCaches($attribute);
 
         if ($attribute->wasChanged('searchable')) {
             $this->syncSearchable($attribute);
@@ -60,8 +58,7 @@ class AttributeObserver
             return;
         }
 
-        $this->schema->forget($attribute->entity_type);
-        $this->registry->forget($attribute->entity_type);
+        $this->invalidateCaches($attribute);
         $this->syncAttributeStates($attribute);
 
         Eav::$entityAttributeModel::query()
@@ -74,9 +71,8 @@ class AttributeObserver
     /** Handle the "forceDeleted" event. */
     public function forceDeleted(Attribute $attribute): void
     {
-        $this->schema->forget($attribute->entity_type);
+        $this->invalidateCaches($attribute);
         $this->enums->forget($attribute->id);
-        $this->registry->forget($attribute->entity_type);
 
         $this->syncAttributeStates($attribute);
         PruneAttribute::dispatch($attribute->id);
@@ -87,9 +83,15 @@ class AttributeObserver
     /** Handle the "restored" event. */
     public function restored(Attribute $attribute): void
     {
+        $this->invalidateCaches($attribute);
+        $this->syncAttributeStates($attribute);
+    }
+
+    /** Clear the schema and attribute registry caches for the attribute's entity type. */
+    protected function invalidateCaches(Attribute $attribute): void
+    {
         $this->schema->forget($attribute->entity_type);
         $this->registry->forget($attribute->entity_type);
-        $this->syncAttributeStates($attribute);
     }
 
     /** Sync all relevant attribute states (searchable/filterable). */

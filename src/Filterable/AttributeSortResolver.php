@@ -36,21 +36,23 @@ class AttributeSortResolver implements SortResolver
             return false;
         }
 
-        $qualifiedKey = $model->qualifyColumn($model->getKeyName());
-        $values       = new Eav::$entityAttributeModel();
+        $qualifiedKey  = $model->qualifyColumn($model->getKeyName());
+        $valuesClass   = Eav::$entityAttributeModel;
+        $values        = new $valuesClass();
 
         $subquery = $values->newQuery()
             ->from($values->getTable() . ' as _ea')
             ->whereColumn('_ea.entity_id', $qualifiedKey)
             ->where('_ea.entity_type', $entityType)
-            ->where('_ea.attribute_id', $eavField->attribute()->id)
+            ->where('_ea.attribute_id', $eavField->attribute()->getAttribute('id'))
             ->orderBy('_ea.id')
             ->limit(1);
 
         if ($eavField->isLocalizable()) {
-            $localeId     = $this->resolveLocaleId();
-            $translations = new Eav::$entityTranslationModel();
-            $valuesType   = $values->getMorphClass();
+            $localeId          = $this->resolveLocaleId();
+            $translationsClass = Eav::$entityTranslationModel;
+            $translations      = new $translationsClass();
+            $valuesType        = $values->getMorphClass();
 
             $subquery
                 ->join($translations->getTable() . ' as _et', function (JoinClause $join) use ($localeId, $valuesType): void {
@@ -72,9 +74,7 @@ class AttributeSortResolver implements SortResolver
         return true;
     }
 
-    /**
-     * Order search results by an indexed attribute.
-     */
+    /** Order search results by an indexed attribute. */
     private function orderIndex(SearchBuilder $query, string $field, string $direction, Model $model): bool
     {
         $path = 'attributes.' . $field;

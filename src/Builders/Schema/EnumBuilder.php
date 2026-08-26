@@ -44,13 +44,7 @@ class EnumBuilder extends Fluent
         return $this;
     }
 
-    /**
-     * Export the queued enum option as a data array, without persisting it.
-     *
-     * Requires the builder to have been constructed with an attribute and a code.
-     *
-     * @return array<string, mixed>
-     */
+    /** Export the queued enum option as a data array, without persisting it. */
     public function build(): array
     {
         if (! $this->subject instanceof Attribute) {
@@ -58,6 +52,7 @@ class EnumBuilder extends Fluent
         }
 
         return [
+            'attribute_id' => $this->subject->id,
             'code' => $this->code,
             'translations' => $this->translations,
             ...$this->toArray(),
@@ -69,7 +64,6 @@ class EnumBuilder extends Fluent
     {
         $enum = $this->schema->create($this->subject, $this->build());
 
-        // See AttributeBuilder::create() — refresh picks up column defaults left unset above.
         return $enum->refresh();
     }
 

@@ -30,8 +30,12 @@ class Number extends Field
     }
 
     /** Normalize the field value to an int or float. */
-    protected function normalize(mixed $value): int|float
+    protected function normalize(mixed $value): int|float|null
     {
+        if ($value === null) {
+            return null;
+        }
+
         $numeric = $value + 0;
 
         return ((float) $numeric === floor($numeric))

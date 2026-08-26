@@ -53,7 +53,7 @@ class Select extends Field
             return null;
         }
 
-        return $this->enumRegistry->find($this->attribute->id, $enumId);
+        return $this->enumRegistry->find($this->attribute->getAttribute('id'), $enumId);
     }
 
     /** Get all selected enum instances. */
@@ -65,7 +65,7 @@ class Select extends Field
             return [];
         }
 
-        return $this->enumRegistry->all($this->attribute->id)
+        return $this->enumRegistry->all($this->attribute->getAttribute('id'))
             ->whereIn('id', (array) $value)
             ->values()
             ->all();
@@ -98,8 +98,8 @@ class Select extends Field
 
         $enums = $this->enums();
         $enumCode = $this->isMultiple()
-            ? array_map(static fn (AttributeEnum $enum) => $enum->code, $enums)
-            : $this->enum()?->code;
+            ? array_map(static fn (AttributeEnum $enum) => $enum->getAttribute('code'), $enums)
+            : $this->enum()?->getAttribute('code');
 
         if ($enumCode === null || $enumCode === []) {
             return [];
@@ -125,7 +125,7 @@ class Select extends Field
     /** Enrich distribution data with labels. */
     public function enrichFacetDistribution(array $distribution, ?int $localeId = null): array
     {
-        $enums = $this->enumRegistry->all($this->attribute->id)->keyBy('code');
+        $enums = $this->enumRegistry->all($this->attribute->getAttribute('id'))->keyBy('code');
         $result = [];
 
         foreach ($distribution as $code => $count) {
@@ -135,7 +135,7 @@ class Select extends Field
             if ($enum !== null) {
                 $label = $localeId !== null
                     ? ($enum->label($localeId) ?? $code)
-                    : ($enum->translations->first()?->pivot?->label ?? $code);
+                    : ($enum->translations->first()?->pivot?->getAttribute('label') ?? $code);
             }
 
             $result[$code] = ['count' => $count, 'label' => $label];
@@ -169,7 +169,7 @@ class Select extends Field
                 return $this->addError(__('eav::attributes.validation.invalid_value'));
             }
 
-            if (! $this->enumRegistry->isValidId($this->attribute->id, (int) $item)) {
+            if (! $this->enumRegistry->isValidId($this->attribute->getAttribute('id'), (int) $item)) {
                 return $this->addError(__('eav::attributes.validation.invalid_enum'));
             }
         }
@@ -178,8 +178,8 @@ class Select extends Field
     }
 
     /** Normalize the value to an integer. */
-    protected function normalize(mixed $value): int
+    protected function normalize(mixed $value): ?int
     {
-        return (int) $value;
+        return $value === null ? null : (int) $value;
     }
 }

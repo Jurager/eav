@@ -77,7 +77,7 @@ class ClosureRelationTest extends FeatureTestCase
 
         $relation = new ClosureRelation(Product::query(), $ownerA, $resolver);
 
-        $relation->match([$ownerA, $ownerB], new Collection, 'sibling');
+        $relation->match([$ownerA, $ownerB], new Collection(), 'sibling');
 
         $this->assertSame('Child of A', $ownerA->getRelation('sibling')->first()->name);
         $this->assertSame('Child of B', $ownerB->getRelation('sibling')->first()->name);

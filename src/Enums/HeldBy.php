@@ -4,9 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Enums;
 
-/**
- * The side of a parent/variant pair that fills an attribute in.
- */
+/** The side of a parent/variant pair that fills an attribute in. */
 enum HeldBy: string
 {
     case Parent = 'parent';

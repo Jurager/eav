@@ -67,4 +67,14 @@ class BatchTest extends FeatureTestCase
             Schema::attribute($attribute)->required(),
         ]);
     }
+
+    public function test_batch_throws_for_a_builder_type_it_does_not_support(): void
+    {
+        $this->expectException(FluentBuilderException::class);
+        $this->expectExceptionMessage('does not support builder');
+
+        Schema::batch([
+            Schema::group('general'),
+        ]);
+    }
 }

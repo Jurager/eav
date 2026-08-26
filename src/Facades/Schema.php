@@ -28,12 +28,17 @@ use Jurager\Eav\Models\AttributeType;
  * consumer's own model subclass — is set dynamically (`->measurement_id($id)`)
  * or filled in bulk from an already-validated array (`->fill($data)`).
  *
- * For bulk imports, collect builders without persisting them and flush them
- * together:
+ * For bulk imports, collect builders of the same kind without persisting them and flush
+ * them together — attributes and enum options both go through the same batch():
  *
  *     Schema::batch([
  *         Schema::attribute('color', 'product')->type('select'),
  *         Schema::attribute('weight', 'product')->type('number'),
+ *     ], fireEvents: false);
+ *
+ *     Schema::batch([
+ *         Schema::enum($colorAttribute, 'red')->label('Red', 'en'),
+ *         Schema::enum($colorAttribute, 'blue')->label('Blue', 'en'),
  *     ], fireEvents: false);
  *
  * @method static GroupBuilder group(AttributeGroup|string $code)

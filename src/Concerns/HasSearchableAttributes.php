@@ -93,7 +93,7 @@ trait HasSearchableAttributes
             'attribute_values.translations',
             ...$this->searchableWith(),
         ];
-        
+
         if (($parent = $this->attributeParentRelationName()) !== null) {
             $relations[] = "{$parent}.attribute_values.attribute.enums.translations";
             $relations[] = "{$parent}.attribute_values.translations";

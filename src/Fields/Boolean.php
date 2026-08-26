@@ -7,9 +7,7 @@ namespace Jurager\Eav\Fields;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
 
-/**
- * Boolean attribute field with tolerant input parsing.
- */
+/** Boolean attribute field with tolerant input parsing. */
 class Boolean extends Field
 {
     public function column(): AttributeStorage
@@ -33,9 +31,7 @@ class Boolean extends Field
         return (bool) $raw;
     }
 
-    /**
-     * @return array<string, bool>
-     */
+    /** @return array<string, bool|list<bool>> */
     public function indexData(): array
     {
         $code = $this->code();

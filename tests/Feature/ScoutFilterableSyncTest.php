@@ -23,7 +23,7 @@ class ScoutFilterableSyncTest extends FeatureTestCase
 
     private function finishCommand(string $command = 'scout:sync-index-settings', int $exitCode = 0): void
     {
-        event(new CommandFinished($command, new ArrayInput([]), new NullOutput, $exitCode));
+        event(new CommandFinished($command, new ArrayInput([]), new NullOutput(), $exitCode));
     }
 
     private function assertDispatchedFor(string $entityType): void

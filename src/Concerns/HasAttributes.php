@@ -125,7 +125,6 @@ trait HasAttributes
         return $this->validator()->validate($input);
     }
 
-
     /** Define Eloquent relation to Attribute through pivot. */
     public function assignedAttributes(): MorphToMany
     {

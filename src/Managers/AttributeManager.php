@@ -161,15 +161,14 @@ class AttributeManager
     /**
      * Attributes for the given codes, resolved once per entity type and scope.
      *
-     * Entities of a type share their schema, so reading one attribute off a thousand of them would
-     * otherwise be a thousand identical queries.
-     *
      * @param list<string> $codes
      */
     private function attributesFor(array $codes): Collection
     {
         $scope = $this->entity?->attributeScopeIds() ?? [];
-        $key   = $this->resolveEntity()->getEntityType() . ':schema:' . implode(',', $scope);
+        sort($scope);
+
+        $key = $this->resolveEntity()->getEntityType() . ':schema:' . implode(',', $scope);
 
         return $this->schemaRegistry
             ->resolve($key, fn (): Collection => $this->query($scope)?->get() ?? collect())
@@ -274,6 +273,7 @@ class AttributeManager
             })
             ->map(function ($value, $code) {
                 $field = clone $this->fields[$code];
+
                 return $field->fill($value) ? $field : null;
             })
             ->filter();
@@ -289,7 +289,7 @@ class AttributeManager
         if (($collection = $this->loadedValues()) !== null) {
             if ($codes !== null) {
                 $collection = $collection->filter(
-                    fn ($ea) => $ea->relationLoaded('attribute') && in_array($ea->attribute->code ?? null, $codes, true)
+                    fn ($ea) => $ea->relationLoaded('attribute') && in_array($ea->attribute?->getAttribute('code'), $codes, true)
                 );
             }
 
@@ -333,7 +333,7 @@ class AttributeManager
             $this->enumRegistry,
             fn (string $code) => $this->field($code),
             fn (string $code) => $this->entity?->getEntityType()
-                ?? ($this->fields[$code] ?? null)?->attribute()->entity_type,
+                ?? ($this->fields[$code] ?? null)?->attribute()->getAttribute('entity_type'),
         );
     }
 
@@ -380,10 +380,7 @@ class AttributeManager
     }
 
     /**
-     * Stored values for the given attributes.
-     *
-     * Reuses `attribute_values` when it is already loaded, so a batch that eager loaded them reads one
-     * attribute off many entities without a query per entity.
+     * Stored values for the given attributes, reusing `attribute_values` when already loaded.
      *
      * @param list<int> $attributeIds
      */
@@ -428,8 +425,8 @@ class AttributeManager
         $overridden = $own->pluck('attribute_id')->all();
 
         return $own->concat($parent->attribute_values->loadMissing('attribute')->filter(
-            static fn (Model $value): bool => (bool) $value->attribute?->inherit_from_parent
-                && ! in_array($value->attribute_id, $overridden, true)
+            static fn (Model $value): bool => (bool) $value->attribute?->getAttribute('inherit_from_parent')
+                && ! in_array($value->getAttribute('attribute_id'), $overridden, true)
         ));
     }
 
@@ -478,7 +475,8 @@ class AttributeManager
      */
     private function indexableValues(): Collection
     {
-        $indexable = static fn (?Attribute $attribute): bool => (bool) ($attribute?->searchable || $attribute?->filterable);
+        $indexable = static fn (?Attribute $attribute): bool =>
+        (bool) ($attribute?->getAttribute('searchable') || $attribute?->getAttribute('filterable'));
 
         if (($loaded = $this->loadedValues()) !== null) {
             return $loaded->filter(fn (Model $value): bool => $indexable($value->attribute))->values();

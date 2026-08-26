@@ -38,13 +38,7 @@ class GroupBuilder extends Fluent
         return $this;
     }
 
-    /**
-     * Export the queued group as a data array, without persisting it.
-     *
-     * Requires the builder to have been constructed with a code.
-     *
-     * @return array<string, mixed>
-     */
+    /** Export the queued group as a data array, without persisting it. */
     public function build(): array
     {
         if (! is_string($this->subject)) {

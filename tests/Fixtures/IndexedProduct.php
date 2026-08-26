@@ -19,7 +19,6 @@ class IndexedProduct extends Product implements InteractsWithIndex
     }
 
     public function indexFields(): array
-
     {
 
         return [];

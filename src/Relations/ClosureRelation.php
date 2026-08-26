@@ -13,9 +13,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 /** Read-only relation whose results are resolved per-parent via a closure. */
 class ClosureRelation extends Relation
 {
-    /**
-     * Query resolved for parent.
-     */
+    /** The query resolved for the current parent. */
     private ?Builder $resolvedQuery = null;
 
     private bool $resolvedQuerySet = false;
@@ -70,9 +68,7 @@ class ClosureRelation extends Relation
         return $this->related->newCollection();
     }
 
-    /**
-     * Forward calls to the query resolved for parent.
-     */
+    /** Forward calls to the query resolved for parent. */
     public function __call($method, $parameters): mixed
     {
         $query = $this->queryForParent() ?? $this->related->newQuery()->whereKey([]);
@@ -86,9 +82,7 @@ class ClosureRelation extends Relation
         return $result;
     }
 
-    /**
-     * Resolve and memoize the query scoped to parent.
-     */
+    /** Get the query resolved for the current parent. */
     private function queryForParent(): ?Builder
     {
         if (! $this->resolvedQuerySet) {

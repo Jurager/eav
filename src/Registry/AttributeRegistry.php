@@ -10,40 +10,19 @@ use Jurager\Eav\Models\Attribute;
 
 class AttributeRegistry
 {
-    /**
-     * Attributes of each entity type, keyed by ID. Shared by every request the process serves.
-     *
-     * @var array<string, Collection<int, Attribute>>
-     */
+    /** @var array<string, Collection<int, Attribute>> */
     private static array $byEntityType = [];
 
-    /**
-     * State of the `attributes` table each entity type was read at.
-     *
-     * @var array<string, string>
-     */
+    /** @var array<string, string> */
     private static array $stamps = [];
 
-    /**
-     * IDs a lookup already failed to resolve, so a dangling reference is not queried per row.
-     *
-     * @var array<string, array<int, true>>
-     */
+    /** @var array<string, array<int, true>> */
     private static array $unresolved = [];
 
-    /**
-     * Entity types already checked against the table during this request.
-     *
-     * Held on the instance, which the container drops between requests and between queued jobs.
-     * That is what keeps the check to once per entity type per request rather than once per lookup.
-     *
-     * @var array<string, true>
-     */
+    /** @var array<string, true> */
     private array $checkedThisRequest = [];
 
-    /**
-     * Get all cached attributes for a given entity type, keyed by ID.
-     */
+    /** Get all cached attributes for a given entity type, keyed by ID. */
     public function forEntityType(string $entityType): Collection
     {
         if (! isset(self::$byEntityType[$entityType]) || $this->changed($entityType)) {
@@ -59,9 +38,7 @@ class AttributeRegistry
         return $this->get($id, $entityType) !== null;
     }
 
-    /**
-     * Get an attribute by its ID, scoped to the given entity type.
-     */
+    /** Get an attribute by its ID, scoped to the given entity type. */
     public function get(int $id, string $entityType): ?Attribute
     {
         $attributes = $this->forEntityType($entityType);
@@ -83,9 +60,7 @@ class AttributeRegistry
         return $attribute;
     }
 
-    /**
-     * Clear the cache.
-     */
+    /** Clear the cache. */
     public function forget(?string $entityType = null): void
     {
         if ($entityType === null) {
@@ -104,9 +79,7 @@ class AttributeRegistry
         );
     }
 
-    /**
-     * Drop everything the process holds.
-     */
+    /** Drop everything the process holds. */
     public static function flush(): void
     {
         self::$byEntityType = [];
@@ -114,11 +87,7 @@ class AttributeRegistry
         self::$unresolved = [];
     }
 
-    /**
-     * Determine if the table moved under an entity type since it was read.
-     *
-     * Costs one aggregate; the rows themselves are read again only when it says so.
-     */
+    /** Determine if the table moved under an entity type since it was read. */
     private function changed(string $entityType): bool
     {
         if (isset($this->checkedThisRequest[$entityType])) {
@@ -145,9 +114,7 @@ class AttributeRegistry
         unset(self::$unresolved[$entityType]);
     }
 
-    /**
-     * State of an entity type's rows, as far as a change to them is observable.
-     */
+    /** Get the state of an entity type's rows, as far as a change is observable. */
     private function stamp(string $entityType): string
     {
         $state = Eav::$attributeModel::query()

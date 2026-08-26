@@ -31,10 +31,7 @@ class BelongsToScoped extends BelongsTo
         parent::addConstraints();
 
         if (static::$constraints) {
-            $this->query->where(
-                $this->ownerScopeKey,
-                $this->child->getAttribute($this->foreignScopeKey)
-            );
+            $this->query->where($this->ownerScopeKey, $this->child->getAttribute($this->foreignScopeKey));
         }
     }
 
@@ -43,10 +40,7 @@ class BelongsToScoped extends BelongsTo
     {
         parent::addEagerConstraints($models);
 
-        $this->query->whereIn(
-            $this->ownerScopeKey,
-            $this->getEagerScopeKeys($models)
-        );
+        $this->query->whereIn($this->ownerScopeKey, $this->getEagerScopeKeys($models));
     }
 
     /** Match the eagerly loaded results to their parents. */
@@ -86,7 +80,7 @@ class BelongsToScoped extends BelongsTo
     {
         return collect($models)
             ->map(fn (Model $model) => $model->getAttribute($this->foreignScopeKey))
-            ->filter(fn ($scope) => ! is_null($scope))
+            ->filter(fn (mixed $scope): bool => $scope !== null)
             ->unique()
             ->values()
             ->all();

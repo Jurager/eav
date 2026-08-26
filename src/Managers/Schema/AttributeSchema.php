@@ -4,26 +4,16 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Managers\Schema;
 
-use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Database\ConnectionResolverInterface;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted;
 use Jurager\Eav\Events\AttributeUpdated;
-use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Eav;
 
 class AttributeSchema extends BaseSchema
 {
-    public function __construct(
-        TranslationManager $translations,
-        ConnectionResolverInterface $db,
-        Dispatcher $events,
-        private AttributeBatchSchema $batchSchema,
-    ) {
-        parent::__construct($translations, $db, $events);
-    }
-
     /** Find an attribute by ID. */
     public function find(int $id): Attribute
     {
@@ -106,10 +96,43 @@ class AttributeSchema extends BaseSchema
         return $attribute->fresh();
     }
 
-    /** Get the batch schema manager. */
-    public function batch(): AttributeBatchSchema
+    /** Create many attributes in a single batch — for imports, not one-off seeding. */
+    public function batch(array $attributesData, bool $fireEvents = true): Collection
     {
-        return $this->batchSchema;
+        if (empty($attributesData)) {
+            return collect();
+        }
+
+        $types = $this->fetchTypes($attributesData);
+        $sortCounters = $this->initializeSortCounters($attributesData);
+        $now = now();
+
+        [$rows, $translationMap] = $this->buildBatchRows($attributesData, $types, $sortCounters, $now);
+
+        $created = $this->transaction(function () use ($rows, $translationMap, $now): Collection {
+            $maxIdBefore = (int) ($this->query()->withTrashed()->max('id') ?? 0);
+
+            foreach (array_chunk($rows, 500) as $chunk) {
+                $this->query()->insert($chunk);
+            }
+
+            $created = $this->query()
+                ->whereIn('entity_type', array_values(array_unique(array_column($rows, 'entity_type'))))
+                ->whereIn('code', array_column($rows, 'code'))
+                ->where('id', '>', $maxIdBefore)
+                ->get()
+                ->keyBy(fn (Attribute $a) => "{$a->entity_type}:{$a->code}");
+
+            $this->saveBatchTranslations($created, $translationMap, $now);
+
+            return $created;
+        });
+
+        if ($fireEvents) {
+            $created->each(fn (Attribute $attribute) => $this->events->dispatch(new AttributeCreated($attribute)));
+        }
+
+        return $created;
     }
 
     /** Get the model class. */
@@ -125,5 +148,59 @@ class AttributeSchema extends BaseSchema
                 ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
                 ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
                 ->max('sort') + 1;
+    }
+
+    /** Pre-fetch attribute types indexed by ID. */
+    private function fetchTypes(array $attributesData): Collection
+    {
+        return Eav::$attributeTypeModel::query()
+            ->whereIn('id', array_values(array_unique(array_column($attributesData, 'attribute_type_id'))))
+            ->get()
+            ->keyBy('id');
+    }
+
+    /** Pre-compute MAX(sort) per group for sequential numbering. */
+    private function initializeSortCounters(array $attributesData): array
+    {
+        $groupIds = array_unique(array_map(fn (array $d) => $d['attribute_group_id'] ?? null, $attributesData));
+
+        $counters = [];
+
+        foreach ($groupIds as $groupId) {
+            $counters[(string) $groupId] = (int) $this->query()
+                ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
+                ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
+                ->max('sort');
+        }
+
+        return $counters;
+    }
+
+    /** Transform raw payloads into DB row arrays and extract translation data. */
+    private function buildBatchRows(array $attributesData, Collection $types, array $sortCounters, Carbon $now): array
+    {
+        $translationMap = [];
+        $rows = [];
+
+        foreach ($attributesData as $data) {
+            $key = ($data['entity_type'] ?? '') . ':' . $data['code'];
+            $translationMap[$key] = $data['translations'] ?? [];
+            unset($data['translations']);
+
+            if ($type = $types[$data['attribute_type_id']] ?? null) {
+                $data = $type->constrain($data);
+            }
+
+            if (! isset($data['sort'])) {
+                $groupKey = (string) ($data['attribute_group_id'] ?? '');
+                $data['sort'] = ++$sortCounters[$groupKey];
+            }
+
+            $data['created_at'] = $now;
+            $data['updated_at'] = $now;
+            $rows[] = $data;
+        }
+
+        return [$rows, $translationMap];
     }
 }

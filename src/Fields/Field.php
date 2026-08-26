@@ -13,9 +13,7 @@ use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
-/**
- * Base attribute field.
- */
+/** Base attribute field. */
 abstract class Field
 {
     use ValidatesPayload;
@@ -24,9 +22,7 @@ abstract class Field
     /** @var array<int, array{locale_id: int|null, value: mixed}> */
     protected array $values = [];
 
-    /**
-     * Bound entity context — set by AttributeManager, null in schema-only managers.
-     */
+    /** Bound entity context — set by AttributeManager, null in schema-only managers. */
     protected ?Attributable $entity = null;
 
     public function __construct(
@@ -46,6 +42,7 @@ abstract class Field
     {
         return $value;
     }
+
     public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
     {
         return $rawValue;
@@ -87,9 +84,7 @@ abstract class Field
         return true;
     }
 
-    /**
-     * @param  Collection<int, object>  $models  entity_attribute rows.
-     */
+    /** @param Collection<int, object> $models entity_attribute rows. */
     public function hydrate(Collection $models): void
     {
         if ($models->isEmpty()) {
@@ -112,7 +107,7 @@ abstract class Field
         $byLocale = [];
         foreach ($models as $model) {
             foreach ($model->translations as $translation) {
-                $byLocale[$translation->id][] = $translation->pivot->label;
+                $byLocale[$translation->getAttribute('id')][] = $translation->pivot->getAttribute('label');
             }
         }
 
@@ -122,9 +117,7 @@ abstract class Field
         ])->values()->all();
     }
 
-    /**
-     * @return array<int, array{value: mixed, translations: array}>
-     */
+    /** @return array<int, array{value: mixed, translations: array}> */
     public function toStorage(): array
     {
         if (! $this->isLocalizable()) {
@@ -195,10 +188,7 @@ abstract class Field
         $this->values[] = ['locale_id' => $localeId, 'value' => $normalized];
     }
 
-    /**
-     * Append one or more values to a `multiple: true` field without disturbing the rest.
-     * Accepts a single value or an array of values.
-     */
+    /** Append one or more values (single value or array) to a `multiple: true` field without disturbing the rest. */
     public function add(mixed $value, ?int $localeId = null): void
     {
         if (! $this->isMultiple()) {
@@ -257,37 +247,37 @@ abstract class Field
 
     public function code(): string
     {
-        return $this->attribute->code;
+        return $this->attribute->getAttribute('code');
     }
 
     public function isLocalizable(): bool
     {
-        return $this->attribute->localizable;
+        return $this->attribute->getAttribute('localizable');
     }
 
     public function isMultiple(): bool
     {
-        return $this->attribute->multiple;
+        return $this->attribute->getAttribute('multiple');
     }
 
     public function isRequired(): bool
     {
-        return $this->attribute->required;
+        return $this->attribute->getAttribute('required');
     }
 
     public function isUnique(): bool
     {
-        return $this->attribute->unique;
+        return $this->attribute->getAttribute('unique');
     }
 
     public function isFilterable(): bool
     {
-        return $this->attribute->filterable ?? false;
+        return $this->attribute->getAttribute('filterable') ?? false;
     }
 
     public function isSearchable(): bool
     {
-        return $this->attribute->searchable ?? false;
+        return $this->attribute->getAttribute('searchable') ?? false;
     }
 
     /** @return array<string, mixed> */
@@ -295,7 +285,7 @@ abstract class Field
     {
         return [
             'code'       => $this->code(),
-            'type'       => $this->attribute->type->code ?? null,
+            'type'       => $this->attribute->type?->getAttribute('code'),
             'localizable' => $this->isLocalizable(),
             'multiple'   => $this->isMultiple(),
             'required'   => $this->isRequired(),
@@ -307,8 +297,9 @@ abstract class Field
 
     public function read(object $model): mixed
     {
-        return $model->{$this->column()->value};
+        return $model->getAttribute($this->column()->value);
     }
+
     protected function resolveValue(mixed $raw): mixed
     {
         if ($raw === null) {

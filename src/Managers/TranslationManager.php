@@ -7,6 +7,7 @@ namespace Jurager\Eav\Managers;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use JsonException;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Registry\LocaleRegistry;
@@ -59,7 +60,7 @@ class TranslationManager
 
     /**
      * Save translations for a specific model.
-     * @throws \JsonException
+     * @throws JsonException
      */
     public function save(Model $model, array $translations, bool $partial = false): void
     {
@@ -87,7 +88,7 @@ class TranslationManager
 
     /**
      * Persist translations for multiple models in a bulk upsert.
-     * @throws \JsonException
+     * @throws JsonException
      */
     public function batch(array $modelsWithTranslations, ?Carbon $timestamp = null): void
     {

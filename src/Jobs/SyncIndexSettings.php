@@ -69,10 +69,10 @@ class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
      */
     protected function pathsFor(array $fields, IndexCapability $capability): array
     {
-        return array_values(array_keys(array_filter(
+        return array_keys(array_filter(
             $fields,
             static fn (array $capabilities): bool => in_array($capability, $capabilities, true),
-        )));
+        ));
     }
 
     /** Determine if the current Scout engine is Meilisearch. */

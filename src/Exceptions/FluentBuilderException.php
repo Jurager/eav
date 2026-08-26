@@ -54,4 +54,10 @@ class FluentBuilderException extends EavException
     {
         return new self('This builder was constructed from a code, not an existing record — call ->create() instead, or pass the existing model to build an update.');
     }
+
+    /** Create a new exception for a builder type Schema::batch() does not know how to persist. */
+    public static function unsupportedBatchBuilder(string $class): self
+    {
+        return new self(sprintf('Schema::batch() does not support builder [%s].', $class));
+    }
 }

@@ -60,7 +60,9 @@ class LocaleRegistry
     public function current(): int
     {
         foreach ($this->active ?? [] as $code) {
-            if ($id = $this->find($code)) {
+            $id = $this->find($code);
+
+            if ($id !== null) {
                 return $id;
             }
         }

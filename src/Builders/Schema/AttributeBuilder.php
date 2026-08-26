@@ -15,12 +15,6 @@ use Jurager\Eav\Registry\LocaleRegistry;
 /**
  * Fluent builder for a single attribute definition.
  *
- * Boolean/scalar columns (required, unique, localizable, multiple, filterable,
- * searchable, sort, validations, meta, ...) are set dynamically — same mechanism
- * as Laravel's own `Schema::create()` column definitions — so any `Attribute`
- * column, including ones added by a consumer's own subclass, works without a
- * dedicated method here.
- *
  * @method $this required(bool $value = true)
  * @method $this unique(bool $value = true)
  * @method $this localizable(bool $value = true)
@@ -76,14 +70,7 @@ class AttributeBuilder extends Fluent
         return $this;
     }
 
-    /**
-     * Export the queued attribute as a data array, without persisting it.
-     *
-     * Used to collect several builders for `Schema::batch()`. Requires the builder
-     * to have been constructed with a code and entity type.
-     *
-     * @return array<string, mixed>
-     */
+    /** Export the queued attribute as a data array, without persisting it. */
     public function build(): array
     {
         if (! is_string($this->subject)) {
@@ -105,12 +92,7 @@ class AttributeBuilder extends Fluent
     /** Persist a new attribute. Requires the builder to have been constructed with a code and entity type. */
     public function create(): Attribute
     {
-        $attribute = $this->schema->create($this->build());
-
-        // Columns left unset above (e.g. boolean flags never called) only get their
-        // value from the DB column default, which the in-memory instance won't see
-        // until refreshed — avoids hardcoding a second copy of those defaults here.
-        return $attribute->refresh();
+        return $this->schema->create($this->build())->refresh();
     }
 
     /**

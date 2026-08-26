@@ -10,9 +10,7 @@ use Exception;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
 
-/**
- * Date/time field stored as datetime and exposed as Carbon instances.
- */
+/** Date/time field stored as datetime and exposed as Carbon instances. */
 class Date extends Field
 {
     public function column(): AttributeStorage
@@ -20,9 +18,7 @@ class Date extends Field
         return AttributeStorage::Datetime;
     }
 
-    /**
-     * @return Carbon|array<int, Carbon>|null
-     */
+    /** @return Carbon|array<int, Carbon>|null */
     public function value(?int $localeId = null): Carbon|array|null
     {
         $raw = parent::value($localeId);
@@ -62,6 +58,7 @@ class Date extends Field
         return $value->format($format);
     }
 
+    /** @return array<string, int|list<int>> */
     public function indexData(): array
     {
         $code = $this->code();
@@ -122,7 +119,7 @@ class Date extends Field
 
         try {
             return Carbon::parse($value);
-        } catch (InvalidFormatException) {
+        } catch (Exception) {
             return null;
         }
     }

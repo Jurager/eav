@@ -18,6 +18,7 @@ use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeGroup;
+use Jurager\Eav\Registry\LocaleRegistry;
 
 class SchemaManagerTest extends FeatureTestCase
 {
@@ -231,7 +232,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
 
-        $created = $this->schema->attribute()->batch()->execute([
+        $created = $this->schema->attribute()->batch([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch1'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch2'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch3'],
@@ -247,7 +248,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
 
-        $this->schema->attribute()->batch()->execute([
+        $this->schema->attribute()->batch([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev1'],
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev2'],
         ]);
@@ -259,7 +260,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
 
-        $this->schema->attribute()->batch()->execute([
+        $this->schema->attribute()->batch([
             ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'silent'],
         ], false);
 
@@ -383,6 +384,91 @@ class SchemaManagerTest extends FeatureTestCase
 
         $this->assertDatabaseMissing('attribute_enums', ['id' => $enum->id]);
         Event::assertDispatched(AttributeEnumDeleted::class);
+    }
+
+    // -----------------------------------------------------------------------
+    // Enum batch
+    // -----------------------------------------------------------------------
+
+    public function test_enum_batch_creates_multiple_options(): void
+    {
+        $type = $this->createAttributeType('select');
+        $attr = $this->createAttribute($type, ['code' => 'color']);
+
+        $created = $this->schema->enum()->batch([
+            ['attribute_id' => $attr->id, 'code' => 'red', 'sort' => 0],
+            ['attribute_id' => $attr->id, 'code' => 'blue', 'sort' => 1],
+        ]);
+
+        $this->assertCount(2, $created);
+        $this->assertDatabaseHas('attribute_enums', ['code' => 'red', 'attribute_id' => $attr->id]);
+        $this->assertDatabaseHas('attribute_enums', ['code' => 'blue', 'attribute_id' => $attr->id]);
+    }
+
+    public function test_enum_batch_persists_translations(): void
+    {
+        $type = $this->createAttributeType('select');
+        $attr = $this->createAttribute($type, ['code' => 'color']);
+
+        // setUp() already seeds the "en" locale.
+        $created = $this->schema->enum()->batch([
+            ['attribute_id' => $attr->id, 'code' => 'red', 'sort' => 0, 'translations' => [
+                ['locale_id' => app(LocaleRegistry::class)->find('en'), 'label' => 'Red'],
+            ]],
+        ]);
+
+        $labels = $created->get("{$attr->id}:red")->translations->pluck('pivot.label', 'code')->all();
+
+        $this->assertSame('Red', $labels['en']);
+    }
+
+    public function test_enum_batch_is_idempotent_for_existing_options(): void
+    {
+        $type = $this->createAttributeType('select');
+        $attr = $this->createAttribute($type, ['code' => 'color']);
+        $existing = $this->createEnum($attr, 'red');
+
+        $created = $this->schema->enum()->batch([
+            ['attribute_id' => $attr->id, 'code' => 'red', 'sort' => 5],
+        ]);
+
+        $this->assertCount(1, $created);
+        $this->assertSame($existing->id, $created->get("{$attr->id}:red")->id);
+        $this->assertDatabaseHas('attribute_enums', ['id' => $existing->id, 'sort' => 5]);
+    }
+
+    public function test_enum_batch_dispatches_created_and_updated_events(): void
+    {
+        $type = $this->createAttributeType('select');
+        $attr = $this->createAttribute($type, ['code' => 'color']);
+        $this->createEnum($attr, 'red');
+
+        $this->schema->enum()->batch([
+            ['attribute_id' => $attr->id, 'code' => 'red', 'sort' => 1],
+            ['attribute_id' => $attr->id, 'code' => 'blue', 'sort' => 2],
+        ]);
+
+        Event::assertDispatchedTimes(AttributeEnumUpdated::class, 1);
+        Event::assertDispatchedTimes(AttributeEnumCreated::class, 1);
+    }
+
+    public function test_enum_batch_with_fire_events_false_skips_events(): void
+    {
+        $type = $this->createAttributeType('select');
+        $attr = $this->createAttribute($type, ['code' => 'color']);
+
+        $this->schema->enum()->batch([
+            ['attribute_id' => $attr->id, 'code' => 'silent', 'sort' => 0],
+        ], false);
+
+        Event::assertNotDispatched(AttributeEnumCreated::class);
+    }
+
+    public function test_enum_batch_does_not_persist_anything_when_empty(): void
+    {
+        $created = $this->schema->enum()->batch([]);
+
+        $this->assertCount(0, $created);
     }
 
     // -----------------------------------------------------------------------

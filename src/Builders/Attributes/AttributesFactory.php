@@ -12,9 +12,7 @@ use Jurager\Eav\Managers\AttributeManager;
 class AttributesFactory
 {
     /**
-     * Build a schema-only manager for an entity type — an FQCN implementing
-     * `Attributable`, or its morph-map key. For a live entity, call `eav()` on
-     * the entity itself instead; its manager is cached on the instance.
+     * Build a schema-only manager for an entity type.
      */
     public function for(string $entityType): AttributeManager
     {

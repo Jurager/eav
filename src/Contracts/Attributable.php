@@ -15,9 +15,7 @@ interface Attributable
     /** Get the scope IDs that determine available attributes. */
     public function attributeScopeIds(): array;
 
-    /**
-     * Get the related entities whose attributes make up this entity's scope.
-     */
+    /** Get the related entities whose attributes make up this entity's scope. */
     public function attributeScopeEntities(): Collection;
 
     /** Get the parent entity this one is a variant of, if any. */

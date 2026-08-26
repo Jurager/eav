@@ -12,9 +12,7 @@ enum IndexCapability: string
     case Filter = 'filter';
     case Sort = 'sort';
 
-    /**
-     * Whether the model grants this capability on the given index path.
-     */
+    /** Whether the model grants this capability on the given index path. */
     public function allowed(Model $model, string $path): bool
     {
         if (! $model instanceof InteractsWithIndex) {
@@ -28,7 +26,9 @@ enum IndexCapability: string
                 return true;
             }
 
-            $path = substr($path, 0, (int) strrpos($path, '.'));
+            $last = strrpos($path, '.');
+
+            $path = $last === false ? '' : substr($path, 0, $last);
         }
 
         return false;

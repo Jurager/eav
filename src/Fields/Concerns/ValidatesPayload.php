@@ -160,7 +160,7 @@ trait ValidatesPayload
         $map = config('eav.validations', []);
         $rules = [];
 
-        foreach ($this->attribute->validations ?? [] as $validation) {
+        foreach ($this->attribute->getAttribute('validations') ?? [] as $validation) {
             $type = $validation['type'] ?? null;
             $param = $validation['value'] ?? null;
 

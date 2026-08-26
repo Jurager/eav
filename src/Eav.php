@@ -36,58 +36,44 @@ class Eav
     public static string $localeModel = Locale::class;
 
     /** Set the model used to represent attributes. */
-    public static function useAttributeModel(string $model): static
+    public static function useAttributeModel(string $model): void
     {
         static::$attributeModel = $model;
-
-        return new static();
     }
 
     /** Set the model used to represent attribute types. */
-    public static function useAttributeTypeModel(string $model): static
+    public static function useAttributeTypeModel(string $model): void
     {
         static::$attributeTypeModel = $model;
-
-        return new static();
     }
 
     /** Set the model used to represent attribute groups. */
-    public static function useAttributeGroupModel(string $model): static
+    public static function useAttributeGroupModel(string $model): void
     {
         static::$attributeGroupModel = $model;
-
-        return new static();
     }
 
     /** Set the model used to represent attribute enum options. */
-    public static function useAttributeEnumModel(string $model): static
+    public static function useAttributeEnumModel(string $model): void
     {
         static::$attributeEnumModel = $model;
-
-        return new static();
     }
 
     /** Set the model used to represent entity attribute values. */
-    public static function useEntityAttributeModel(string $model): static
+    public static function useEntityAttributeModel(string $model): void
     {
         static::$entityAttributeModel = $model;
-
-        return new static();
     }
 
     /** Set the model used to represent entity translations. */
-    public static function useEntityTranslationModel(string $model): static
+    public static function useEntityTranslationModel(string $model): void
     {
         static::$entityTranslationModel = $model;
-
-        return new static();
     }
 
     /** Set the model used to represent locales. */
-    public static function useLocaleModel(string $model): static
+    public static function useLocaleModel(string $model): void
     {
         static::$localeModel = $model;
-
-        return new static();
     }
 }

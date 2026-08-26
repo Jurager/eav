@@ -133,9 +133,11 @@ class EavServiceProvider extends ServiceProvider
     /** Register Scout hook for automatic filterable sync. */
     private function registerScoutHook(): void
     {
-        $this->app->make(Dispatcher::class)->listen(EntityValuesChanged::class, ReindexChangedEntities::class);
+        $dispatcher = $this->app->make(Dispatcher::class);
 
-        $this->app->make(Dispatcher::class)->listen(CommandFinished::class, static function (CommandFinished $event) {
+        $dispatcher->listen(EntityValuesChanged::class, ReindexChangedEntities::class);
+
+        $dispatcher->listen(CommandFinished::class, static function (CommandFinished $event) {
 
             if ($event->command !== 'scout:sync-index-settings' || $event->exitCode !== 0) {
                 return;
@@ -146,7 +148,7 @@ class EavServiceProvider extends ServiceProvider
     }
 
     /**
-     * Entity types whose filterable attributes must be restored after scout rewrites index settings from config.
+     * Get entity types whose filterable attributes must be restored.
      *
      * @return Collection<int, string>
      */
@@ -162,7 +164,7 @@ class EavServiceProvider extends ServiceProvider
     }
 
     /**
-     * Morph aliases of the models declaring additional index paths.
+     * Get morph aliases of models declaring additional index paths.
      *
      * @return Collection<int, string>
      */

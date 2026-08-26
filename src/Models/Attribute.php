@@ -61,30 +61,37 @@ class Attribute extends Model
     {
         static::forceDeleting(fn (Attribute $attribute) => $attribute->translations()->delete());
 
-        static::saving(function (Attribute $attribute) {
-            if ($attribute->type?->code === 'select') {
-                $attribute->localizable = false;
-            }
-        });
+        static::saving(static fn (Attribute $attribute) => static::enforceNonLocalizableForSelectType($attribute));
 
-        // Load type and group from the request cache to avoid redundant database queries
-        static::retrieved(function (Attribute $attribute) {
-            if (! $attribute->relationLoaded('type')) {
-                $attribute->setRelation('type', $attribute->attribute_type_id !== null
-                    ? app(AttributeTypeRegistry::class)->get($attribute->attribute_type_id)
-                    : null);
-            }
-
-            if (! $attribute->relationLoaded('group')) {
-                $attribute->setRelation('group', $attribute->attribute_group_id !== null
-                    ? app(AttributeGroupRegistry::class)->get($attribute->attribute_group_id)
-                    : null);
-            }
-        });
+        static::retrieved(static fn (Attribute $attribute) => static::hydrateFromRegistries($attribute));
 
         static::addGlobalScope('ordered', function (Builder $query) {
             $query->orderBy('attribute_group_id')->orderBy('sort')->orderBy('id');
         });
+    }
+
+    /** Force select-type attributes to be non-localizable. */
+    protected static function enforceNonLocalizableForSelectType(Attribute $attribute): void
+    {
+        if ($attribute->type?->code === 'select') {
+            $attribute->setAttribute('localizable', false);
+        }
+    }
+
+    /** Populate the type and group relations from the registry cache. */
+    protected static function hydrateFromRegistries(Attribute $attribute): void
+    {
+        if (! $attribute->relationLoaded('type')) {
+            $attribute->setRelation('type', $attribute->getAttribute('attribute_type_id') !== null
+                ? app(AttributeTypeRegistry::class)->get($attribute->getAttribute('attribute_type_id'))
+                : null);
+        }
+
+        if (! $attribute->relationLoaded('group')) {
+            $attribute->setRelation('group', $attribute->getAttribute('attribute_group_id') !== null
+                ? app(AttributeGroupRegistry::class)->get($attribute->getAttribute('attribute_group_id'))
+                : null);
+        }
     }
 
     protected function casts(): array
@@ -106,7 +113,6 @@ class Attribute extends Model
             'inherit_from_parent' => 'boolean',
         ];
     }
-
 
     public function type(): BelongsTo
     {
@@ -165,7 +171,7 @@ class Attribute extends Model
     /** Determine if the given side fills this attribute in. */
     public function isHeldBy(HeldBy $side): bool
     {
-        return $this->held_by === $side || $this->held_by === HeldBy::Both;
+        return $this->getAttribute('held_by') === $side || $this->getAttribute('held_by') === HeldBy::Both;
     }
 
     /** Scope a query to eager load common attribute relationships. */

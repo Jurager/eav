@@ -8,17 +8,15 @@ use Illuminate\Support\Collection;
 
 class SchemaRegistry
 {
+    /** @var array<string, Collection<array-key, mixed>> */
+    private array $schemas = [];
+
     /**
      * @template TKey of array-key
      * @template TValue
      *
-     * @var array<string, Collection<TKey, TValue>>
-     */
-    private array $schemas = [];
-
-    /**
+     * @param  callable(): Collection<TKey, TValue>  $loader
      * @return Collection<TKey, TValue>
-     * @param callable(): Collection<TKey, TValue> $loader
      */
     public function resolve(string $key, callable $loader): Collection
     {
@@ -36,10 +34,6 @@ class SchemaRegistry
 
         $prefix = "{$entityType}:";
 
-        foreach ($this->schemas as $key => $_) {
-            if (str_starts_with($key, $prefix)) {
-                unset($this->schemas[$key]);
-            }
-        }
+        $this->schemas = array_filter($this->schemas, static fn (string $key): bool => ! str_starts_with($key, $prefix), ARRAY_FILTER_USE_KEY);
     }
 }

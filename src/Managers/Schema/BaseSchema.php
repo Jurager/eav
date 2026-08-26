@@ -9,6 +9,7 @@ use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\ConnectionResolverInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Managers\TranslationManager;
 
@@ -93,6 +94,20 @@ abstract class BaseSchema
     {
         if (! empty($translations)) {
             $this->translations->save($model, $translations);
+        }
+    }
+
+    /** Save translations for a batch of models — the batch counterpart to saveTranslations(). */
+    protected function saveBatchTranslations(Collection $saved, array $translationMap, Carbon $now): void
+    {
+        $batch = $saved
+            ->filter(fn (Model $model, string $key) => ! empty($translationMap[$key]))
+            ->map(fn (Model $model, string $key) => [$model, $translationMap[$key]])
+            ->values()
+            ->all();
+
+        if (! empty($batch)) {
+            $this->translations->batch($batch, $now);
         }
     }
 

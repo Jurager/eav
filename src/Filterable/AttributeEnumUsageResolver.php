@@ -11,9 +11,7 @@ use Jurager\Eav\Eav;
 use Jurager\Filterable\Concerns\HasFilterable;
 use Jurager\Filterable\Contracts\RelationResolver;
 
-/**
- * Resolve constraint on an eager-loaded enum relation, keeping only the options actually selected by the matching entities
- */
+/** Constrain an eager-loaded enum relation to the options used by matching entities. */
 class AttributeEnumUsageResolver implements RelationResolver
 {
     /** Segment marking a filter as a usage constraint: `<relation>.used_by.<entity_type>`. */
