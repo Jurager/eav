@@ -108,11 +108,15 @@ class AttributeManager
 
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
+
+                // Unfilled fields validate fine (an empty value is a valid one) but must not
+                // reach the persister: a blank row still counts as the entity's own value and
+                // blocks a variant from inheriting the parent's, same as attach()/replace().
                 $fields = ($prebuiltSchema ?? static::schema($entity))->fill(
                     $item['data'],
                     $entity,
                     $onRejected !== null ? fn (string $code) => $onRejected($entity, $code) : null,
-                );
+                )->filter(fn (Field $field) => $field->isFilled());
 
                 if ($fields->isNotEmpty()) {
                     $persister->add($entity, $fields);

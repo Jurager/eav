@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\Queue;
 use Laravel\Scout\Jobs\MakeSearchable;
 use Illuminate\Validation\ValidationException;
 use Jurager\Eav\Enums\HeldBy;
+use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 
@@ -276,6 +278,44 @@ class ParentInheritanceTest extends FeatureTestCase
         $parent = $this->createProduct();
 
         $this->assertSame([], $this->createVariant($parent)->validate([['code' => 'nope', 'values' => 'x']]));
+    }
+
+    public function test_syncing_an_empty_value_does_not_block_inheritance(): void
+    {
+        $localeId = app(LocaleRegistry::class)->find('en');
+        dump('localeId', $localeId);
+
+        $this->createAttribute($this->type, [
+            'code' => 'title',
+            'held_by' => HeldBy::Both,
+            'inherit_from_parent' => true,
+            'localizable' => true,
+        ]);
+
+        $parent = $this->createProduct();
+        $parent->eav()->set('title', 'Parent title', $localeId)->save('title');
+
+        dump('LocaleRegistry::get()', app(LocaleRegistry::class)->get());
+        $row = \Jurager\Eav\Models\EntityAttribute::query()->with('translations')->find(1);
+        dump('row translations', $row->translations->toArray());
+        dump('parent own read', $parent->fresh()->eav()->value('title', $localeId));
+        dump('parent rows', DB::table('entity_attribute')->where('entity_id', $parent->id)->get()->toArray());
+        dump('entity_translations', DB::table('entity_translations')->get()->toArray());
+
+        $variant = $this->createVariant($parent);
+
+        // Mirrors what a bulk import sends for a variant with no value of its own: the code
+        // is present in the payload but empty. sync() must drop it rather than persist a
+        // blank row, or the row itself — regardless of its value — blocks inheritance.
+        AttributeManager::sync(collect([
+            ['entity' => $variant, 'data' => ['title' => []]],
+        ]));
+
+        dump('variant rows', DB::table('entity_attribute')->where('entity_id', $variant->id)->get()->toArray());
+        dump('variant attributeParent id', $variant->fresh()->attributeParent()?->id, 'parent id', $parent->id);
+
+        $this->assertSame('Parent title', $variant->fresh()->eav()->value('title', $localeId));
+        $this->assertSame(0, DB::table('entity_attribute')->where('entity_id', $variant->id)->count());
     }
 
     // -----------------------------------------------------------------------
