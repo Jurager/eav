@@ -6,6 +6,7 @@ namespace Jurager\Eav\Builders\Schema;
 
 use Illuminate\Support\Fluent;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Managers\Schema\AttributeSchema;
 use Jurager\Eav\Models\Attribute;
@@ -21,6 +22,8 @@ use Jurager\Eav\Registry\LocaleRegistry;
  * @method $this multiple(bool $value = true)
  * @method $this filterable(bool $value = true)
  * @method $this searchable(bool $value = true)
+ * @method $this held_by(HeldBy $side)
+ * @method $this inherit_from_parent(bool $value = true)
  * @method $this sort(int $position)
  * @method $this validations(array $rules)
  * @method $this meta(array $meta)
