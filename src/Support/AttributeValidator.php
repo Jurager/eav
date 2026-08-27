@@ -227,7 +227,7 @@ class AttributeValidator
         }
 
         return Eav::$entityTranslationModel::query()
-            ->where('entity_type', 'entity_attribute')
+            ->where('entity_type', (new (Eav::$entityAttributeModel)())->getMorphClass())
             ->whereIn('entity_id', $base->select('id'))
             ->where(function ($q) use ($labels) {
                 foreach ($labels as $t) {

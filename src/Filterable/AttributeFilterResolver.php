@@ -81,10 +81,8 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
         foreach ($conditions as [$operator, $operand]) {
             if ($operator === FilterOperator::Like->value && is_array($operand)) {
                 $query->where(function (Builder $sub) use ($attribute, $operand): void {
-                    foreach ($operand as $i => $val) {
-                        $i === 0
-                            ? $sub->whereAttribute($attribute, $val, FilterOperator::Like->value)
-                            : $sub->orWhere(fn (Builder $q) => $q->whereAttribute($attribute, $val, FilterOperator::Like->value));
+                    foreach ($operand as $value) {
+                        $sub->orWhere(fn (Builder $q) => $q->whereAttribute($attribute, $value, FilterOperator::Like->value));
                     }
                 });
 

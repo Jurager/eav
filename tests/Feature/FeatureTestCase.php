@@ -30,9 +30,7 @@ abstract class FeatureTestCase extends TestCase
 
         Queue::fake();
 
-        // 'entity_attribute' backs the translations relation: EntityAttributeTranslation
-        // rows store it as a hardcoded morph type, so a matching alias must be registered
-        // for the reverse Eloquent lookup to find them — the same as consuming apps must do.
+        // Consuming apps register this alias too; the translations relation needs it to find rows.
         Relation::morphMap(['product' => Product::class, 'entity_attribute' => EntityAttribute::class]);
 
         Schema::create('products', function (Blueprint $table) {

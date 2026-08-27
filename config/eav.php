@@ -51,6 +51,16 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Bulk Write Bind Limit
+    |--------------------------------------------------------------------------
+    | Maximum bound parameters per insert/upsert statement when persisting
+    | entity_attribute and translation rows in bulk. 65535 is the MySQL and
+    | PostgreSQL wire-protocol limit; lower it if your driver caps lower.
+    */
+    'bind_limit' => 65535,
+
+    /*
+    |--------------------------------------------------------------------------
     | Validation Rule Map
     |--------------------------------------------------------------------------
     | Maps validation type codes stored on attributes to Laravel rule prefixes.

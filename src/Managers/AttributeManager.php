@@ -115,7 +115,7 @@ class AttributeManager
                     $item['data'],
                     $entity,
                     $onRejected !== null ? fn (string $code) => $onRejected($entity, $code) : null,
-                )->filter(fn (Field $field) => $field->isFilled());
+                )->filter->isFilled();
 
                 if ($fields->isNotEmpty()) {
                     $persister->add($entity, $fields);
@@ -234,14 +234,14 @@ class AttributeManager
             $this->fields[$code] = $field;
         }
 
-        $this->persister()->persist(collect($fields)->filter(fn (Field $f) => $f->isFilled()));
+        $this->persister()->persist(collect($fields)->filter->isFilled());
     }
 
     /** Replace all entity_attribute rows with the given fields. */
     public function replace(array $fields): void
     {
         $this->fields = $fields;
-        $this->persister()->replace(collect($this->fields)->filter(fn (Field $f) => $f->isFilled()));
+        $this->persister()->replace(collect($this->fields)->filter->isFilled());
     }
 
     /** Delete entity_attribute rows for the given attribute IDs. */
@@ -487,7 +487,7 @@ class AttributeManager
         }
 
         return $this->entityQuery()
-            ->whereHas('attribute', fn ($q) => $q->where('searchable', true)->orWhere('filterable', true))
+            ->whereHas('attribute', fn ($q) => $q->whereAny(['searchable', 'filterable'], true))
             ->with(['attribute', 'attribute.enums.translations', 'translations'])
             ->get();
     }

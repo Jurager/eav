@@ -33,10 +33,7 @@ class AttributePersister
             return;
         }
 
-        $this->withinTimestamp(fn () => $this->persistGroup(
-            $this->entity->getEntityType(),
-            [$this->entity->id => $fields],
-        ));
+        $this->persistGroup($this->entity->getEntityType(), [$this->entity->id => $fields]);
     }
 
     public function save(Field $field): void
@@ -51,11 +48,11 @@ class AttributePersister
             return;
         }
 
-        $this->withinTimestamp(fn () => $this->db->connection()->transaction(function () use ($fields): void {
-            $keepIds = $fields->map(fn (Field $f) => $f->attribute()->id)->values()->all();
+        $this->db->connection()->transaction(function () use ($fields): void {
+            $keepIds = $fields->map->attribute()->pluck('id');
             $this->delete($this->entityQuery()->whereNotIn('attribute_id', $keepIds)->pluck('id')->all());
             $this->persistGroup($this->entity->getEntityType(), [$this->entity->id => $fields]);
-        }));
+        });
     }
 
     /** @param  array<int>  $attributeIds */

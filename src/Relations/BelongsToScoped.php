@@ -79,7 +79,7 @@ class BelongsToScoped extends BelongsTo
     protected function getEagerScopeKeys(array $models): array
     {
         return collect($models)
-            ->map(fn (Model $model) => $model->getAttribute($this->foreignScopeKey))
+            ->map->getAttribute($this->foreignScopeKey)
             ->filter(fn (mixed $scope): bool => $scope !== null)
             ->unique()
             ->values()

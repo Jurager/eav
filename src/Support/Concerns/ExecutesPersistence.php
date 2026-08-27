@@ -5,28 +5,13 @@ declare(strict_types=1);
 namespace Jurager\Eav\Support\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Support\Carbon;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Events\EntityValuesChanged;
 
 trait ExecutesPersistence
 {
-    private const int BIND_LIMIT = 65535;
-
-    private const string MODEL_ATTRIBUTE = 'entity_attribute';
-
-    private const string MODEL_TRANSLATION = 'entity_translation';
-
-    private const array VALUE_COLUMNS = [
-        'value_text', 'value_integer', 'value_float',
-        'value_boolean', 'value_date', 'value_datetime',
-    ];
-
-    private const array TRANSLATION_VALUE_COLUMNS = ['label', 'updated_at'];
-
-    private ?Carbon $timestamp = null;
-
     /** @param  array<int>  $ids */
     public function delete(array $ids): void
     {
@@ -75,7 +60,7 @@ trait ExecutesPersistence
         }
 
         ['updates' => $updates, 'inserts' => $inserts, 'deletes' => $deletes] =
-            $this->partition($type, $grouped, $existingGrouped);
+            $this->diffAgainstExisting($type, $grouped, $existingGrouped);
 
         $this->delete($deletes);
         $this->applyUpdates($updates);
@@ -92,10 +77,10 @@ trait ExecutesPersistence
             return;
         }
 
-        $this->inChunks(
+        $this->chunk(
             array_column($updates, 'row'),
             fn (array $chunk) => Eav::$entityAttributeModel::query()
-                ->upsert($chunk, ['id'], [...self::VALUE_COLUMNS, 'updated_at']),
+                ->upsert($chunk, ['id'], [...self::valueColumns(), 'updated_at']),
         );
 
         $this->syncTranslations($updates);
@@ -111,7 +96,7 @@ trait ExecutesPersistence
         $rows = array_column($inserts, 'row');
         $maxIdBefore = (int) (Eav::$entityAttributeModel::query()->max('id') ?? 0);
 
-        $this->inChunks(
+        $this->chunk(
             $rows,
             fn (array $chunk) => Eav::$entityAttributeModel::query()->insert($chunk),
         );
@@ -132,11 +117,7 @@ trait ExecutesPersistence
         $created = $this->fetchCreatedRecords($type, $rows, $maxIdBefore);
         $mapped = $this->mapTranslationsToRecords($inserts, $created);
 
-        $this->inChunks(
-            $this->buildTranslationRows($mapped),
-            fn (array $chunk) => Eav::$entityTranslationModel::query()
-                ->upsert($chunk, ['entity_type', 'entity_id', 'locale_id'], self::TRANSLATION_VALUE_COLUMNS),
-        );
+        $this->upsertTranslations($this->buildTranslationRows($mapped));
     }
 
     /** @param  array<int, array{row: array, translations: array|null}>  $entries */
@@ -175,10 +156,22 @@ trait ExecutesPersistence
 
         $this->pruneStaleTranslations($withData);
 
-        $this->inChunks(
-            $this->buildTranslationRows($withData),
+        $this->upsertTranslations($this->buildTranslationRows($withData));
+    }
+
+    /** Upsert translation rows, refreshing every column but the identity and creation time. */
+    private function upsertTranslations(array $rows): void
+    {
+        if ($rows === []) {
+            return;
+        }
+
+        $updateColumns = array_diff(array_keys($rows[0]), ['entity_type', 'entity_id', 'locale_id', 'created_at']);
+
+        $this->chunk(
+            $rows,
             fn (array $chunk) => Eav::$entityTranslationModel::query()
-                ->upsert($chunk, ['entity_type', 'entity_id', 'locale_id'], self::TRANSLATION_VALUE_COLUMNS),
+                ->upsert($chunk, ['entity_type', 'entity_id', 'locale_id'], $updateColumns),
         );
     }
 
@@ -208,8 +201,14 @@ trait ExecutesPersistence
     private function translationsFor(iterable $entityIds): Builder
     {
         return Eav::$entityTranslationModel::query()
-            ->where('entity_type', self::MODEL_ATTRIBUTE)
+            ->where('entity_type', $this->entityAttributeMorphClass())
             ->whereIn('entity_id', is_array($entityIds) ? $entityIds : iterator_to_array($entityIds));
+    }
+
+    /** The morph type entity_attribute rows are stored under, resolved via getMorphClass() rather than hardcoded. */
+    private function entityAttributeMorphClass(): string
+    {
+        return (new (Eav::$entityAttributeModel)())->getMorphClass();
     }
 
     /**
@@ -221,7 +220,7 @@ trait ExecutesPersistence
      *     deletes: array<int>
      * }
      */
-    private function partition(string $type, array $grouped, array $existing): array
+    private function diffAgainstExisting(string $type, array $grouped, array $existing): array
     {
         $updates = $inserts = $deletes = [];
 
@@ -237,13 +236,13 @@ trait ExecutesPersistence
                 $overlap = min($valueCount, $recordCount);
 
                 for ($i = 0; $i < $overlap; $i++) {
-                    $entry = $this->buildEntry($type, $entityId, $attrId, $field->column()->value, $field->isLocalizable(), $values[$i]);
+                    $entry = $this->buildRowWithTranslations($type, $entityId, $attrId, $field->column()->value, $field->isLocalizable(), $values[$i]);
                     $entry['row']['id'] = $records[$i]->id;
                     $updates[] = $entry;
                 }
 
                 for ($i = $overlap; $i < $valueCount; $i++) {
-                    $inserts[] = $this->buildEntry($type, $entityId, $attrId, $field->column()->value, $field->isLocalizable(), $values[$i]);
+                    $inserts[] = $this->buildRowWithTranslations($type, $entityId, $attrId, $field->column()->value, $field->isLocalizable(), $values[$i]);
                 }
 
                 for ($i = $overlap; $i < $recordCount; $i++) {
@@ -256,7 +255,7 @@ trait ExecutesPersistence
     }
 
     /** @return array{row: array, translations: array|null} */
-    private function buildEntry(
+    private function buildRowWithTranslations(
         string $type,
         int|string $entityId,
         int $attrId,
@@ -326,17 +325,18 @@ trait ExecutesPersistence
     /** @param  array<int, array>  $map */
     private function buildTranslationRows(array $map): array
     {
+        $entityType = $this->entityAttributeMorphClass();
         $rows = [];
         foreach ($map as $recordId => $translations) {
             foreach ($translations as $t) {
                 if (isset($t['locale_id'])) {
                     $rows[] = [
-                        'entity_type' => self::MODEL_ATTRIBUTE,
+                        'entity_type' => $entityType,
                         'entity_id'   => $recordId,
                         'locale_id'   => (int) $t['locale_id'],
                         'label'       => $t['value'] ?? null,
-                        'created_at'  => $this->timestamp ?? now(),
-                        'updated_at'  => $this->timestamp ?? now(),
+                        'created_at'  => now(),
+                        'updated_at'  => now(),
                     ];
                 }
             }
@@ -346,14 +346,14 @@ trait ExecutesPersistence
     }
 
     /** @param  array  $rows */
-    private function inChunks(array $rows, callable $callback): void
+    private function chunk(array $rows, callable $callback): void
     {
         if (empty($rows)) {
             return;
         }
 
         $columns = count(reset($rows) ?: []);
-        $size = max(1, intdiv(self::BIND_LIMIT, max(1, $columns)));
+        $size = max(1, intdiv((int) config('eav.bind_limit', 65535), max(1, $columns)));
 
         foreach (array_chunk($rows, $size) as $chunk) {
             $callback($chunk);
@@ -363,26 +363,21 @@ trait ExecutesPersistence
     /** @return array<string, mixed> */
     private function blankRow(string $type, int|string $entityId, int $attrId): array
     {
-        $ts = $this->timestamp ?? throw new \LogicException('blankRow() called outside withinTimestamp().');
+        $ts = now();
 
         return [
             'entity_type' => $type,
             'entity_id' => $entityId,
             'attribute_id' => $attrId,
-            ...array_fill_keys(self::VALUE_COLUMNS, null),
+            ...array_fill_keys(self::valueColumns(), null),
             'created_at' => $ts,
             'updated_at' => $ts,
         ];
     }
 
-    private function withinTimestamp(callable $callback): void
+    /** @return list<string> */
+    private static function valueColumns(): array
     {
-        $this->timestamp = now();
-
-        try {
-            $callback();
-        } finally {
-            $this->timestamp = null;
-        }
+        return array_column(AttributeStorage::cases(), 'value');
     }
 }

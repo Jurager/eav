@@ -49,25 +49,23 @@ class BatchAttributePersister
      */
     public function flush(?callable $onError = null): void
     {
-        $this->withinTimestamp(function () use ($onError): void {
-            foreach ($this->pending as $type => $grouped) {
-                if ($onError === null) {
-                    $this->persistGroup($type, $grouped);
-                } else {
-                    try {
-                        $this->db->connection()->transaction(fn () => $this->persistGroup($type, $grouped));
-                    } catch (\Throwable) {
-                        foreach ($grouped as $entityId => $fields) {
-                            try {
-                                $this->db->connection()->transaction(fn () => $this->persistGroup($type, [$entityId => $fields]));
-                            } catch (\Throwable $e) {
-                                $onError($e, $this->entities[$entityId]);
-                            }
+        foreach ($this->pending as $type => $grouped) {
+            if ($onError === null) {
+                $this->persistGroup($type, $grouped);
+            } else {
+                try {
+                    $this->db->connection()->transaction(fn () => $this->persistGroup($type, $grouped));
+                } catch (\Throwable) {
+                    foreach ($grouped as $entityId => $fields) {
+                        try {
+                            $this->db->connection()->transaction(fn () => $this->persistGroup($type, [$entityId => $fields]));
+                        } catch (\Throwable $e) {
+                            $onError($e, $this->entities[$entityId]);
                         }
                     }
                 }
             }
-        });
+        }
 
         $this->pending = [];
         $this->entities = [];

@@ -23,7 +23,7 @@ class AttributeInheritanceResolver
     public function resolve(Collection $entities, string $model): Collection
     {
         $base = $entities->values();
-        $toInherit = $entities->filter(fn ($e) => $e->shouldInheritAttributes());
+        $toInherit = $entities->filter->shouldInheritAttributes();
 
         if ($toInherit->isEmpty()) {
             return $base;
