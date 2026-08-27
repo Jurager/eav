@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
 use Jurager\Eav\Registry\AttributeRegistry;
@@ -29,7 +30,10 @@ abstract class FeatureTestCase extends TestCase
 
         Queue::fake();
 
-        Relation::morphMap(['product' => Product::class]);
+        // 'entity_attribute' backs the translations relation: EntityAttributeTranslation
+        // rows store it as a hardcoded morph type, so a matching alias must be registered
+        // for the reverse Eloquent lookup to find them — the same as consuming apps must do.
+        Relation::morphMap(['product' => Product::class, 'entity_attribute' => EntityAttribute::class]);
 
         Schema::create('products', function (Blueprint $table) {
             $table->id();

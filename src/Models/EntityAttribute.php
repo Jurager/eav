@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Jurager\Eav\Concerns\HasScopedRelations;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\BelongsToScoped;
 use Jurager\Eav\Eav;
@@ -60,9 +61,7 @@ class EntityAttribute extends Model
         });
     }
 
-    /**
-     * Scope the rows an entity reads: its own values, plus the ones a variant inherits.
-     */
+    /** Scope the rows an entity reads: its own values, plus the ones a variant inherits. */
     public function scopeForEntity(Builder $query, Attributable $entity): Builder
     {
         $query->where('entity_type', $entity->getEntityType());
@@ -76,14 +75,32 @@ class EntityAttribute extends Model
         $own = static::query()
             ->select('attribute_id')
             ->where('entity_type', $entity->getEntityType())
-            ->where('entity_id', $entity->id);
+            ->where('entity_id', $entity->id)
+            ->whereHasValue();
 
         return $query->where(fn (Builder $rows) => $rows
-            ->where('entity_id', $entity->id)
+            ->where(fn (Builder $ownRow) => $ownRow->where('entity_id', $entity->id)->whereHasValue())
             ->orWhere(fn (Builder $inherited) => $inherited
                 ->where('entity_id', $parent->id)
                 ->whereNotIn('attribute_id', $own)
                 ->whereHas('attribute', static fn (Builder $attribute) => $attribute->whereInheritable())));
+    }
+
+    /** Scope to rows that carry a real stored value — a scalar column, or at least one translation. */
+    public function scopeWhereHasValue(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $q) => $q
+            ->whereAny(array_column(AttributeStorage::cases(), 'value'), '!=', null)
+            ->orWhereHas('translations'));
+    }
+
+    /** Whether this row carries a real stored value — a scalar column, or at least one translation. */
+    public function hasValue(): bool
+    {
+        $hasScalar = collect(AttributeStorage::cases())->contains(fn ($column) => $this->getAttribute($column->value) !== null);
+
+        // Translations aren't loaded in every context; assume filled rather than force an N+1 lookup.
+        return $hasScalar || ! $this->relationLoaded('translations') || $this->translations->isNotEmpty();
     }
 
     public function attribute(): BelongsTo

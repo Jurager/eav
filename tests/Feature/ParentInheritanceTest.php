@@ -51,6 +51,28 @@ class ParentInheritanceTest extends FeatureTestCase
         $this->assertSame('Parent title', $variant->eav()->value('title'));
     }
 
+    public function test_variant_inherits_through_a_blank_own_row(): void
+    {
+        $attribute = $this->createAttribute($this->type, ['code' => 'title', 'inherit_from_parent' => true]);
+
+        $parent = $this->createProduct();
+        $parent->eav()->set('title', 'Parent title')->save('title');
+
+        $variant = $this->createVariant($parent);
+
+        // A row with no value at all — e.g. left behind by persisting an empty payload before
+        // sync() dropped unfilled fields — must not be treated as the variant's own override.
+        DB::table('entity_attribute')->insert([
+            'entity_type' => 'product',
+            'entity_id' => $variant->id,
+            'attribute_id' => $attribute->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame('Parent title', $variant->fresh()->eav()->value('title'));
+    }
+
     public function test_own_value_wins_over_the_inherited_one(): void
     {
         $this->createAttribute($this->type, ['code' => 'title', 'inherit_from_parent' => true, 'held_by' => HeldBy::Both]);
@@ -283,7 +305,6 @@ class ParentInheritanceTest extends FeatureTestCase
     public function test_syncing_an_empty_value_does_not_block_inheritance(): void
     {
         $localeId = app(LocaleRegistry::class)->find('en');
-        dump('localeId', $localeId);
 
         $this->createAttribute($this->type, [
             'code' => 'title',
@@ -295,13 +316,6 @@ class ParentInheritanceTest extends FeatureTestCase
         $parent = $this->createProduct();
         $parent->eav()->set('title', 'Parent title', $localeId)->save('title');
 
-        dump('LocaleRegistry::get()', app(LocaleRegistry::class)->get());
-        $row = \Jurager\Eav\Models\EntityAttribute::query()->with('translations')->find(1);
-        dump('row translations', $row->translations->toArray());
-        dump('parent own read', $parent->fresh()->eav()->value('title', $localeId));
-        dump('parent rows', DB::table('entity_attribute')->where('entity_id', $parent->id)->get()->toArray());
-        dump('entity_translations', DB::table('entity_translations')->get()->toArray());
-
         $variant = $this->createVariant($parent);
 
         // Mirrors what a bulk import sends for a variant with no value of its own: the code
@@ -310,9 +324,6 @@ class ParentInheritanceTest extends FeatureTestCase
         AttributeManager::sync(collect([
             ['entity' => $variant, 'data' => ['title' => []]],
         ]));
-
-        dump('variant rows', DB::table('entity_attribute')->where('entity_id', $variant->id)->get()->toArray());
-        dump('variant attributeParent id', $variant->fresh()->attributeParent()?->id, 'parent id', $parent->id);
 
         $this->assertSame('Parent title', $variant->fresh()->eav()->value('title', $localeId));
         $this->assertSame(0, DB::table('entity_attribute')->where('entity_id', $variant->id)->count());

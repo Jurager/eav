@@ -109,9 +109,8 @@ class AttributeManager
             foreach ($chunk as $item) {
                 $entity = $item['entity'];
 
-                // Unfilled fields validate fine (an empty value is a valid one) but must not
-                // reach the persister: a blank row still counts as the entity's own value and
-                // blocks a variant from inheriting the parent's, same as attach()/replace().
+                // Unfilled fields validate fine (an empty value is a valid one) but must not reach the persister.
+                // Blank row still counts as the entity's own value and blocks a variant from inheriting the parent's.
                 $fields = ($prebuiltSchema ?? static::schema($entity))->fill(
                     $item['data'],
                     $entity,
@@ -426,9 +425,10 @@ class AttributeManager
             return null;
         }
 
-        $overridden = $own->pluck('attribute_id')->all();
+        $filled = $own->filter(static fn (Model $value): bool => $value->hasValue());
+        $overridden = $filled->pluck('attribute_id')->all();
 
-        return $own->concat($parent->attribute_values->loadMissing('attribute')->filter(
+        return $filled->concat($parent->attribute_values->loadMissing('attribute')->filter(
             static fn (Model $value): bool => (bool) $value->attribute?->getAttribute('inherit_from_parent')
                 && ! in_array($value->getAttribute('attribute_id'), $overridden, true)
         ));
