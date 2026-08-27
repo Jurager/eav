@@ -16,6 +16,8 @@ use Jurager\Eav\Eav;
  * @property int $attribute_id
  * @property string $code
  * @property int $sort
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
  *
  * @property-read Attribute|null $attribute
  * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations

@@ -32,6 +32,9 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property bool $inherit_from_parent
  * @property array|null $validations
  * @property array|null $meta
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ * @property \Illuminate\Support\Carbon|null $deleted_at
  *
  * @property-read AttributeType|null $type
  * @property-read AttributeGroup|null $group
