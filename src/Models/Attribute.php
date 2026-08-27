@@ -33,6 +33,11 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property array|null $validations
  * @property array|null $meta
  *
+ * @property-read AttributeType|null $type
+ * @property-read AttributeGroup|null $group
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, AttributeEnum> $enums
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
+ *
  * @mixin Builder
  */
 class Attribute extends Model

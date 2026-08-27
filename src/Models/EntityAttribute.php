@@ -26,6 +26,10 @@ use Jurager\Eav\Eav;
  * @property bool|null $value_boolean
  * @property string|null $value_date
  * @property string|null $value_datetime
+ *
+ * @property-read Attribute|null $attribute
+ * @property-read AttributeEnum|null $enum
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
  */
 class EntityAttribute extends Model
 {

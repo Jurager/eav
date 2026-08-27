@@ -15,6 +15,9 @@ use Jurager\Eav\Eav;
  * @property int $id
  * @property string $code
  * @property int $sort
+ *
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Attribute> $attributes
  */
 class AttributeGroup extends Model
 {

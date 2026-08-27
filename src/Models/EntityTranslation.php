@@ -15,6 +15,10 @@ use Jurager\Eav\Eav;
  * @property int $locale_id
  * @property string $label
  * @property array $params
+ * @property \Illuminate\Support\Carbon|null $created_at
+ * @property \Illuminate\Support\Carbon|null $updated_at
+ *
+ * @property-read Locale|null $locale
  */
 class EntityTranslation extends MorphPivot
 {

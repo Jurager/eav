@@ -16,6 +16,8 @@ use Jurager\Eav\Eav;
  * @property bool $unique
  * @property bool $filterable
  * @property bool $searchable
+ *
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Attribute> $attributes
  */
 class AttributeType extends Model
 {

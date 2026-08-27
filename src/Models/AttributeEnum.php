@@ -16,6 +16,9 @@ use Jurager\Eav\Eav;
  * @property int $attribute_id
  * @property string $code
  * @property int $sort
+ *
+ * @property-read Attribute|null $attribute
+ * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
  */
 class AttributeEnum extends Model
 {
