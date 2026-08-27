@@ -14,7 +14,11 @@ trait HasClosureRelations
     /**
      * Define a relation whose results are resolved per-parent via a closure.
      *
-     * @param  Closure(Model): (Builder|null)  $resolver
+     * @template TRelatedModel of Model
+     *
+     * @param  class-string<TRelatedModel>  $related
+     * @param  Closure(Model): (Builder<TRelatedModel>|null)  $resolver
+     * @return ClosureRelation<TRelatedModel, $this>
      */
     protected function closureRelation(string $related, Closure $resolver): ClosureRelation
     {

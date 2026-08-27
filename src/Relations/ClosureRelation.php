@@ -10,15 +10,30 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
-/** Read-only relation whose results are resolved per-parent via a closure. */
+/**
+ * Read-only relation whose results are resolved per-parent via a closure.
+ *
+ * @template TRelatedModel of Model
+ * @template TDeclaringModel of Model
+ *
+ * @extends Relation<TRelatedModel, TDeclaringModel>
+ */
 class ClosureRelation extends Relation
 {
-    /** The query resolved for the current parent. */
+    /**
+     * The query resolved for the current parent.
+     *
+     * @var Builder<TRelatedModel>|null
+     */
     private ?Builder $resolvedQuery = null;
 
     private bool $resolvedQuerySet = false;
 
-    /** @param Closure(Model): (Builder|null) $resolver */
+    /**
+     * @param  Builder<TRelatedModel>  $query
+     * @param  TDeclaringModel  $parent
+     * @param  Closure(Model): (Builder<TRelatedModel>|null)  $resolver
+     */
     public function __construct(Builder $query, Model $parent, protected Closure $resolver)
     {
         parent::__construct($query->whereKey([]), $parent);
@@ -56,13 +71,13 @@ class ClosureRelation extends Relation
         return $models;
     }
 
-    /** Get the results of the relationship. */
+    /** @return Collection<int, TRelatedModel> */
     public function getResults(): Collection
     {
         return $this->queryForParent()?->get() ?? $this->related->newCollection();
     }
 
-    /** Get the relationship for eager loading (not applicable). */
+    /** @return Collection<int, TRelatedModel> */
     public function getEager(): Collection
     {
         return $this->related->newCollection();
@@ -82,7 +97,7 @@ class ClosureRelation extends Relation
         return $result;
     }
 
-    /** Get the query resolved for the current parent. */
+    /** @return Builder<TRelatedModel>|null */
     private function queryForParent(): ?Builder
     {
         if (! $this->resolvedQuerySet) {
@@ -93,14 +108,17 @@ class ClosureRelation extends Relation
         return $this->resolvedQuery;
     }
 
-    /** Resolve the query for a specific parent. */
+    /** @return Collection<int, TRelatedModel> */
     protected function resolveFor(Model $parent): Collection
     {
         return self::scopedQuery($this->resolver, $parent)?->get()
             ?? $this->related->newCollection();
     }
 
-    /** Resolve the per-parent query without eager loads. */
+    /**
+     * @param  Closure(Model): (Builder<TRelatedModel>|null)  $resolver
+     * @return Builder<TRelatedModel>|null
+     */
     private static function scopedQuery(Closure $resolver, Model $parent): ?Builder
     {
         return $resolver($parent)?->setEagerLoads([]);

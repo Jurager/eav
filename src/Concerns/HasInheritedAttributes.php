@@ -15,6 +15,7 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
+use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Relations\ClosureRelation;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
@@ -186,13 +187,21 @@ trait HasInheritedAttributes
         return $this->getAvailableAttributesQuery($params)?->whereHeldBy(HeldBy::of($this->isVariant()));
     }
 
-    /** Expose available attributes as closure relation. */
+    /**
+     * Expose available attributes as closure relation.
+     *
+     * @return ClosureRelation<Attribute, $this>
+     */
     public function availableAttributesRelation(Closure $resolver): ClosureRelation
     {
         return $this->closureRelation(Eav::$attributeModel, $resolver);
     }
 
-    /** Define closure relation for scoped attributes. */
+    /**
+     * Define closure relation for scoped attributes.
+     *
+     * @return ClosureRelation<Attribute, $this>
+     */
     public function closuredAttributesRelation(string $entityClass, ?Closure $scope = null, ?Closure $constrain = null): ClosureRelation
     {
         $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
