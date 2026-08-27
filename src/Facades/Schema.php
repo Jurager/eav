@@ -49,10 +49,10 @@ use Jurager\Eav\Models\AttributeType;
  * @method static AttributeGroup findGroup(int $id)
  * @method static AttributeEnum findEnum(int $id)
  * @method static AttributeType findType(int $id)
- * @method static Builder attributes()
- * @method static Builder groups()
- * @method static Builder enums(Attribute $attribute)
- * @method static Builder types()
+ * @method static Builder<Attribute> attributes()
+ * @method static Builder<AttributeGroup> groups()
+ * @method static Builder<AttributeEnum> enums(Attribute $attribute)
+ * @method static Builder<AttributeType> types()
  * @method static mixed search(string $query)
  *
  * @see SchemaFactory

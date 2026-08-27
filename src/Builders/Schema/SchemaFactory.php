@@ -102,25 +102,25 @@ class SchemaFactory
         return $this->manager->findType($id);
     }
 
-    /** Query builder for attributes. */
+    /** @return Builder<Attribute> */
     public function attributes(): Builder
     {
         return $this->manager->attributesQuery();
     }
 
-    /** Query builder for groups. */
+    /** @return Builder<AttributeGroup> */
     public function groups(): Builder
     {
         return $this->manager->groupsQuery();
     }
 
-    /** Query builder for a given attribute's enum options. */
+    /** @return Builder<AttributeEnum> */
     public function enums(Attribute $attribute): Builder
     {
         return $this->manager->enumsQuery($attribute);
     }
 
-    /** Query builder for attribute types. */
+    /** @return Builder<AttributeType> */
     public function types(): Builder
     {
         return $this->manager->typesQuery();

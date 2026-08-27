@@ -53,25 +53,25 @@ class SchemaManager
         return Eav::$attributeTypeModel::query()->findOrFail($id);
     }
 
-    /** Get a query builder for attributes. */
+    /** @return Builder<Attribute> */
     public function attributesQuery(): Builder
     {
         return Eav::$attributeModel::query();
     }
 
-    /** Get a query builder for enums of a given attribute. */
+    /** @return Builder<\Jurager\Eav\Models\AttributeEnum> */
     public function enumsQuery(Attribute $attribute): Builder
     {
         return $attribute->enums()->getQuery();
     }
 
-    /** Get a query builder for attribute types. */
+    /** @return Builder<AttributeType> */
     public function typesQuery(): Builder
     {
         return Eav::$attributeTypeModel::query();
     }
 
-    /** Get a query builder for attribute groups. */
+    /** @return Builder<\Jurager\Eav\Models\AttributeGroup> */
     public function groupsQuery(): Builder
     {
         return Eav::$attributeGroupModel::query();

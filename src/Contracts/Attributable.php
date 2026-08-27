@@ -5,10 +5,18 @@ declare(strict_types=1);
 namespace Jurager\Eav\Contracts;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Support\Collection;
+use Jurager\Eav\Managers\AttributeManager;
 
 interface Attributable
 {
+    /** Get cached attribute manager instance. */
+    public function eav(): AttributeManager;
+
+    /** Define Eloquent relation to entity_attribute values. */
+    public function attributeValues(): MorphMany;
+
     /** Get the entity type identifier. */
     public function getEntityType(): string;
 
