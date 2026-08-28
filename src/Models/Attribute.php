@@ -46,7 +46,6 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
 class Attribute extends Model
 {
     use SoftDeletes;
-
     protected $fillable = [
         'entity_type',
         'attribute_type_id',
@@ -67,7 +66,7 @@ class Attribute extends Model
 
     protected static function booted(): void
     {
-        static::forceDeleting(fn (Attribute $attribute) => $attribute->translations()->delete());
+        static::forceDeleting(fn (Attribute $attribute) => $attribute->translations()->detach());
 
         static::saving(static fn (Attribute $attribute) => static::enforceNonLocalizableForSelectType($attribute));
 
@@ -142,8 +141,7 @@ class Attribute extends Model
         return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
             ->using(Eav::$entityTranslationModel)
             ->withPivot(['id', 'label', 'params'])
-            ->withTimestamps()
-            ->active();
+            ->withTimestamps();
     }
 
     /** Scope a query to only include attributes for a given entity type. */

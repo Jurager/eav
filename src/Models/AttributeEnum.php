@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Eav;
 
 /**
@@ -29,7 +28,7 @@ class AttributeEnum extends Model
     protected static function booted(): void
     {
         static::deleting(static function (AttributeEnum $enum) {
-            $enum->translations()->delete();
+            $enum->translations()->detach();
         });
 
         static::addGlobalScope('ordered', static function (Builder $query) {
@@ -42,8 +41,7 @@ class AttributeEnum extends Model
         return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
             ->using(Eav::$entityTranslationModel)
             ->withPivot(['id', 'label', 'params'])
-            ->withTimestamps()
-            ->when(app(LocaleRegistry::class)->get(), fn ($q, $codes) => $q->whereIn('code', $codes));
+            ->withTimestamps();
     }
 
     public function attribute(): BelongsTo

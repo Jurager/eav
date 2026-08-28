@@ -20,6 +20,7 @@ use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Scopes\ActiveLocaleScope;
 use Jurager\Eav\Support\AttributePersister;
 use Jurager\Eav\Support\AttributeQueryBuilder;
 use Jurager\Eav\Support\BatchAttributePersister;
@@ -399,7 +400,7 @@ class AttributeManager
 
         return $this->entityQuery()
             ->whereIn('attribute_id', $attributeIds)
-            ->with('translations')
+            ->with(['translations' => fn ($q) => $q->withoutGlobalScope(ActiveLocaleScope::class)])
             ->get();
     }
 
@@ -488,7 +489,11 @@ class AttributeManager
 
         return $this->entityQuery()
             ->whereHas('attribute', fn ($q) => $q->whereAny(['searchable', 'filterable'], true))
-            ->with(['attribute', 'attribute.enums.translations', 'translations'])
+            ->with([
+                'attribute',
+                'attribute.enums.translations' => fn ($q) => $q->withoutGlobalScope(ActiveLocaleScope::class),
+                'translations' => fn ($q) => $q->withoutGlobalScope(ActiveLocaleScope::class),
+            ])
             ->get();
     }
 }

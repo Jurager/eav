@@ -62,7 +62,7 @@ class EnumRegistry
     {
         return $this->cache[$attributeId] ??= Eav::$attributeEnumModel::query()
             ->where('attribute_id', $attributeId)
-            ->with(['translations' => fn ($q) => $q->active()])
+            ->with('translations')
             ->get();
     }
 }

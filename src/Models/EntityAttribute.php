@@ -57,7 +57,7 @@ class EntityAttribute extends Model
     protected static function booted(): void
     {
         static::deleting(static function (EntityAttribute $entityAttribute) {
-            $entityAttribute->translations()->delete();
+            $entityAttribute->translations()->detach();
         });
 
         static::retrieved(function (EntityAttribute $entityAttribute) {
@@ -123,7 +123,6 @@ class EntityAttribute extends Model
     {
         return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
             ->using(Eav::$entityTranslationModel)
-            ->withPivot(['id', 'label', 'created_at', 'updated_at'])
-            ->active();
+            ->withPivot(['id', 'label', 'created_at', 'updated_at']);
     }
 }
