@@ -150,6 +150,44 @@ trait HasInheritedAttributes
     }
 
     /**
+     * Determine whether the entity's effective scope — own, or inherited from its parent when it
+     * carries none itself, see {@see attributeScopeEntities()} — falls within the nested-set
+     * subtree rooted at any of the given IDs.
+     *
+     * A variant (e.g. a product offer) holds no categories of its own, so checking its direct
+     * relation against a category-tree scope always fails; this checks the inherited scope instead.
+     *
+     * @param array<int> $rootIds
+     */
+    public function attributeScopeMatchesTree(array $rootIds): bool
+    {
+        if (empty($rootIds)) {
+            return true;
+        }
+
+        $entities = $this->attributeScopeEntities();
+
+        if ($entities->isEmpty()) {
+            return false;
+        }
+
+        $model = $entities->first();
+        $ids   = $entities->pluck($model->getKeyName())->all();
+
+        $query = $model->newQuery()->whereKey($ids);
+
+        if (! method_exists($query, 'whereDescendantOrSelf')) {
+            return array_intersect($ids, $rootIds) !== [];
+        }
+
+        return $query->where(function (Builder $q) use ($rootIds): void {
+            foreach ($rootIds as $i => $rootId) {
+                $q->whereDescendantOrSelf($rootId, $i === 0 ? 'and' : 'or');
+            }
+        })->exists();
+    }
+
+    /**
      * Get available attribute definitions.
      *
      * @param array<int> $params

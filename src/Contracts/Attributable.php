@@ -26,6 +26,9 @@ interface Attributable
     /** Get the related entities whose attributes make up this entity's scope. */
     public function attributeScopeEntities(): Collection;
 
+    /** Determine if the entity's effective scope falls within the subtree rooted at any of the given IDs. */
+    public function attributeScopeMatchesTree(array $rootIds): bool;
+
     /** Get the parent entity this one is a variant of, if any. */
     public function attributeParent(): ?Attributable;
 
