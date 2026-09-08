@@ -7,6 +7,7 @@ namespace Jurager\Eav\Registry;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
+use Jurager\Eav\Scopes\ActiveLocaleScope;
 
 class LocaleRegistry
 {
@@ -18,10 +19,14 @@ class LocaleRegistry
     /** @var array<string>|null Active locales for the current request. */
     private ?array $active = null;
 
-    /** Get all cached locales. */
+    /**
+     * Get all cached locales.
+     */
     public function all(): Collection
     {
-        return $this->locales ??= Eav::$localeModel::query()->pluck('code', 'id');
+        return $this->locales ??= Eav::$localeModel::query()
+            ->withoutGlobalScope(ActiveLocaleScope::class)
+            ->pluck('code', 'id');
     }
 
     /** Get all locale IDs. */

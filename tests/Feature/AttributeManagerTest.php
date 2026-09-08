@@ -13,6 +13,7 @@ use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 
 class AttributeManagerTest extends FeatureTestCase
@@ -108,6 +109,71 @@ class AttributeManagerTest extends FeatureTestCase
         $manager->set('title', 'My Product');
 
         $this->assertSame('My Product', $manager->value('title'));
+    }
+
+    // -----------------------------------------------------------------------
+    // value() — locale resolution (current() vs default())
+    // -----------------------------------------------------------------------
+
+    public function test_value_without_explicit_locale_resolves_current_request_locale_not_default(): void
+    {
+        // setUp() already created 'en' (kept as config('app.locale') default below); 'fr' is the
+        // locale a request would negotiate via Accept-Language and mark "current".
+        $this->app['config']->set('app.locale', 'en');
+        $fr = $this->createLocale('fr');
+        $enId = app(LocaleRegistry::class)->find('en');
+
+        $this->createAttribute($this->textType, ['code' => 'title', 'localizable' => true]);
+
+        $product = $this->createProduct();
+        $manager = AttributeManager::for($product);
+        $manager->set('title', 'Widget', $enId);
+        $manager->set('title', 'Gadget', $fr->id);
+        $manager->save('title');
+
+        app(LocaleRegistry::class)->set(['fr']);
+
+        // Regression: before the fix this returned 'Widget' (default()) regardless of the
+        // active request locale.
+        $this->assertSame('Gadget', AttributeManager::for($product->fresh())->value('title'));
+    }
+
+    public function test_value_falls_back_to_default_locale_when_no_request_locale_is_active(): void
+    {
+        $this->app['config']->set('app.locale', 'en');
+        $enId = app(LocaleRegistry::class)->find('en');
+
+        $this->createAttribute($this->textType, ['code' => 'title', 'localizable' => true]);
+
+        $product = $this->createProduct();
+        $manager = AttributeManager::for($product);
+        $manager->set('title', 'Widget', $enId);
+        $manager->save('title');
+
+        app(LocaleRegistry::class)->forget();
+        $this->app['config']->set('app.locale', 'en');
+
+        $this->assertSame('Widget', AttributeManager::for($product->fresh())->value('title'));
+    }
+
+    public function test_value_with_explicit_locale_overrides_current_request_locale(): void
+    {
+        $this->app['config']->set('app.locale', 'en');
+        $fr = $this->createLocale('fr');
+        $enId = app(LocaleRegistry::class)->find('en');
+
+        $this->createAttribute($this->textType, ['code' => 'title', 'localizable' => true]);
+
+        $product = $this->createProduct();
+        $manager = AttributeManager::for($product);
+        $manager->set('title', 'Widget', $enId);
+        $manager->set('title', 'Gadget', $fr->id);
+        $manager->save('title');
+
+        app(LocaleRegistry::class)->set(['fr']);
+
+        // Explicit $localeId still wins over the active request locale.
+        $this->assertSame('Widget', AttributeManager::for($product->fresh())->value('title', $enId));
     }
 
     // -----------------------------------------------------------------------

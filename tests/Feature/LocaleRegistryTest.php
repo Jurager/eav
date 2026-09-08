@@ -162,6 +162,38 @@ class LocaleRegistryTest extends TestCase
         $this->assertSame($id, $first);
     }
 
+    /**
+     * Regression: all() must not let ActiveLocaleScope narrow its own memoized
+     * cache down to whatever set() holds at the moment it first runs — otherwise
+     * find()/default() for any locale outside that set breaks for the rest of the
+     * request, even though the locale genuinely exists in the table.
+     */
+    public function test_all_is_not_narrowed_by_active_locales_set_before_first_call(): void
+    {
+        $enId = $this->insertLocale('en', 'English');
+        $this->insertLocale('fr', 'French');
+        $this->registry->forget();
+
+        // Active locale set BEFORE all() has ever been memoized.
+        $this->registry->set(['fr']);
+
+        $this->assertSame($enId, $this->registry->find('en'));
+    }
+
+    public function test_default_resolves_for_a_locale_outside_the_active_set(): void
+    {
+        $enId = $this->insertLocale('en', 'English');
+        $this->registry->forget();
+        $this->app['config']->set('app.locale', 'en');
+
+        // Request negotiated a locale the system doesn't have — current() falls
+        // through to default(), which must still find 'en' even though 'de' (not
+        // 'en') is what scoped whatever the first all() call would otherwise cache.
+        $this->registry->set(['de']);
+
+        $this->assertSame($enId, $this->registry->current());
+    }
+
     // -----------------------------------------------------------------------
     // resolve()
     // -----------------------------------------------------------------------

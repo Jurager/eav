@@ -19,6 +19,7 @@ use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Scopes\ActiveLocaleScope;
 use Jurager\Eav\Support\AttributePersister;
@@ -196,10 +197,22 @@ class AttributeManager
         return $this->fields[$code] ?? null;
     }
 
-    /** Get value for a field. */
+    /**
+     * Get value for a field, resolved against the given locale.
+     */
     public function value(string $code, ?int $localeId = null): mixed
     {
-        return $this->field($code)?->value($localeId);
+        $field = $this->field($code);
+
+        if ($field === null) {
+            return null;
+        }
+
+        if ($localeId === null && $field->isLocalizable()) {
+            $localeId = app(LocaleRegistry::class)->current();
+        }
+
+        return $field->value($localeId);
     }
 
     /** Set value in memory. */
