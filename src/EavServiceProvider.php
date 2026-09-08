@@ -8,10 +8,12 @@ use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Http\Middleware\SetLocaleContext;
 use Jurager\Eav\Builders\Attributes\AttributesFactory;
 use Jurager\Eav\Builders\Schema\SchemaFactory;
 use Jurager\Eav\Builders\Translator\TranslatorFactory;
@@ -115,6 +117,16 @@ class EavServiceProvider extends ServiceProvider
         $this->registerObservers();
         $this->registerCitextSupport();
         $this->registerScoutHook();
+        $this->registerLocaleContext();
+    }
+
+    private function registerLocaleContext(): void
+    {
+        $this->callAfterResolving(Kernel::class, function (Kernel $kernel): void {
+            if (method_exists($kernel, 'prependMiddleware')) {
+                $kernel->prependMiddleware(SetLocaleContext::class);
+            }
+        });
     }
 
     /** Register citext column type support for PostgreSQL. */
