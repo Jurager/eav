@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Registry;
 
+use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Tests\TestCase;
@@ -120,5 +121,40 @@ class AttributeTypeRegistryTest extends TestCase
         AttributeType::whereKey($id)->delete();
 
         $this->assertNull($this->registry->get($id));
+    }
+
+    public function test_get_resolves_by_point_lookup_without_loading_the_whole_table(): void
+    {
+        $id = $this->registry->find('text')->id;
+        $this->registry->forget();
+
+        DB::enableQueryLog();
+
+        $type = $this->registry->get($id);
+
+        $this->assertSame('text', $type->code);
+
+        $rowQueries = array_values(array_filter(
+            DB::getQueryLog(),
+            fn ($q) => str_contains($q['query'], 'from "attribute_types"') && ! str_contains($q['query'], 'count(*)')
+        ));
+
+        $this->assertCount(1, $rowQueries);
+        $this->assertStringContainsString('"id" = ?', $rowQueries[0]['query']);
+    }
+
+    public function test_get_picks_up_an_edit_made_elsewhere_on_the_next_request_without_ever_loading_the_whole_table(): void
+    {
+        $id = $this->registry->find('text')->id;
+        $this->assertSame('text', $this->registry->get($id)->code);
+
+        // Written straight to the table: the observer that clears the registry runs in the
+        // process performing the write, which on a long-running server is not this one.
+        DB::table('attribute_types')->where('id', $id)->update(['code' => 'renamed', 'updated_at' => now()->addMinute()]);
+
+        app()->forgetScopedInstances();
+        $registry = app(AttributeTypeRegistry::class);
+
+        $this->assertSame('renamed', $registry->get($id)->code);
     }
 }

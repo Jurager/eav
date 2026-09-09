@@ -99,6 +99,41 @@ class LocaleRegistryTest extends TestCase
         $this->assertSame('es', $this->registry->code($id));
     }
 
+    public function test_code_resolves_by_point_lookup_without_loading_the_whole_table(): void
+    {
+        $id = $this->insertLocale('it', 'Italian');
+        $this->registry->forget();
+
+        DB::enableQueryLog();
+
+        $this->assertSame('it', $this->registry->code($id));
+
+        $rowQueries = array_values(array_filter(
+            DB::getQueryLog(),
+            fn ($q) => str_contains($q['query'], 'from "locales"') && ! str_contains($q['query'], 'count(*)')
+        ));
+
+        $this->assertCount(1, $rowQueries);
+        $this->assertStringContainsString('"id" = ?', $rowQueries[0]['query']);
+    }
+
+    public function test_code_picks_up_an_edit_made_elsewhere_on_the_next_request_without_ever_loading_the_whole_table(): void
+    {
+        $id = $this->insertLocale('nl', 'Dutch');
+        $this->registry->forget();
+
+        $this->assertSame('nl', $this->registry->code($id));
+
+        // Written straight to the table: the observer that clears the registry runs in the
+        // process performing the write, which on a long-running server is not this one.
+        DB::table('locales')->where('id', $id)->update(['code' => 'nl-NL', 'updated_at' => now()->addMinute()]);
+
+        app()->forgetScopedInstances();
+        $registry = app(LocaleRegistry::class);
+
+        $this->assertSame('nl-NL', $registry->code($id));
+    }
+
     public function test_code_returns_null_for_missing_id(): void
     {
         $this->assertNull($this->registry->code(9999));

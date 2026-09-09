@@ -83,7 +83,7 @@ class FieldFactory
             return collect();
         }
 
-        return $this->attributes->forEntityType($entityType)
+        return $this->attributes->all($entityType)
             ->filter(fn (Attribute $attribute) => in_array($attribute->type?->getAttribute('code'), $codes, true));
     }
 

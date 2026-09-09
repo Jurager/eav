@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Unit\Registry;
 
+use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Models\AttributeGroup;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
 use Jurager\Eav\Tests\TestCase;
@@ -88,4 +89,36 @@ class AttributeGroupRegistryTest extends TestCase
 
         $this->assertCount(3, $this->registry->all());
     }
+
+    public function test_get_resolves_by_point_lookup_without_loading_the_whole_table(): void
+    {
+        DB::enableQueryLog();
+
+        $group = $this->registry->get($this->dimensions->id);
+
+        $this->assertSame('dimensions', $group->code);
+
+        $rowQueries = array_values(array_filter(
+            DB::getQueryLog(),
+            fn ($q) => str_contains($q['query'], 'from "attribute_groups"') && ! str_contains($q['query'], 'count(*)')
+        ));
+
+        $this->assertCount(1, $rowQueries);
+        $this->assertStringContainsString('"id" = ?', $rowQueries[0]['query']);
+    }
+
+    public function test_get_picks_up_an_edit_made_elsewhere_on_the_next_request_without_ever_loading_the_whole_table(): void
+    {
+        $this->assertSame('dimensions', $this->registry->get($this->dimensions->id)->code);
+
+        // Written straight to the table: the observer that clears the registry runs in the
+        // process performing the write, which on a long-running server is not this one.
+        DB::table('attribute_groups')->where('id', $this->dimensions->id)->update(['code' => 'renamed', 'updated_at' => now()->addMinute()]);
+
+        app()->forgetScopedInstances();
+        $registry = app(AttributeGroupRegistry::class);
+
+        $this->assertSame('renamed', $registry->get($this->dimensions->id)->code);
+    }
+
 }

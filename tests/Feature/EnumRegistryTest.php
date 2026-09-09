@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature;
 
+use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Registry\EnumRegistry;
 
 class EnumRegistryTest extends FeatureTestCase
@@ -99,5 +100,48 @@ class EnumRegistryTest extends FeatureTestCase
 
         $this->assertTrue($r1->contains('id', $e3->id));
         $this->assertTrue($r2->contains('id', $e4->id));
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-request caching (Octane: the registry is rebuilt, the enums aren't)
+    // -----------------------------------------------------------------------
+
+    public function test_enums_survive_a_fresh_registry_instance_with_only_a_stamp_check(): void
+    {
+        $selectType = $this->createAttributeType('select5');
+        $attr = $this->createAttribute($selectType, ['code' => 'material']);
+        $this->createEnum($attr, 'wood');
+
+        $this->registry->all($attr->id);
+
+        // Simulate the next Octane request: the container drops the scoped instance,
+        // but the static state a fresh instance reads from must still be there.
+        app()->forgetScopedInstances();
+        $registry = app(EnumRegistry::class);
+
+        DB::enableQueryLog();
+        $all = $registry->all($attr->id);
+
+        $this->assertCount(1, $all);
+        // Just the staleness stamp — not the rows themselves.
+        $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_enums')));
+    }
+
+    public function test_an_edit_made_elsewhere_is_picked_up_on_the_next_request(): void
+    {
+        $selectType = $this->createAttributeType('select6');
+        $attr = $this->createAttribute($selectType, ['code' => 'finish']);
+        $enum = $this->createEnum($attr, 'matte');
+
+        $this->assertSame('matte', $this->registry->find($attr->id, $enum->id)->code);
+
+        // Written straight to the table: the observer that clears the registry runs in the
+        // process performing the write, which on a long-running server is not this one.
+        DB::table('attribute_enums')->where('id', $enum->id)->update(['code' => 'glossy', 'updated_at' => now()->addMinute()]);
+
+        app()->forgetScopedInstances();
+        $registry = app(EnumRegistry::class);
+
+        $this->assertSame('glossy', $registry->find($attr->id, $enum->id)->code);
     }
 }

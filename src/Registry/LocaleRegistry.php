@@ -7,28 +7,27 @@ namespace Jurager\Eav\Registry;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
+use Jurager\Eav\Registry\Concerns\CachesResolvedItems;
+use Jurager\Eav\Registry\Concerns\TracksTableChanges;
 use Jurager\Eav\Scopes\ActiveLocaleScope;
 
 class LocaleRegistry
 {
+    use CachesResolvedItems;
+    use TracksTableChanges;
+
     /** @var Collection<int, string>|null id → code */
     private static ?Collection $locales = null;
 
-    private static ?string $stamp = null;
-
     private static ?int $default = null;
-
-    private bool $checked = false;
 
     /** @var array<string>|null Active locales for the current request. */
     private ?array $active = null;
 
-    /**
-     * Get all cached locales.
-     */
+    /** Get all cached locales. */
     public function all(): Collection
     {
-        if (self::$locales === null || $this->changed()) {
+        if (self::$locales === null || $this->tableChanged(fn () => $this->stamp())) {
             $this->load();
         }
 
@@ -44,21 +43,41 @@ class LocaleRegistry
     /** Determine if the locale exists by ID. */
     public function has(int $id): bool
     {
-        return $this->all()->has($id);
+        return $this->code($id) !== null;
     }
 
-    /** Get the locale code by ID. */
+    /** Get the locale code by ID, without loading the whole table for a single lookup. */
     public function code(int $id): ?string
     {
-        return $this->all()->get($id);
+        $this->dropStaleCaches();
+
+        if (self::$locales !== null && self::$locales->has($id)) {
+            return self::$locales->get($id);
+        }
+
+        return $this->resolved('id', $id, fn () => Eav::$localeModel::query()
+            ->withoutGlobalScope(ActiveLocaleScope::class)
+            ->where('id', $id)
+            ->value('code'));
     }
 
-    /** Find a locale ID by its code. */
+    /** Find a locale ID by its code, without loading the whole table for a single lookup. */
     public function find(string $code): ?int
     {
-        $id = $this->all()->search($code);
+        $this->dropStaleCaches();
 
-        return $id !== false ? $id : null;
+        if (self::$locales !== null) {
+            $id = self::$locales->search($code);
+
+            if ($id !== false) {
+                return $id;
+            }
+        }
+
+        return $this->resolved('code', $code, fn () => Eav::$localeModel::query()
+            ->withoutGlobalScope(ActiveLocaleScope::class)
+            ->where('code', $code)
+            ->value('id'));
     }
 
     /** Resolve a locale ID by code or return the default. */
@@ -81,11 +100,7 @@ class LocaleRegistry
         return $this->default();
     }
 
-    /**
-     * Get the default locale ID.
-     *
-     * @throws InvalidConfigurationException
-     */
+    /** Get the default locale ID. */
     public function default(): int
     {
         if (self::$default !== null) {
@@ -113,9 +128,9 @@ class LocaleRegistry
     public function forget(): void
     {
         self::$locales = null;
-        self::$stamp = null;
         self::$default = null;
-        $this->checked = false;
+        $this->forgetTableChange();
+        $this->forgetResolved();
         $this->active = null;
     }
 
@@ -123,42 +138,40 @@ class LocaleRegistry
     public static function flush(): void
     {
         self::$locales = null;
-        self::$stamp = null;
         self::$default = null;
+        static::flushTableChanges();
+        static::flushResolved();
     }
 
-    /** Determine if the table changed since it was last read. Checked at most once per request. */
-    private function changed(): bool
+    /** Drop the whole-table and point-lookup caches if the table moved since either was read. */
+    private function dropStaleCaches(): void
     {
-        if ($this->checked) {
-            return false;
+        if ($this->tableChanged(fn () => $this->stamp())) {
+            self::$locales = null;
+            $this->forgetResolved();
         }
-
-        $this->checked = true;
-
-        return $this->stamp() !== self::$stamp;
     }
 
     /** Read the table, dropping whatever was held before. */
     private function load(): void
     {
-        $this->checked = true;
-        self::$stamp = $this->stamp();
+        $this->markTableFresh(fn () => $this->stamp());
         self::$locales = Eav::$localeModel::query()
             ->withoutGlobalScope(ActiveLocaleScope::class)
             ->pluck('code', 'id');
+        $this->forgetResolved();
     }
 
-    /** Get the state of the table, as far as a change is observable without an updated_at column. */
+    /** Get the state of the table, as far as a change is observable. */
     private function stamp(): string
     {
         $state = Eav::$localeModel::query()
             ->withoutGlobalScope(ActiveLocaleScope::class)
             ->toBase()
             ->reorder()
-            ->selectRaw('count(*) as total, max(id) as last_id')
+            ->selectRaw('count(*) as total, max(id) as last_id, max(updated_at) as changed_at')
             ->first();
 
-        return implode(':', [$state->total ?? 0, $state->last_id ?? 0]);
+        return implode(':', [$state->total ?? 0, $state->last_id ?? 0, $state->changed_at ?? '']);
     }
 }

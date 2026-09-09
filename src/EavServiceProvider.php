@@ -68,6 +68,7 @@ class EavServiceProvider extends ServiceProvider
         AttributeTypeRegistry::flush();
         AttributeGroupRegistry::flush();
         LocaleRegistry::flush();
+        EnumRegistry::flush();
 
         // Managers & Support
         $this->app->singleton(AttributeInheritanceResolver::class);

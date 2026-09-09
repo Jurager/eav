@@ -63,7 +63,7 @@ class EntityAttribute extends Model
 
         static::retrieved(function (EntityAttribute $entityAttribute) {
             if (! $entityAttribute->relationLoaded('attribute') && $entityAttribute->attribute_id !== null && $entityAttribute->entity_type !== null) {
-                $entityAttribute->setRelation('attribute', app(AttributeRegistry::class)->get($entityAttribute->attribute_id, $entityAttribute->entity_type));
+                $entityAttribute->setRelation('attribute', app(AttributeRegistry::class)->get($entityAttribute->entity_type, $entityAttribute->attribute_id));
             }
         });
     }

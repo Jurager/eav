@@ -7,25 +7,21 @@ namespace Jurager\Eav\Registry;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\Concerns\CachesResolvedItems;
+use Jurager\Eav\Registry\Concerns\TracksTableChanges;
 
 class AttributeRegistry
 {
+    use CachesResolvedItems;
+    use TracksTableChanges;
+
     /** @var array<string, Collection<int, Attribute>> */
     private static array $byEntityType = [];
 
-    /** @var array<string, string> */
-    private static array $stamps = [];
-
-    /** @var array<string, array<int, true>> */
-    private static array $unresolved = [];
-
-    /** @var array<string, true> */
-    private array $checked = [];
-
     /** Get all cached attributes for a given entity type, keyed by ID. */
-    public function forEntityType(string $entityType): Collection
+    public function all(string $entityType): Collection
     {
-        if (! isset(self::$byEntityType[$entityType]) || $this->changed($entityType)) {
+        if (! isset(self::$byEntityType[$entityType]) || $this->tableChanged(fn () => $this->stamp($entityType), $entityType)) {
             $this->load($entityType);
         }
 
@@ -33,31 +29,21 @@ class AttributeRegistry
     }
 
     /** Determine if the registry has the given attribute for the given entity type. */
-    public function has(int $id, string $entityType): bool
+    public function has(string $entityType, int $id): bool
     {
-        return $this->get($id, $entityType) !== null;
+        return $this->get($entityType, $id) !== null;
     }
 
-    /** Get an attribute by its ID, scoped to the given entity type. */
-    public function get(int $id, string $entityType): ?Attribute
+    /** Get an attribute by its ID, scoped to the given entity type, without loading the whole entity type for a single lookup. */
+    public function get(string $entityType, int $id): ?Attribute
     {
-        $attributes = $this->forEntityType($entityType);
+        $this->dropStaleCaches($entityType);
 
-        if ($attributes->has($id) || isset(self::$unresolved[$entityType][$id])) {
-            return $attributes->get($id);
+        if (isset(self::$byEntityType[$entityType]) && self::$byEntityType[$entityType]->has($id)) {
+            return self::$byEntityType[$entityType]->get($id);
         }
 
-        $attribute = Eav::$attributeModel::query()->forEntity($entityType)->find($id);
-
-        if ($attribute === null) {
-            self::$unresolved[$entityType][$id] = true;
-
-            return null;
-        }
-
-        $attributes->put($id, $attribute);
-
-        return $attribute;
+        return $this->resolved($entityType, $id, fn () => Eav::$attributeModel::query()->forEntity($entityType)->find($id));
     }
 
     /** Clear the cache. */
@@ -65,53 +51,45 @@ class AttributeRegistry
     {
         if ($entityType === null) {
             static::flush();
-
-            $this->checked = [];
+            $this->forgetTableChange();
+            $this->forgetResolved();
 
             return;
         }
 
-        unset(
-            self::$byEntityType[$entityType],
-            self::$stamps[$entityType],
-            self::$unresolved[$entityType],
-            $this->checked[$entityType],
-        );
+        unset(self::$byEntityType[$entityType]);
+        $this->forgetTableChange($entityType);
+        $this->forgetResolved($entityType);
     }
 
     /** Drop everything the process holds. */
     public static function flush(): void
     {
         self::$byEntityType = [];
-        self::$stamps = [];
-        self::$unresolved = [];
+        static::flushTableChanges();
+        static::flushResolved();
     }
 
-    /** Determine if the table moved under an entity type since it was read. */
-    private function changed(string $entityType): bool
+    /** Drop the whole-set and point-lookup caches for an entity type if it moved since either was read. */
+    private function dropStaleCaches(string $entityType): void
     {
-        if (isset($this->checked[$entityType])) {
-            return false;
+        if ($this->tableChanged(fn () => $this->stamp($entityType), $entityType)) {
+            unset(self::$byEntityType[$entityType]);
+            $this->forgetResolved($entityType);
         }
-
-        $this->checked[$entityType] = true;
-
-        return $this->stamp($entityType) !== (self::$stamps[$entityType] ?? null);
     }
 
     /** Read an entity type's attributes, dropping whatever was held for it before. */
     private function load(string $entityType): void
     {
-        $this->checked[$entityType] = true;
-
-        self::$stamps[$entityType] = $this->stamp($entityType);
+        $this->markTableFresh(fn () => $this->stamp($entityType), $entityType);
 
         self::$byEntityType[$entityType] = Eav::$attributeModel::query()
             ->forEntity($entityType)
             ->get()
             ->keyBy('id');
 
-        unset(self::$unresolved[$entityType]);
+        $this->forgetResolved($entityType);
     }
 
     /** Get the state of an entity type's rows, as far as a change is observable. */

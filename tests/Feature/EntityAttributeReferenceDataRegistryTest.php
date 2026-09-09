@@ -24,7 +24,7 @@ class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
         ]);
 
         // Warm the registry once, outside of the assertion window.
-        app(AttributeRegistry::class)->forEntityType('product');
+        app(AttributeRegistry::class)->all('product');
 
         DB::enableQueryLog();
 
@@ -81,9 +81,44 @@ class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
         $this->assertCount(2, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
 
         // The 'category' scope was never touched, so it still triggers its own warm-up.
-        app(AttributeRegistry::class)->forEntityType('category');
+        app(AttributeRegistry::class)->all('category');
 
         $this->assertCount(4, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
+    }
+
+    public function test_attribute_relation_resolves_by_point_lookup_without_loading_the_whole_entity_type(): void
+    {
+        $type = $this->createAttributeType('text');
+        $touched = $this->createAttribute($type, ['code' => 'name']);
+
+        // A wide schema for this entity type — sized so a whole-table dump would be obviously
+        // wrong for what this request actually needs (one attribute, on one stored value).
+        foreach (range(1, 20) as $i) {
+            $this->createAttribute($type, ['code' => "unused_{$i}"]);
+        }
+
+        $product = $this->createProduct();
+
+        $value = EntityAttribute::create([
+            'entity_id' => $product->id,
+            'entity_type' => 'product',
+            'attribute_id' => $touched->id,
+            'value_text' => 'Widget',
+        ]);
+
+        DB::enableQueryLog();
+
+        $fetched = EntityAttribute::query()->find($value->id);
+
+        $this->assertSame('name', $fetched->attribute->code);
+
+        $attributeQueries = array_values(array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"') && ! str_contains($q['query'], 'count(*)')));
+
+        // The rows query must be a point lookup by id — not a scan of the whole entity type
+        // (which, with 21 rows here and thousands in a real catalog, is exactly the cost this
+        // path exists to avoid).
+        $this->assertCount(1, $attributeQueries);
+        $this->assertStringContainsString('"id" = ?', $attributeQueries[0]['query']);
     }
 
     public function test_updating_attribute_invalidates_the_registry(): void
