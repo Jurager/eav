@@ -33,6 +33,31 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
         $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types')));
     }
 
+    public function test_with_relations_populates_type_from_registry_without_a_query(): void
+    {
+        $type = $this->createAttributeType('text');
+        $group = AttributeGroup::create(['code' => 'general', 'sort' => 0]);
+        $attribute = $this->createAttribute($type, ['attribute_group_id' => $group->id]);
+
+        // Warm the registry once, outside of the assertion window.
+        app(AttributeTypeRegistry::class)->all();
+
+        DB::enableQueryLog();
+
+        $fetched = Attribute::query()->withRelations()->find($attribute->id);
+
+        $this->assertTrue($fetched->relationLoaded('type'));
+        $this->assertSame('text', $fetched->type->code);
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types')));
+
+        // withRelations() must still eager-load group and its translations — only the
+        // eager load of `type` was dropped in favor of the registry.
+        $this->assertTrue($fetched->relationLoaded('group'));
+        $this->assertSame('general', $fetched->group->code);
+        $this->assertTrue($fetched->group->relationLoaded('translations'));
+        $this->assertTrue($fetched->relationLoaded('translations'));
+    }
+
     public function test_group_relation_is_populated_from_registry_without_a_query(): void
     {
         $type = $this->createAttributeType('text');

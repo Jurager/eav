@@ -186,7 +186,6 @@ class Attribute extends Model
     public function scopeWithRelations(Builder $query): Builder
     {
         return $query->with([
-            'type',
             'group.translations',
             'translations',
         ]);
