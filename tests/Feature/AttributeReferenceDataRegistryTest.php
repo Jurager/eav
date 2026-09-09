@@ -50,12 +50,16 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
         $this->assertSame('text', $fetched->type->code);
         $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types')));
 
-        // withRelations() must still eager-load group and its translations — only the
-        // eager load of `type` was dropped in favor of the registry.
+        // withRelations() must still populate group and the attribute's own translations —
+        // only the eager load of `type` was dropped in favor of the registry.
         $this->assertTrue($fetched->relationLoaded('group'));
         $this->assertSame('general', $fetched->group->code);
-        $this->assertTrue($fetched->group->relationLoaded('translations'));
         $this->assertTrue($fetched->relationLoaded('translations'));
+
+        // group->translations is NOT eager-loaded here — it's locale-scoped, so it comes off
+        // the request-shared clone in AttributeGroupRegistry::forRequest() lazily instead
+        // (see the dedicated coverage below).
+        $this->assertFalse($fetched->group->relationLoaded('translations'));
     }
 
     public function test_group_relation_is_populated_from_registry_without_a_query(): void
@@ -73,6 +77,39 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
         $this->assertTrue($fetched->relationLoaded('group'));
         $this->assertSame('general', $fetched->group->code);
         $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_groups')));
+    }
+
+    public function test_group_translations_are_queried_once_per_request_however_many_attributes_share_the_group(): void
+    {
+        $type = $this->createAttributeType('text');
+        $group = AttributeGroup::create(['code' => 'general', 'sort' => 0]);
+        $locale = $this->createLocale();
+        $group->translations()->attach($locale->id, ['label' => 'General']);
+
+        $a = $this->createAttribute($type, ['code' => 'a', 'attribute_group_id' => $group->id]);
+        $b = $this->createAttribute($type, ['code' => 'b', 'attribute_group_id' => $group->id]);
+
+        // Two independent top-level queries, mirroring separate calls within one request
+        // (e.g. a search endpoint plus a resource that separately re-fetches attributes) —
+        // exactly the shape that used to fire the same group-translations query 3 times.
+        $fetchedA = Attribute::query()->find($a->id);
+        $fetchedB = Attribute::query()->find($b->id);
+
+        DB::enableQueryLog();
+
+        $this->assertCount(1, $fetchedA->group->translations);
+
+        $groupQueries = array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_groups') || str_contains($q['query'], 'entity_translations'));
+        $this->assertNotEmpty($groupQueries, 'expected the first ->translations access to query.');
+
+        DB::flushQueryLog();
+
+        // $fetchedB carries the SAME clone for group id — its ->translations access must
+        // reuse what $fetchedA already loaded, not fire a second query.
+        $this->assertCount(1, $fetchedB->group->translations);
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_groups') || str_contains($q['query'], 'entity_translations')));
+
+        DB::disableQueryLog();
     }
 
     public function test_group_relation_is_null_when_attribute_has_no_group(): void
@@ -193,5 +230,28 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
 
         $this->assertCount(1, $all);
         $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_groups')));
+    }
+
+    public function test_group_translations_do_not_leak_into_the_next_simulated_request(): void
+    {
+        $type = $this->createAttributeType('text');
+        $group = AttributeGroup::create(['code' => 'general', 'sort' => 0]);
+        $locale = $this->createLocale();
+        $group->translations()->attach($locale->id, ['label' => 'General']);
+
+        $attribute = $this->createAttribute($type, ['attribute_group_id' => $group->id]);
+
+        $fetched = Attribute::query()->find($attribute->id);
+        $this->assertCount(1, $fetched->group->translations);
+
+        // The clone that carried those translations belongs to this request's registry
+        // instance. Simulate the next Octane request: the container drops the scoped
+        // instance, so the next fetch must get a fresh clone with no relation preloaded —
+        // not the previous request's clone/translations bleeding across the boundary.
+        app()->forgetScopedInstances();
+
+        $fetchedAgain = Attribute::query()->find($attribute->id);
+
+        $this->assertFalse($fetchedAgain->group->relationLoaded('translations'));
     }
 }
