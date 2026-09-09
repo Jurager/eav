@@ -33,7 +33,7 @@ trait ValidatesPayload
     {
         if (! $this->isLocalizable()) {
             if (! $this->isMultiple()) {
-                if (is_array($values)) {
+                if (! $this->isComposite() && is_array($values)) {
                     return $this->addError(__('eav::attributes.validation.multiple_not_allowed'));
                 }
 
@@ -45,7 +45,7 @@ trait ValidatesPayload
             }
 
             foreach ($values as $value) {
-                if (is_array($value)) {
+                if (! $this->isComposite() && is_array($value)) {
                     return $this->addError(__('eav::attributes.validation.invalid_format'));
                 }
 
@@ -137,11 +137,13 @@ trait ValidatesPayload
 
         $rules = $this->rules();
 
-        if (empty($rules) || $value === null) {
+        $subject = $this->ruleSubject($value);
+
+        if (empty($rules) || $subject === null) {
             return true;
         }
 
-        $validator = Validator::make(['value' => $value], ['value' => $rules]);
+        $validator = Validator::make(['value' => $subject], ['value' => $rules]);
 
         if ($validator->fails()) {
             foreach ($validator->errors()->get('value') as $error) {
@@ -152,6 +154,18 @@ trait ValidatesPayload
         }
 
         return true;
+    }
+
+    /** Value checked against the configured rules — override for a field whose value isn't the rule subject itself. */
+    protected function ruleSubject(mixed $value): mixed
+    {
+        return $value;
+    }
+
+    /** Whether a single value is itself an array (e.g. {value, unit_id}) rather than a scalar exploded for `multiple`. */
+    protected function isComposite(): bool
+    {
+        return false;
     }
 
     /** Convert attribute validations to Laravel rules. */

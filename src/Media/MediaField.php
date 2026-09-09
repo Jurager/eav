@@ -47,11 +47,7 @@ class MediaField extends File
             return null;
         }
 
-        $normalized = parent::normalize($value);
-
-        return is_array($normalized)
-            ? array_map(static fn (mixed $id): int => (int) $id, $normalized)
-            : (int) $normalized;
+        return (int) parent::normalize($value);
     }
 
     public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed

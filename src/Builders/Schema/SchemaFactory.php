@@ -8,9 +8,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
-use Jurager\Eav\Managers\Schema\AttributeSchema;
-use Jurager\Eav\Managers\Schema\EnumSchema;
-use Jurager\Eav\Managers\Schema\GroupSchema;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
@@ -23,12 +20,9 @@ use Jurager\Eav\Registry\LocaleRegistry;
 class SchemaFactory
 {
     public function __construct(
-        private readonly GroupSchema $groupSchema,
-        private readonly AttributeSchema $attributeSchema,
-        private readonly EnumSchema $enumSchema,
+        private readonly SchemaManager $manager,
         private readonly AttributeTypeRegistry $types,
         private readonly LocaleRegistry $locales,
-        private readonly SchemaManager $manager,
     ) {
     }
 
@@ -39,13 +33,13 @@ class SchemaFactory
      */
     public function group(AttributeGroup|string $code): GroupBuilder
     {
-        return new GroupBuilder($this->groupSchema, $this->locales, $code);
+        return new GroupBuilder($this->manager->group(), $this->locales, $code);
     }
 
     /** Start building an attribute. */
     public function attribute(Attribute|string $code, ?string $entityType = null): AttributeBuilder
     {
-        return new AttributeBuilder($this->attributeSchema, $this->types, $this->locales, $code, $entityType);
+        return new AttributeBuilder($this->manager->attribute(), $this->types, $this->locales, $code, $entityType);
     }
 
     /**
@@ -55,7 +49,7 @@ class SchemaFactory
      */
     public function enum(AttributeEnum|Attribute $subject, ?string $code = null): EnumBuilder
     {
-        return new EnumBuilder($this->enumSchema, $this->locales, $subject, $code);
+        return new EnumBuilder($this->manager->enum(), $this->locales, $subject, $code);
     }
 
     /** Persist many builders of the same kind in a single batch — for imports, not one-off seeding. */
@@ -66,11 +60,11 @@ class SchemaFactory
         }
 
         return match (true) {
-            $builders[0] instanceof AttributeBuilder => $this->attributeSchema->batch(
+            $builders[0] instanceof AttributeBuilder => $this->manager->attribute()->batch(
                 array_map(fn (AttributeBuilder $builder) => $builder->build(), $builders),
                 $fireEvents,
             ),
-            $builders[0] instanceof EnumBuilder => $this->enumSchema->batch(
+            $builders[0] instanceof EnumBuilder => $this->manager->enum()->batch(
                 array_map(fn (EnumBuilder $builder) => $builder->build(), $builders),
                 $fireEvents,
             ),
@@ -81,19 +75,19 @@ class SchemaFactory
     /** Find an attribute by ID. */
     public function findAttribute(int $id): Attribute
     {
-        return $this->attributeSchema->find($id);
+        return $this->manager->attribute()->find($id);
     }
 
     /** Find a group by ID. */
     public function findGroup(int $id): AttributeGroup
     {
-        return $this->groupSchema->find($id);
+        return $this->manager->group()->find($id);
     }
 
     /** Find an enum option by ID. */
     public function findEnum(int $id): AttributeEnum
     {
-        return $this->enumSchema->find($id);
+        return $this->manager->enum()->find($id);
     }
 
     /** Find an attribute type by ID. */
