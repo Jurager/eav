@@ -16,6 +16,7 @@ use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\ClosureRelation;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 
@@ -31,12 +32,7 @@ trait HasInheritedAttributes
         return null;
     }
 
-    /**
-     * Name of the relation whose related IDs scope this entity's available
-     * attributes. Defaults to the pluralized, camelCase basename of
-     * `attributeScopeModel()` (`Category` → `categories`) — override when the
-     * relation isn't named by that convention.
-     */
+    /** Name of the relation whose related IDs scope this entity's available attributes. */
     protected function attributeScopeRelationName(): ?string
     {
         $model = static::attributeScopeModel();
@@ -44,12 +40,7 @@ trait HasInheritedAttributes
         return $model !== null ? Str::camel(Str::plural(class_basename($model))) : null;
     }
 
-    /**
-     * Name of the relation holding the parent entity this one is a variant of.
-     *
-     * Declaring it turns the entity into a child: it resolves its attribute scope through the
-     * parent, inherits the parent's values and keeps only the attributes it may hold itself.
-     */
+    /** Name of the relation holding the parent entity this one is a variant of. */
     protected function attributeParentRelationName(): ?string
     {
         return null;
@@ -81,10 +72,6 @@ trait HasInheritedAttributes
     /**
      * Relations to eager-load so a variant reads its inherited values in one batch.
      *
-     * The attribute manager merges the parent's values in memory; when they are not already loaded,
-     * reading values falls back to one merged query per variant. Keyed off the parent relation this
-     * entity declares.
-     *
      * @return list<string>
      */
     public function inheritedValueRelations(): array
@@ -97,16 +84,35 @@ trait HasInheritedAttributes
     /**
      * Relations to eager-load alongside the requested includes.
      *
-     * Reading a variant's values merges the parent's attribute values in memory; when they are not
-     * already loaded, the attribute manager falls back to one merged query per variant. This hook lets
-     * the calling layer batch-load them before it reads the values.
-     *
      * @param  list<string>  $included
-     * @return list<string>
+     * @param  list<string>|null  $fields
+     * @return array<int|string, string|Closure>
      */
-    public function eagerLoads(array $included): array
+    public function eagerLoads(array $included, ?array $fields = null): array
     {
-        return in_array('attribute_values', $included, true) ? $this->inheritedValueRelations() : [];
+        if (! in_array('attribute_values', $included, true)) {
+            return [];
+        }
+
+        $relations = $this->inheritedValueRelations();
+
+        if ($fields !== null) {
+            $relations['attribute_values'] = $this->attributeValuesSparseConstraint($fields);
+        }
+
+        return $relations;
+    }
+
+    /** Constrain attribute_values to the codes among the given fields, resolved for this entity's type. */
+    protected function attributeValuesSparseConstraint(array $fields): Closure
+    {
+        $ids = app(AttributeRegistry::class)
+            ->all($this->getEntityType())
+            ->whereIn('code', $fields)
+            ->pluck('id')
+            ->all();
+
+        return fn ($query) => $query->whereIn('attribute_id', $ids);
     }
 
     /** Get the relation pointing at the parent entity, when the model declares one. */
@@ -120,9 +126,6 @@ trait HasInheritedAttributes
 
     /**
      * Get the related entities whose attributes make up this entity's scope.
-     *
-     * A variant carries no scope of its own — a product offer belongs to the categories of its
-     * model — so an empty scope falls back to the parent's.
      *
      * @return Collection<int, mixed>
      */
@@ -150,13 +153,8 @@ trait HasInheritedAttributes
     }
 
     /**
-     * Determine whether the entity's effective scope — own, or inherited from its parent when it
-     * carries none itself, see {@see attributeScopeEntities()} — falls within the nested-set
-     * subtree rooted at any of the given IDs.
-     *
-     * A variant (e.g. a product offer) holds no categories of its own, so checking its direct
-     * relation against a category-tree scope always fails; this checks the inherited scope instead.
-     *
+     * Determine whether the entity's effective scope — own, or inherited from its parent when it carries none itself.
+     * 
      * @param  array<int>  $rootIds
      */
     public function attributeScopeMatchesTree(array $rootIds): bool
@@ -214,9 +212,6 @@ trait HasInheritedAttributes
 
     /**
      * Get the query for the attributes the entity fills in itself.
-     *
-     * The schema carries every attribute in scope, including the ones a variant only reads off its
-     * parent; this narrows it down to the side that holds the value.
      *
      * @param  array<int>  $params
      */
