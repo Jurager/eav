@@ -26,6 +26,8 @@ use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Listeners\ReindexChangedEntities;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
+use Jurager\Eav\Media\MediaCollectionResolver;
+use Jurager\Eav\Media\MediaObserver;
 use Jurager\Eav\Observers\AttributeEnumObserver;
 use Jurager\Eav\Observers\AttributeGroupObserver;
 use Jurager\Eav\Observers\AttributeObserver;
@@ -41,6 +43,8 @@ use Jurager\Eav\Search\Engine;
 use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
 use Jurager\Eav\Search\SearchFactory;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
+use Jurager\Media\Models\Media;
+use Jurager\Media\Support\MediaCollectionResolverRegistry;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -115,6 +119,7 @@ class EavServiceProvider extends ServiceProvider
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
         $this->registerObservers();
+        $this->registerMediaIntegration();
         $this->registerCitextSupport();
         $this->registerScoutHook();
         $this->registerLocaleContext();
@@ -200,5 +205,17 @@ class EavServiceProvider extends ServiceProvider
         foreach ($observers as $model => $observer) {
             $model::observe($observer);
         }
+    }
+
+    /** Wire the media field integration when media package is installed. */
+    private function registerMediaIntegration(): void
+    {
+        if (! class_exists(Media::class)) {
+            return;
+        }
+
+        config('media.models.media', Media::class)::observe(MediaObserver::class);
+
+        $this->app->make(MediaCollectionResolverRegistry::class)->register($this->app->make(MediaCollectionResolver::class));
     }
 }

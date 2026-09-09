@@ -83,25 +83,51 @@ $field->label(localeId: 2); // label for a specific locale
 
 ## Working With File and Image Fields
 
-`File` and `Image` store a path or URL in `value_text`. The base field returns the raw stored string. To resolve it into a URL, a signed link, or a media model, override `resolve()` in a subclass:
+`File` and `Image` store a path or URL in `value_text`. The base field returns the raw stored string. To resolve it into a URL, a signed link, or a media model, override `resolve()` in a subclass — see [Defining Custom Field Types](#defining-custom-field-types) for registration details.
+
+### Backing File/Image Fields With jurager/media
+
+If the app also uses [`jurager/media`](https://github.com/Jurager/media), `Jurager\Eav\Media\MediaField` is a ready-made field type: it stores a `media.id`, validates it against the entity's own media, and resolves to the `Media` model.
 
 ```php
-use Jurager\Eav\Fields\File;
+// config/eav.php
+'types' => [
+    'image' => \Jurager\Eav\Media\MediaField::class,
+    'file'  => \Jurager\Eav\Media\MediaField::class,
+],
+```
 
-class MediaFileField extends File
+Nothing else to wire — `EavServiceProvider` registers `Jurager\Eav\Media\MediaCollectionResolver` globally as soon as it detects jurager/media, so every model implementing `Attributable` and `InteractsWithMedia` picks up its `MediaField` attributes automatically. A model only needs `registerMediaCollections()` for its own static collections, if any:
+
+```php
+public function registerMediaCollections(): void
 {
-    public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
-    {
-        if ($rawValue === null) {
-            return null;
-        }
-
-        return Storage::disk('s3')->url($rawValue);
-    }
+    $this->addMediaCollection('gallery');
 }
 ```
 
-Register the subclass in `config/eav.php` under the appropriate type code. See [Defining Custom Field Types](#defining-custom-field-types) for registration details.
+Two more pieces complete the integration, both wired automatically by the same provider, no registration needed on your end:
+
+- `Jurager\Eav\Media\OrphanedMediaCleaner` — deletes media a `MediaField` attribute no longer references. Add it to `config('media.cleaners')` yourself; unlike the other two, cleaner registration stays explicit — see [Custom cleaner rules](advanced.md#media-clean) in jurager/media's docs.
+- `Jurager\Eav\Media\MediaObserver` — clears the attribute value when its media is deleted directly.
+
+`jurager/eav` has no hard dependency on `jurager/media` — everything under `Jurager\Eav\Media\` is opt-in and only needs it loaded when you actually use these classes.
+
+### Finding Attributes By Field Class
+
+`AttributeManager::field()` resolves a field against one entity's attribute scope — it needs a bound, saved entity. Some tooling needs the opposite: "which attributes of this entity type are of this kind at all", independent of any one entity's scope. `FieldFactory::using()` answers that directly:
+
+```php
+use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Media\MediaField;
+
+$mediaAttributes = app(FieldFactory::class)->using(MediaField::class, 'product');
+
+$mediaAttributes->pluck('code'); // attribute codes
+$mediaAttributes->keys();        // attribute ids
+```
+
+It matches `$fieldClass` itself and its subclasses, and is backed by `AttributeRegistry`, so repeated calls don't re-query. `Jurager\Eav\Media\OrphanedMediaCleaner` and `MediaCollectionResolver` are both built on exactly this call.
 
 ## Defining Custom Field Types
 

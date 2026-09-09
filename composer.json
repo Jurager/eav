@@ -23,6 +23,9 @@
         "orchestra/testbench": "^9.0|^10.0",
         "phpunit/phpunit": "^11.0|^12.0"
     },
+    "suggest": {
+        "jurager/media": "Adds a file/image attribute type backed by a media library."
+    },
     "autoload": {
         "psr-4": {
             "Jurager\\Eav\\": "src/"

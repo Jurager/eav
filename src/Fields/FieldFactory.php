@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Fields;
 
+use Illuminate\Support\Collection;
 use Jurager\Eav\Enums\AttributeType;
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
@@ -18,6 +20,7 @@ class FieldFactory
     public function __construct(
         private readonly LocaleRegistry $localeRegistry,
         private readonly EnumRegistry $enumRegistry,
+        private readonly AttributeRegistry $attributes,
     ) {
         $this->types = config('eav.types', []);
     }
@@ -29,19 +32,19 @@ class FieldFactory
             throw InvalidFieldTypeException::notAField($class);
         }
 
-        $this->types[$this->getTypeCode($type)] = $class;
+        $this->types[$this->type($type)] = $class;
     }
 
     /** Check if a field type is registered. */
     public function has(AttributeType|string $type): bool
     {
-        return isset($this->types[$this->getTypeCode($type)]);
+        return isset($this->types[$this->type($type)]);
     }
 
     /** Resolve a class name for a given field type. */
     public function resolve(AttributeType|string $type): string
     {
-        $code = $this->getTypeCode($type);
+        $code = $this->type($type);
 
         if (! $this->has($code)) {
             throw InvalidFieldTypeException::notRegistered($code);
@@ -68,8 +71,24 @@ class FieldFactory
         return $this->types;
     }
 
+    /** Attributes of $entityType whose field class is, or extends, $fieldClass — schema-level, ignores instance scope. */
+    public function using(string $fieldClass, string $entityType): Collection
+    {
+        $codes = array_keys(array_filter(
+            $this->types,
+            fn (string $class) => is_a($class, $fieldClass, true),
+        ));
+
+        if (empty($codes)) {
+            return collect();
+        }
+
+        return $this->attributes->forEntityType($entityType)
+            ->filter(fn (Attribute $attribute) => in_array($attribute->type?->getAttribute('code'), $codes, true));
+    }
+
     /** Get the string code from a type enum or string. */
-    private function getTypeCode(AttributeType|string $type): string
+    private function type(AttributeType|string $type): string
     {
         return $type instanceof AttributeType ? $type->value : $type;
     }
