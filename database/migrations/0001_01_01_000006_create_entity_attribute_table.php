@@ -37,12 +37,16 @@ return new class extends Migration
             $table->index(['entity_type', 'attribute_id', 'value_boolean'], 'idx_ea_filter_boolean');
             $table->index(['entity_type', 'attribute_id', 'value_date'], 'idx_ea_filter_date');
             $table->index(['entity_type', 'attribute_id', 'value_datetime'], 'idx_ea_filter_datetime');
-            $table->index(['entity_type', 'attribute_id', 'value_text'], 'idx_ea_filter_text');
+
+            if (! $isPgsql) {
+                $table->index(['entity_type', 'attribute_id', 'value_text'], 'idx_ea_filter_text');
+            }
 
             $table->timestamps();
         });
 
         if ($isPgsql) {
+            DB::statement('CREATE INDEX idx_ea_filter_text ON entity_attribute (entity_type, attribute_id, value_text) WHERE octet_length(value_text) <= 1000');
             DB::statement('CREATE INDEX idx_ea_value_text_trgm ON entity_attribute USING gin (value_text gin_trgm_ops)');
         }
     }
