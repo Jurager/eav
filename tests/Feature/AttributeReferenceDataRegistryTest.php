@@ -33,32 +33,30 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
         $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types')));
     }
 
-    public function test_with_relations_populates_type_from_registry_without_a_query(): void
+    public function test_type_and_group_are_both_populated_from_the_registry_on_the_same_fetch(): void
     {
         $type = $this->createAttributeType('text');
         $group = AttributeGroup::create(['code' => 'general', 'sort' => 0]);
         $attribute = $this->createAttribute($type, ['attribute_group_id' => $group->id]);
 
-        // Warm the registry once, outside of the assertion window.
+        // Warm the registries once, outside of the assertion window.
         app(AttributeTypeRegistry::class)->all();
+        app(AttributeGroupRegistry::class)->all();
 
         DB::enableQueryLog();
 
-        $fetched = Attribute::query()->withRelations()->find($attribute->id);
+        $fetched = Attribute::query()->find($attribute->id);
 
         $this->assertTrue($fetched->relationLoaded('type'));
         $this->assertSame('text', $fetched->type->code);
-        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types')));
-
-        // withRelations() must still populate group and the attribute's own translations —
-        // only the eager load of `type` was dropped in favor of the registry.
         $this->assertTrue($fetched->relationLoaded('group'));
         $this->assertSame('general', $fetched->group->code);
-        $this->assertTrue($fetched->relationLoaded('translations'));
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types') || str_contains($q['query'], 'attribute_groups')));
 
-        // group->translations is NOT eager-loaded here — it's locale-scoped, so it comes off
-        // the request-shared clone in AttributeGroupRegistry::forRequest() lazily instead
-        // (see the dedicated coverage below).
+        // Neither relation carries translations here — those are locale-scoped, so nothing
+        // preloads them; the group's own come off its per-request clone lazily instead (see
+        // the dedicated coverage below).
+        $this->assertFalse($fetched->relationLoaded('translations'));
         $this->assertFalse($fetched->group->relationLoaded('translations'));
     }
 

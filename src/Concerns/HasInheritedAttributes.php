@@ -287,8 +287,7 @@ trait HasInheritedAttributes
     protected function globalAttributesQuery(): Builder
     {
         return Eav::$attributeModel::query()
-            ->forEntity($this->getEntityType())
-            ->withRelations();
+            ->forEntity($this->getEntityType());
     }
 
     /** Get query for attributes scoped through related entities. */
@@ -366,7 +365,6 @@ trait HasInheritedAttributes
                     ->select($relatedKey)
                     ->whereIn($foreignKey, $entityIds)
                     ->distinct();
-            })
-            ->withRelations();
+            });
     }
 }

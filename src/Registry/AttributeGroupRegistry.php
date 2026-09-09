@@ -15,21 +15,8 @@ class AttributeGroupRegistry
 
     private static ?string $stamp = null;
 
-    private bool $checkedThisRequest = false;
+    private bool $checked = false;
 
-    /**
-     * One clone per group, for the current request only — unlike the row data above, a clone is
-     * safe to carry locale-scoped relations (translations) that the shared static row above must
-     * never hold. Handing every Attribute the SAME clone (instead of a fresh one each time) means
-     * a lazy ->translations access on it queries once per group per request, however many
-     * Attributes reference that group — not once per Attribute (see {@see forRequest()}).
-     *
-     * This stays a plain instance property: the registry itself is resolved fresh each request
-     * ({@see \Jurager\Eav\EavServiceProvider} binds it `scoped`), which is exactly the lifetime
-     * this cache is safe for.
-     *
-     * @var array<int, AttributeGroup>
-     */
     private array $hydrated = [];
 
     /** Get all cached attribute groups, keyed by ID. */
@@ -54,19 +41,8 @@ class AttributeGroupRegistry
         return $this->all()->get($id);
     }
 
-    /**
-     * Get a group to attach relations to, safe for the current request only.
-     *
-     * The row itself is safe to share across every request in the worker — it carries no
-     * locale — but a relation like `translations` resolves against whichever locale the
-     * current request negotiated, so it can never be cached on that shared row. This hands
-     * out a clone instead, one per group id, reused for the rest of the request: the first
-     * `->translations` access on it (however that happens — resource serialization, direct
-     * access, anywhere) queries once, and every other Attribute that shares this group in
-     * this request reuses that same loaded relation rather than re-querying (see {@see
-     * \Jurager\Eav\Models\Attribute::hydrateFromRegistries()}).
-     */
-    public function forRequest(int $groupId): ?AttributeGroup
+    /** Get a group to attach relations to. */
+    public function own(int $groupId): ?AttributeGroup
     {
         if (array_key_exists($groupId, $this->hydrated)) {
             return $this->hydrated[$groupId];
@@ -82,7 +58,7 @@ class AttributeGroupRegistry
     {
         self::$groups = null;
         self::$stamp = null;
-        $this->checkedThisRequest = false;
+        $this->checked = false;
         $this->hydrated = [];
     }
 
@@ -96,11 +72,11 @@ class AttributeGroupRegistry
     /** Determine if the table changed since it was last read. Checked at most once per request. */
     private function changed(): bool
     {
-        if ($this->checkedThisRequest) {
+        if ($this->checked) {
             return false;
         }
 
-        $this->checkedThisRequest = true;
+        $this->checked = true;
 
         return $this->stamp() !== self::$stamp;
     }
@@ -108,7 +84,7 @@ class AttributeGroupRegistry
     /** Read the table, dropping whatever was held before. */
     private function load(): void
     {
-        $this->checkedThisRequest = true;
+        $this->checked = true;
         self::$stamp = $this->stamp();
         self::$groups = Eav::$attributeGroupModel::query()->get()->keyBy('id');
     }

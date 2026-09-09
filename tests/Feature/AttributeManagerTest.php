@@ -66,6 +66,23 @@ class AttributeManagerTest extends FeatureTestCase
         $this->assertNotContains('a', $attributesQueries[0]['bindings'], 'the query should be scoped to the requested code, not the whole available schema.');
     }
 
+    public function test_field_does_not_query_the_attributes_own_translations(): void
+    {
+        $attribute = $this->createAttribute($this->textType, ['code' => 'title']);
+        $attribute->translations()->attach($this->createLocale('de')->id, ['label' => 'Titel']);
+
+        $product = $this->createProduct();
+
+        DB::enableQueryLog();
+
+        $field = $product->eav()->field('title');
+
+        $this->assertNotNull($field);
+        // Nothing in AttributeManager's own code path reads an attribute definition's label —
+        // field()/ensureFields() must not fetch it on spec.
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'entity_translations')));
+    }
+
     public function test_for_non_attributable_class_throws(): void
     {
         $this->expectException(InvalidConfigurationException::class);

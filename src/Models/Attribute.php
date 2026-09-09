@@ -101,17 +101,10 @@ class Attribute extends Model
         }
     }
 
-    /**
-     * Resolve the group relation for the current request.
-     *
-     * {@see AttributeGroupRegistry::forRequest()} hands back the same clone for every Attribute
-     * that shares this group id in this request, so a later ->group->translations access — lazy,
-     * no eager load needed here — queries once per group per request no matter how many
-     * Attributes carry it, instead of once per Attribute.
-     */
+    /** Resolve the group relation, shared for however this attribute id was fetched. */
     private static function hydrateGroup(?int $groupId): ?AttributeGroup
     {
-        return $groupId !== null ? app(AttributeGroupRegistry::class)->forRequest($groupId) : null;
+        return $groupId !== null ? app(AttributeGroupRegistry::class)->own($groupId) : null;
     }
 
     protected function casts(): array
@@ -191,20 +184,5 @@ class Attribute extends Model
     public function isHeldBy(HeldBy $side): bool
     {
         return $this->getAttribute('held_by') === $side || $this->getAttribute('held_by') === HeldBy::Both;
-    }
-
-    /**
-     * Scope a query to eager load common attribute relationships.
-     *
-     * "group" is deliberately left out here: {@see hydrateFromRegistries()} already attaches it
-     * (row from the shared registry, translations from its per-request cache) on every retrieved
-     * event, for free. Eager-loading it here too would run its own SQL and then clobber that with
-     * a copy that isn't safe to have shared across requests.
-     */
-    public function scopeWithRelations(Builder $query): Builder
-    {
-        return $query->with([
-            'translations',
-        ]);
     }
 }

@@ -73,7 +73,7 @@ class AttributeManager
 
         $attributes = $registry->resolve(
             "{$entity}:default",
-            fn () => Eav::$attributeModel::query()->forEntity($entity)->withRelations()->get(),
+            fn () => Eav::$attributeModel::query()->forEntity($entity)->get(),
         );
 
         return static::buildFromCollection($attributes);

@@ -20,7 +20,7 @@ class AttributeRegistry
     private static array $unresolved = [];
 
     /** @var array<string, true> */
-    private array $checkedThisRequest = [];
+    private array $checked = [];
 
     /** Get all cached attributes for a given entity type, keyed by ID. */
     public function forEntityType(string $entityType): Collection
@@ -66,7 +66,7 @@ class AttributeRegistry
         if ($entityType === null) {
             static::flush();
 
-            $this->checkedThisRequest = [];
+            $this->checked = [];
 
             return;
         }
@@ -75,7 +75,7 @@ class AttributeRegistry
             self::$byEntityType[$entityType],
             self::$stamps[$entityType],
             self::$unresolved[$entityType],
-            $this->checkedThisRequest[$entityType],
+            $this->checked[$entityType],
         );
     }
 
@@ -90,11 +90,11 @@ class AttributeRegistry
     /** Determine if the table moved under an entity type since it was read. */
     private function changed(string $entityType): bool
     {
-        if (isset($this->checkedThisRequest[$entityType])) {
+        if (isset($this->checked[$entityType])) {
             return false;
         }
 
-        $this->checkedThisRequest[$entityType] = true;
+        $this->checked[$entityType] = true;
 
         return $this->stamp($entityType) !== (self::$stamps[$entityType] ?? null);
     }
@@ -102,7 +102,7 @@ class AttributeRegistry
     /** Read an entity type's attributes, dropping whatever was held for it before. */
     private function load(string $entityType): void
     {
-        $this->checkedThisRequest[$entityType] = true;
+        $this->checked[$entityType] = true;
 
         self::$stamps[$entityType] = $this->stamp($entityType);
 

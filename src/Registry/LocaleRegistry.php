@@ -18,7 +18,7 @@ class LocaleRegistry
 
     private static ?int $default = null;
 
-    private bool $checkedThisRequest = false;
+    private bool $checked = false;
 
     /** @var array<string>|null Active locales for the current request. */
     private ?array $active = null;
@@ -115,7 +115,7 @@ class LocaleRegistry
         self::$locales = null;
         self::$stamp = null;
         self::$default = null;
-        $this->checkedThisRequest = false;
+        $this->checked = false;
         $this->active = null;
     }
 
@@ -130,11 +130,11 @@ class LocaleRegistry
     /** Determine if the table changed since it was last read. Checked at most once per request. */
     private function changed(): bool
     {
-        if ($this->checkedThisRequest) {
+        if ($this->checked) {
             return false;
         }
 
-        $this->checkedThisRequest = true;
+        $this->checked = true;
 
         return $this->stamp() !== self::$stamp;
     }
@@ -142,7 +142,7 @@ class LocaleRegistry
     /** Read the table, dropping whatever was held before. */
     private function load(): void
     {
-        $this->checkedThisRequest = true;
+        $this->checked = true;
         self::$stamp = $this->stamp();
         self::$locales = Eav::$localeModel::query()
             ->withoutGlobalScope(ActiveLocaleScope::class)

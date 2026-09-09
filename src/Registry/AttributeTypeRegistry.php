@@ -18,7 +18,7 @@ class AttributeTypeRegistry
 
     private static ?string $stamp = null;
 
-    private bool $checkedThisRequest = false;
+    private bool $checked = false;
 
     /** Get all cached attribute types. */
     public function all(): Collection
@@ -62,7 +62,7 @@ class AttributeTypeRegistry
         self::$types = null;
         self::$typesById = null;
         self::$stamp = null;
-        $this->checkedThisRequest = false;
+        $this->checked = false;
     }
 
     /** Drop everything the process holds. */
@@ -76,11 +76,11 @@ class AttributeTypeRegistry
     /** Determine if the table changed since it was last read. Checked at most once per request. */
     private function changed(): bool
     {
-        if ($this->checkedThisRequest) {
+        if ($this->checked) {
             return false;
         }
 
-        $this->checkedThisRequest = true;
+        $this->checked = true;
 
         return $this->stamp() !== self::$stamp;
     }
@@ -88,7 +88,7 @@ class AttributeTypeRegistry
     /** Read the table, dropping whatever was held before. */
     private function load(): void
     {
-        $this->checkedThisRequest = true;
+        $this->checked = true;
         self::$stamp = $this->stamp();
         self::$types = Eav::$attributeTypeModel::query()->get()->keyBy('code');
         self::$typesById = self::$types->values()->keyBy('id');
