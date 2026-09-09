@@ -14,8 +14,7 @@ class AttributeGroupObserver
 {
     public function __construct(
         protected AttributeGroupRegistry $registry,
-    ) {
-    }
+    ) {}
 
     /** Handle the "created" event. */
     public function created(AttributeGroup $group): void

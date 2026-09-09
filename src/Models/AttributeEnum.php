@@ -5,9 +5,11 @@ declare(strict_types=1);
 namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Carbon;
 use Jurager\Eav\Eav;
 
 /**
@@ -15,11 +17,10 @@ use Jurager\Eav\Eav;
  * @property int $attribute_id
  * @property string $code
  * @property int $sort
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- *
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  * @property-read Attribute|null $attribute
- * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
+ * @property-read Collection<int, Locale> $translations
  */
 class AttributeEnum extends Model
 {
@@ -64,9 +65,9 @@ class AttributeEnum extends Model
      */
     public function scopeUsedBy(Builder $query, Builder $entities): Builder
     {
-        $enum       = $query->getModel();
+        $enum = $query->getModel();
         $valuesClass = Eav::$entityAttributeModel;
-        $values      = new $valuesClass();
+        $values = new $valuesClass;
 
         return $query->whereExists(
             fn ($sub) => $sub

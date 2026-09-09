@@ -16,8 +16,7 @@ class TranslationManager
 {
     public function __construct(
         protected LocaleRegistry $localeRegistry,
-    ) {
-    }
+    ) {}
 
     /** Execute a custom query on locales or return all. */
     public function locales(?callable $modifier = null): mixed
@@ -60,6 +59,7 @@ class TranslationManager
 
     /**
      * Save translations for a specific model.
+     *
      * @throws JsonException
      */
     public function save(Model $model, array $translations, bool $partial = false): void
@@ -88,6 +88,7 @@ class TranslationManager
 
     /**
      * Persist translations for multiple models in a bulk upsert.
+     *
      * @throws JsonException
      */
     public function batch(array $modelsWithTranslations, ?Carbon $timestamp = null): void
@@ -120,19 +121,19 @@ class TranslationManager
     protected function buildTranslationRow(Model $model, int $localeId, array $translation, Carbon $timestamp): array
     {
         $params = array_filter([
-            'short_name'  => $translation['short_name'] ?? null,
-            'hint'        => $translation['hint'] ?? null,
+            'short_name' => $translation['short_name'] ?? null,
+            'hint' => $translation['hint'] ?? null,
             'placeholder' => $translation['placeholder'] ?? null,
         ], static fn ($value) => $value !== null);
 
         return [
             'entity_type' => $model->getMorphClass(),
-            'entity_id'   => $model->getKey(),
-            'locale_id'   => $localeId,
-            'label'       => $translation['label'],
-            'params'      => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
-            'created_at'  => $timestamp,
-            'updated_at'  => $timestamp,
+            'entity_id' => $model->getKey(),
+            'locale_id' => $localeId,
+            'label' => $translation['label'],
+            'params' => $params ? json_encode($params, JSON_THROW_ON_ERROR) : null,
+            'created_at' => $timestamp,
+            'updated_at' => $timestamp,
         ];
     }
 }

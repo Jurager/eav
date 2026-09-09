@@ -71,16 +71,16 @@ return [
     | ":<value>" automatically. Parameterless rules (email, url) are used as-is.
     */
     'validations' => [
-        'min_length'  => 'min',
-        'max_length'  => 'max',
-        'min'         => 'min',
-        'max'         => 'max',
-        'regex'       => 'regex',
-        'email'       => 'email',
-        'url'         => 'url',
+        'min_length' => 'min',
+        'max_length' => 'max',
+        'min' => 'min',
+        'max' => 'max',
+        'regex' => 'regex',
+        'email' => 'email',
+        'url' => 'url',
         'date_format' => 'date_format',
-        'after'       => 'after',
-        'before'      => 'before',
+        'after' => 'after',
+        'before' => 'before',
     ],
 
     /*
@@ -99,15 +99,15 @@ return [
     |   ],
     */
     'types' => [
-        'text'     => Text::class,
+        'text' => Text::class,
         'textarea' => Textarea::class,
-        'number'   => Number::class,
-        'date'     => Date::class,
-        'boolean'  => Boolean::class,
-        'select'   => Select::class,
-        'image'    => Image::class,
-        'file'     => File::class,
-        'link'     => Link::class,
+        'number' => Number::class,
+        'date' => Date::class,
+        'boolean' => Boolean::class,
+        'select' => Select::class,
+        'image' => Image::class,
+        'file' => File::class,
+        'link' => Link::class,
     ],
 
 ];

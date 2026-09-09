@@ -14,8 +14,7 @@ class AttributeTypeObserver
 {
     public function __construct(
         protected AttributeTypeRegistry $registry,
-    ) {
-    }
+    ) {}
 
     /** Handle the "created" event. */
     public function created(AttributeType $type): void

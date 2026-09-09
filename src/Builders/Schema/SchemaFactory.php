@@ -23,8 +23,7 @@ class SchemaFactory
         private readonly SchemaManager $manager,
         private readonly AttributeTypeRegistry $types,
         private readonly LocaleRegistry $locales,
-    ) {
-    }
+    ) {}
 
     /**
      * Start building a group.

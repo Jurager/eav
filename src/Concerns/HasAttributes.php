@@ -24,8 +24,8 @@ use Jurager\Eav\Support\AttributeValidator;
  */
 trait HasAttributes
 {
-    use HasClosureRelations;
     use HasAttributeScopes;
+    use HasClosureRelations;
     use HasInheritedAttributes;
 
     /** Cached AttributeManager instance for this model. */
@@ -115,7 +115,7 @@ trait HasAttributes
     /**
      * Validate attribute input and return parsed fields.
      *
-     * @param array<int, array{code: string, values: mixed}> $input
+     * @param  array<int, array{code: string, values: mixed}>  $input
      * @return array<string, Field>
      *
      * @throws ValidationException|JsonException|BindingResolutionException

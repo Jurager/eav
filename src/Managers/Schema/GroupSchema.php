@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Managers\Schema;
 
+use Jurager\Eav\Eav;
 use Jurager\Eav\Events\AttributeGroupCreated;
 use Jurager\Eav\Events\AttributeGroupDeleted;
 use Jurager\Eav\Events\AttributeGroupUpdated;
-use Jurager\Eav\Eav;
 use Jurager\Eav\Models\AttributeGroup;
 
 class GroupSchema extends BaseSchema

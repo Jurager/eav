@@ -17,7 +17,7 @@ class CompilerTest extends TestCase
     {
         parent::setUp();
 
-        $this->compiler = new Compiler();
+        $this->compiler = new Compiler;
     }
 
     private function compile(ParsedFilters $parsed, callable $resolve): ?string
@@ -32,7 +32,7 @@ class CompilerTest extends TestCase
 
     private function parse(array $raw): ParsedFilters
     {
-        return (new FilterParser())->parse($raw, []);
+        return (new FilterParser)->parse($raw, []);
     }
 
     /** @return \Closure(string): ?string */

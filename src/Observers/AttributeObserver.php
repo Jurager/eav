@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Observers;
 
+use Jurager\Eav\Eav;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted as AttributeDeletedEvent;
 use Jurager\Eav\Events\AttributeUpdated;
@@ -14,7 +15,6 @@ use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Eav;
 
 class AttributeObserver
 {
@@ -22,8 +22,7 @@ class AttributeObserver
         protected SchemaRegistry $schema,
         protected EnumRegistry $enums,
         protected AttributeRegistry $registry,
-    ) {
-    }
+    ) {}
 
     /** Handle the "created" event. */
     public function created(Attribute $attribute): void

@@ -78,8 +78,8 @@ class AttributeEnumUsageResolver implements RelationResolver
             return null;
         }
 
-        $entity = new $entityClass();
-        $field  = $this->scopeField($entity);
+        $entity = new $entityClass;
+        $field = $this->scopeField($entity);
 
         return $field === null ? null : $entity->newQuery()->filter([$field => $conditions]);
     }

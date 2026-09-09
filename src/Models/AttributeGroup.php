@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
@@ -14,9 +15,8 @@ use Jurager\Eav\Eav;
  * @property int $id
  * @property string $code
  * @property int $sort
- *
- * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
- * @property-read \Illuminate\Database\Eloquent\Collection<int, Attribute> $attributes
+ * @property-read Collection<int, Locale> $translations
+ * @property-read Collection<int, Attribute> $attributes
  */
 class AttributeGroup extends Model
 {

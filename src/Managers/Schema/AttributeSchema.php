@@ -6,11 +6,11 @@ namespace Jurager\Eav\Managers\Schema;
 
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Events\AttributeCreated;
 use Jurager\Eav\Events\AttributeDeleted;
 use Jurager\Eav\Events\AttributeUpdated;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Eav;
 
 class AttributeSchema extends BaseSchema
 {
@@ -145,9 +145,9 @@ class AttributeSchema extends BaseSchema
     private function nextSort(?int $groupId): int
     {
         return (int) $this->query()
-                ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
-                ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
-                ->max('sort') + 1;
+            ->when($groupId, fn ($q) => $q->where('attribute_group_id', $groupId))
+            ->unless($groupId, fn ($q) => $q->whereNull('attribute_group_id'))
+            ->max('sort') + 1;
     }
 
     /** Pre-fetch attribute types indexed by ID. */
@@ -183,7 +183,7 @@ class AttributeSchema extends BaseSchema
         $rows = [];
 
         foreach ($attributesData as $data) {
-            $key = ($data['entity_type'] ?? '') . ':' . $data['code'];
+            $key = ($data['entity_type'] ?? '').':'.$data['code'];
             $translationMap[$key] = $data['translations'] ?? [];
             unset($data['translations']);
 

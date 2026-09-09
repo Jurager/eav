@@ -13,9 +13,7 @@ use Jurager\Media\MediaCollection;
 /** Resolves media collections backed by MediaField attributes — registered globally by EavServiceProvider. */
 class MediaCollectionResolver implements DynamicMediaCollectionResolver
 {
-    public function __construct(protected FieldFactory $fields)
-    {
-    }
+    public function __construct(protected FieldFactory $fields) {}
 
     public function resolve(object $model, string $name): ?MediaCollection
     {

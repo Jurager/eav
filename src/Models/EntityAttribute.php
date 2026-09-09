@@ -5,15 +5,17 @@ declare(strict_types=1);
 namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Carbon;
 use Jurager\Eav\Concerns\HasScopedRelations;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\BelongsToScoped;
-use Jurager\Eav\Eav;
 
 /**
  * @property int $id
@@ -26,12 +28,11 @@ use Jurager\Eav\Eav;
  * @property bool|null $value_boolean
  * @property string|null $value_date
  * @property string|null $value_datetime
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- *
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  * @property-read Attribute|null $attribute
  * @property-read AttributeEnum|null $enum
- * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
+ * @property-read Collection<int, Locale> $translations
  */
 class EntityAttribute extends Model
 {

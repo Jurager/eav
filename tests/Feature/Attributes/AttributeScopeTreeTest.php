@@ -7,8 +7,8 @@ namespace Jurager\Eav\Tests\Feature\Attributes;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
-use Jurager\Eav\Tests\Fixtures\Category;
 use Jurager\Eav\Tests\Fixtures\CategorizedProduct;
+use Jurager\Eav\Tests\Fixtures\Category;
 
 class AttributeScopeTreeTest extends FeatureTestCase
 {
@@ -46,7 +46,7 @@ class AttributeScopeTreeTest extends FeatureTestCase
     public function test_matches_when_own_category_is_among_the_root_ids(): void
     {
         $category = Category::create(['name' => 'Tools']);
-        $product  = CategorizedProduct::create(['name' => 'Widget']);
+        $product = CategorizedProduct::create(['name' => 'Widget']);
         $product->categories()->attach($category->id);
 
         $this->assertTrue($product->attributeScopeMatchesTree([$category->id]));
@@ -55,8 +55,8 @@ class AttributeScopeTreeTest extends FeatureTestCase
     public function test_does_not_match_when_own_category_is_outside_the_root_ids(): void
     {
         $category = Category::create(['name' => 'Tools']);
-        $other    = Category::create(['name' => 'Garden']);
-        $product  = CategorizedProduct::create(['name' => 'Widget']);
+        $other = Category::create(['name' => 'Garden']);
+        $product = CategorizedProduct::create(['name' => 'Widget']);
         $product->categories()->attach($category->id);
 
         $this->assertFalse($product->attributeScopeMatchesTree([$other->id]));
@@ -65,7 +65,7 @@ class AttributeScopeTreeTest extends FeatureTestCase
     public function test_falls_back_to_the_parent_categories_when_the_variant_has_none_of_its_own(): void
     {
         $category = Category::create(['name' => 'Tools']);
-        $parent   = CategorizedProduct::create(['name' => 'Widget']);
+        $parent = CategorizedProduct::create(['name' => 'Widget']);
         $parent->categories()->attach($category->id);
 
         $variant = CategorizedProduct::create(['name' => 'Widget — Red', 'parent_id' => $parent->id]);
@@ -76,8 +76,8 @@ class AttributeScopeTreeTest extends FeatureTestCase
     public function test_does_not_match_when_neither_the_entity_nor_its_parent_has_categories(): void
     {
         $category = Category::create(['name' => 'Tools']);
-        $parent   = CategorizedProduct::create(['name' => 'Widget']);
-        $variant  = CategorizedProduct::create(['name' => 'Widget — Red', 'parent_id' => $parent->id]);
+        $parent = CategorizedProduct::create(['name' => 'Widget']);
+        $variant = CategorizedProduct::create(['name' => 'Widget — Red', 'parent_id' => $parent->id]);
 
         $this->assertFalse($variant->attributeScopeMatchesTree([$category->id]));
     }

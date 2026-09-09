@@ -5,11 +5,12 @@ declare(strict_types=1);
 namespace Jurager\Eav\Fields\Concerns;
 
 use Illuminate\Support\Facades\Validator;
+use Jurager\Eav\Fields\Field;
 
 /**
  * Trait providing payload validation, normalization, and rule application for fields.
  *
- * @phpstan-require-extends \Jurager\Eav\Fields\Field
+ * @phpstan-require-extends Field
  */
 trait ValidatesPayload
 {
@@ -113,7 +114,7 @@ trait ValidatesPayload
         foreach ($byLocale as $localeId => $items) {
             $result[] = [
                 'locale_id' => $localeId,
-                'value'     => $this->isMultiple() ? $items : $items[0],
+                'value' => $this->isMultiple() ? $items : $items[0],
             ];
         }
 

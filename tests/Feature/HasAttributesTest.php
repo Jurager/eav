@@ -233,5 +233,4 @@ class HasAttributesTest extends FeatureTestCase
         $this->assertCount(1, $results);
         $this->assertSame($match->id, $results->first()->id);
     }
-
 }

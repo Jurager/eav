@@ -12,22 +12,21 @@ use Illuminate\Support\Collection;
 class Result
 {
     /**
-     * @param array<int, int|string> $ids
-     * @param array<string, mixed>   $facets
+     * @param  array<int, int|string>  $ids
+     * @param  array<string, mixed>  $facets
      */
     public function __construct(
         public readonly array $ids,
         public readonly int $total,
         public readonly array $facets,
-    ) {
-    }
+    ) {}
 
     /**
      * Hydrate Eloquent models into a paginator.
      *
      * @template TModel of Model
      *
-     * @param class-string<TModel> $model
+     * @param  class-string<TModel>  $model
      * @return LengthAwarePaginator<int, TModel>
      */
     public function paginate(string $model, int $limit, int $page): LengthAwarePaginator
@@ -36,7 +35,7 @@ class Result
             return $this->paginator(collect(), $limit, $page);
         }
 
-        $key = (new $model())->getKeyName();
+        $key = (new $model)->getKeyName();
 
         $order = array_flip(array_map('strval', $this->ids));
 

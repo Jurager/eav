@@ -28,8 +28,7 @@ class Engine
         private readonly LocaleRegistry $localeRegistry,
         private readonly SchemaRegistry $schemaRegistry,
         private readonly Compiler $compiler,
-    ) {
-    }
+    ) {}
 
     /** Execute search query. */
     public function search(Builder $builder, int $limit = 15, int $page = 1): Result
@@ -42,7 +41,7 @@ class Engine
 
         $indexUid = $model->searchableAs();
         $resolver = $this->createResolver($builder);
-        $filter   = $builder->getFilter();
+        $filter = $builder->getFilter();
 
         $this->logUnresolved($this->compiler->unresolved($filter, $resolver), $builder->getEntityType());
 
@@ -82,7 +81,7 @@ class Engine
         }
 
         $leading = $results['leading'];
-        $ids     = array_column($leading->getHits(), 'id');
+        $ids = array_column($leading->getHits(), 'id');
         $missing = $limit - count($ids);
 
         if ($missing <= 0) {
@@ -109,7 +108,7 @@ class Engine
      */
     private function partitionRequest(Builder $builder, string $uid, Closure $resolver, bool $matching): SearchQuery
     {
-        $request = (new SearchQuery())->setIndexUid($uid);
+        $request = (new SearchQuery)->setIndexUid($uid);
 
         if (($query = $builder->getQuery()) !== null) {
             $request->setQuery($query);
@@ -117,7 +116,7 @@ class Engine
 
         $partition = $builder->getPartition();
 
-        $base      = $this->compiler->compile($builder->getFilter(), $resolver);
+        $base = $this->compiler->compile($builder->getFilter(), $resolver);
         $condition = $partition !== null ? $this->compiler->compile($partition, $resolver) : null;
 
         if ($condition !== null && ! $matching) {
@@ -146,7 +145,7 @@ class Engine
             $facetFields[] = $this->formatFacetField($facet);
         }
 
-        $mainRequest = (new SearchQuery())
+        $mainRequest = (new SearchQuery)
             ->setIndexUid($uid)
             ->setLimit($limit)
             ->setOffset(($page - 1) * $limit);
@@ -187,7 +186,7 @@ class Engine
 
             $excludeResolver = $this->createResolver($builder, $isStats ? $allFacetKeys : [$key]);
 
-            $facetRequest = (new SearchQuery())
+            $facetRequest = (new SearchQuery)
                 ->setIndexUid($uid)
                 ->setLimit(0)
                 ->setFacets([$this->formatFacetField($key)]);
@@ -326,6 +325,6 @@ class Engine
     /** Format facet field name for index. */
     private function formatFacetField(string $key): string
     {
-        return !str_contains($key, '.') ? "attributes.{$key}" : $key;
+        return ! str_contains($key, '.') ? "attributes.{$key}" : $key;
     }
 }

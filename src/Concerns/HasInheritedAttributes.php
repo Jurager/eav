@@ -24,7 +24,7 @@ trait HasInheritedAttributes
     /**
      * Get the model class used to resolve relation-scoped attributes.
      *
-     * @return class-string<\Jurager\Eav\Contracts\Attributable>|null
+     * @return class-string<Attributable>|null
      */
     protected static function attributeScopeModel(): ?string
     {
@@ -101,7 +101,7 @@ trait HasInheritedAttributes
      * already loaded, the attribute manager falls back to one merged query per variant. This hook lets
      * the calling layer batch-load them before it reads the values.
      *
-     * @param list<string> $included
+     * @param  list<string>  $included
      * @return list<string>
      */
     public function eagerLoads(array $included): array
@@ -157,7 +157,7 @@ trait HasInheritedAttributes
      * A variant (e.g. a product offer) holds no categories of its own, so checking its direct
      * relation against a category-tree scope always fails; this checks the inherited scope instead.
      *
-     * @param array<int> $rootIds
+     * @param  array<int>  $rootIds
      */
     public function attributeScopeMatchesTree(array $rootIds): bool
     {
@@ -172,7 +172,7 @@ trait HasInheritedAttributes
         }
 
         $model = $entities->first();
-        $ids   = $entities->pluck($model->getKeyName())->all();
+        $ids = $entities->pluck($model->getKeyName())->all();
 
         $query = $model->newQuery()->whereKey($ids);
 
@@ -190,7 +190,7 @@ trait HasInheritedAttributes
     /**
      * Get available attribute definitions.
      *
-     * @param array<int> $params
+     * @param  array<int>  $params
      * @return Collection<int, mixed>
      */
     public function availableAttributes(array $params = []): Collection
@@ -201,7 +201,7 @@ trait HasInheritedAttributes
     /**
      * Get available attributes query builder.
      *
-     * @param array<int> $params
+     * @param  array<int>  $params
      */
     public function getAvailableAttributesQuery(array $params = []): ?Builder
     {
@@ -218,7 +218,7 @@ trait HasInheritedAttributes
      * The schema carries every attribute in scope, including the ones a variant only reads off its
      * parent; this narrows it down to the side that holds the value.
      *
-     * @param array<int> $params
+     * @param  array<int>  $params
      */
     public function getEditableAttributesQuery(array $params = []): ?Builder
     {
@@ -245,7 +245,7 @@ trait HasInheritedAttributes
         $scope ??= static fn (Model $parent): array => $parent->attributeScopeSubtreeIds();
 
         return $this->availableAttributesRelation(static function (Model $parent) use ($entityClass, $scope, $constrain): ?Builder {
-            $query = (new $entityClass())->getAvailableAttributesQuery($scope($parent));
+            $query = (new $entityClass)->getAvailableAttributesQuery($scope($parent));
 
             return $query !== null && $constrain !== null ? $constrain($query) : $query;
         });
@@ -298,7 +298,7 @@ trait HasInheritedAttributes
             return null;
         }
 
-        $instance = new $model();
+        $instance = new $model;
         $entities = $this->loadInheritanceEntities($model, $instance, $params);
 
         if (empty($entities)) {

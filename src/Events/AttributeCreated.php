@@ -11,7 +11,5 @@ class AttributeCreated
 {
     use Dispatchable;
 
-    public function __construct(public readonly Attribute $attribute)
-    {
-    }
+    public function __construct(public readonly Attribute $attribute) {}
 }

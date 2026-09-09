@@ -11,7 +11,7 @@ class CircularInheritanceException extends EavException
     public static function maxDepthExceeded(string $model, array $unresolvedIds, int $maxDepth): self
     {
         return new self(sprintf(
-            'Maximum attribute inheritance depth (%d) exceeded for [%s]. Unresolved IDs: [%s]. ' .
+            'Maximum attribute inheritance depth (%d) exceeded for [%s]. Unresolved IDs: [%s]. '.
             'Check for circular dependencies or increase "eav.max_inheritance_depth".',
             $maxDepth,
             $model,

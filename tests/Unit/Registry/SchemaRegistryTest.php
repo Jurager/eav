@@ -16,7 +16,7 @@ class SchemaRegistryTest extends TestCase
     {
         parent::setUp();
 
-        $this->registry = new SchemaRegistry();
+        $this->registry = new SchemaRegistry;
     }
 
     public function test_resolve_calls_loader_on_first_access(): void
@@ -130,5 +130,129 @@ class SchemaRegistryTest extends TestCase
 
         $this->assertSame(['product'], $result1->all());
         $this->assertSame(['category'], $result2->all());
+    }
+
+    // -----------------------------------------------------------------------
+    // resolveCodes()
+    // -----------------------------------------------------------------------
+
+    private function item(string $code): object
+    {
+        return (object) ['code' => $code];
+    }
+
+    public function test_resolve_codes_calls_loader_with_all_codes_on_first_access(): void
+    {
+        $seen = null;
+
+        $this->registry->resolveCodes('product:schema:', ['a', 'b'], function (array $missing) use (&$seen) {
+            $seen = $missing;
+
+            return [$this->item('a'), $this->item('b')];
+        });
+
+        $this->assertSame(['a', 'b'], $seen);
+    }
+
+    public function test_resolve_codes_does_not_requery_a_code_already_resolved(): void
+    {
+        $calls = 0;
+        $loader = function (array $missing) use (&$calls) {
+            $calls++;
+
+            return array_map($this->item(...), $missing);
+        };
+
+        $this->registry->resolveCodes('product:schema:', ['a'], $loader);
+        $this->registry->resolveCodes('product:schema:', ['a'], $loader);
+
+        $this->assertSame(1, $calls);
+    }
+
+    public function test_resolve_codes_only_fetches_the_gap_on_a_later_call_with_new_codes(): void
+    {
+        $seenPerCall = [];
+        $loader = function (array $missing) use (&$seenPerCall) {
+            $seenPerCall[] = $missing;
+
+            return array_map($this->item(...), $missing);
+        };
+
+        $this->registry->resolveCodes('product:schema:', ['a'], $loader);
+        $this->registry->resolveCodes('product:schema:', ['a', 'b'], $loader);
+
+        $this->assertSame([['a'], ['b']], $seenPerCall, 'the second call should only fetch "b" — "a" is already cached.');
+    }
+
+    public function test_resolve_codes_does_not_call_the_loader_when_nothing_is_missing(): void
+    {
+        $calls = 0;
+        $loader = function (array $missing) use (&$calls) {
+            $calls++;
+
+            return array_map($this->item(...), $missing);
+        };
+
+        $this->registry->resolveCodes('product:schema:', ['a', 'b'], $loader);
+        $this->registry->resolveCodes('product:schema:', ['a'], $loader);
+
+        $this->assertSame(1, $calls);
+    }
+
+    public function test_resolve_codes_returns_only_the_requested_codes(): void
+    {
+        $loader = fn (array $missing) => array_map($this->item(...), $missing);
+
+        $this->registry->resolveCodes('product:schema:', ['a', 'b'], $loader);
+        $result = $this->registry->resolveCodes('product:schema:', ['a'], $loader);
+
+        $this->assertSame(['a'], $result->pluck('code')->all());
+    }
+
+    public function test_resolve_codes_under_different_keys_are_cached_independently(): void
+    {
+        $calls = 0;
+        $loader = function (array $missing) use (&$calls) {
+            $calls++;
+
+            return array_map($this->item(...), $missing);
+        };
+
+        $this->registry->resolveCodes('product:schema:1', ['a'], $loader);
+        $this->registry->resolveCodes('product:schema:2', ['a'], $loader);
+
+        $this->assertSame(2, $calls);
+    }
+
+    public function test_forget_by_entity_type_removes_matching_code_schemas(): void
+    {
+        $calls = 0;
+        $loader = function (array $missing) use (&$calls) {
+            $calls++;
+
+            return array_map($this->item(...), $missing);
+        };
+
+        $this->registry->resolveCodes('product:schema:1', ['a'], $loader);
+        $this->registry->forget('product');
+        $this->registry->resolveCodes('product:schema:1', ['a'], $loader);
+
+        $this->assertSame(2, $calls);
+    }
+
+    public function test_forget_null_clears_code_schemas_too(): void
+    {
+        $calls = 0;
+        $loader = function (array $missing) use (&$calls) {
+            $calls++;
+
+            return array_map($this->item(...), $missing);
+        };
+
+        $this->registry->resolveCodes('product:schema:1', ['a'], $loader);
+        $this->registry->forget(null);
+        $this->registry->resolveCodes('product:schema:1', ['a'], $loader);
+
+        $this->assertSame(2, $calls);
     }
 }

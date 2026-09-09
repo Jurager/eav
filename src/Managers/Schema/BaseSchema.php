@@ -19,8 +19,7 @@ abstract class BaseSchema
         protected TranslationManager $translations,
         protected ConnectionResolverInterface $db,
         protected Dispatcher $events,
-    ) {
-    }
+    ) {}
 
     /** Return the class name of the associated model. */
     abstract protected function modelClass(): string;

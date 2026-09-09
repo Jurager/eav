@@ -11,7 +11,5 @@ class AttributeEnumCreated
 {
     use Dispatchable;
 
-    public function __construct(public readonly AttributeEnum $enum)
-    {
-    }
+    public function __construct(public readonly AttributeEnum $enum) {}
 }

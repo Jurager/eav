@@ -42,7 +42,8 @@ abstract class TestCase extends OrchestraTestCase
     {
         $connection = app('db')->connection();
 
-        $connection->setSchemaGrammar(new class ($connection) extends SQLiteGrammar {
+        $connection->setSchemaGrammar(new class($connection) extends SQLiteGrammar
+        {
             /** @var string[] */
             protected $modifiers = ['Increment', 'Nullable', 'Default', 'VirtualAs', 'StoredAs'];
 

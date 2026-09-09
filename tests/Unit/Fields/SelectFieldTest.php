@@ -7,6 +7,7 @@ namespace Jurager\Eav\Tests\Unit\Fields;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Select;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
@@ -40,7 +41,7 @@ class SelectFieldTest extends TestCase
 
     private function makeAttribute(array $attributes = []): Attribute
     {
-        $attr = (new Attribute())->forceFill(array_merge([
+        $attr = (new Attribute)->forceFill(array_merge([
             'id' => 1,
             'code' => 'color',
             'localizable' => false,
@@ -214,7 +215,7 @@ class SelectFieldTest extends TestCase
 
     public function test_index_data_returns_enum_code_as_value(): void
     {
-        $enum = (new \Jurager\Eav\Models\AttributeEnum())->forceFill([
+        $enum = (new AttributeEnum)->forceFill([
             'id' => 10, 'code' => 'red', 'attribute_id' => 1,
         ]);
         $enum->setRelation('translations', collect());

@@ -16,7 +16,7 @@ class Compiler
 
         $groups = [
             'AND' => $parsed->andGroups,
-            'OR'  => $parsed->orGroups,
+            'OR' => $parsed->orGroups,
         ];
 
         foreach ($groups as $glue => $conditions) {
@@ -139,19 +139,19 @@ class Compiler
     private function compileOperand(string $field, string $alias, mixed $operand): ?string
     {
         return match (FilterOperator::fromAlias($alias)) {
-            FilterOperator::Eq         => $this->compileEquality($field, '=', $operand),
-            FilterOperator::Ne         => $this->compileEquality($field, '!=', $operand),
-            FilterOperator::Gt         => $this->compileComparison($field, '>', $operand),
-            FilterOperator::Gte        => $this->compileComparison($field, '>=', $operand),
-            FilterOperator::Lt         => $this->compileComparison($field, '<', $operand),
-            FilterOperator::Lte        => $this->compileComparison($field, '<=', $operand),
-            FilterOperator::In         => $this->compileIn($field, $operand, false),
-            FilterOperator::Nin        => $this->compileIn($field, $operand, true),
-            FilterOperator::Between    => $this->compileRange($field, $operand, false),
+            FilterOperator::Eq => $this->compileEquality($field, '=', $operand),
+            FilterOperator::Ne => $this->compileEquality($field, '!=', $operand),
+            FilterOperator::Gt => $this->compileComparison($field, '>', $operand),
+            FilterOperator::Gte => $this->compileComparison($field, '>=', $operand),
+            FilterOperator::Lt => $this->compileComparison($field, '<', $operand),
+            FilterOperator::Lte => $this->compileComparison($field, '<=', $operand),
+            FilterOperator::In => $this->compileIn($field, $operand, false),
+            FilterOperator::Nin => $this->compileIn($field, $operand, true),
+            FilterOperator::Between => $this->compileRange($field, $operand, false),
             FilterOperator::NotBetween => $this->compileRange($field, $operand, true),
-            FilterOperator::IsNull     => $this->compileExists($field, $operand, true),
-            FilterOperator::IsNotNull  => $this->compileExists($field, $operand, false),
-            default                    => null,
+            FilterOperator::IsNull => $this->compileExists($field, $operand, true),
+            FilterOperator::IsNotNull => $this->compileExists($field, $operand, false),
+            default => null,
         };
     }
 
@@ -228,6 +228,6 @@ class Compiler
             return (string) $value;
         }
 
-        return '"' . addcslashes((string) $value, '"\\') . '"';
+        return '"'.addcslashes((string) $value, '"\\').'"';
     }
 }

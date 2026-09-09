@@ -77,6 +77,7 @@ class LocaleRegistry
 
     /**
      * Get the default locale ID.
+     *
      * @throws InvalidConfigurationException
      */
     public function default(): int

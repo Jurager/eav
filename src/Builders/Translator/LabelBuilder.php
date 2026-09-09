@@ -21,8 +21,7 @@ class LabelBuilder
         private readonly TranslationManager $manager,
         private readonly LocaleRegistry $locales,
         private readonly Model $model,
-    ) {
-    }
+    ) {}
 
     /** Queue a translated label for the given locale code. */
     public function label(string $label, string $locale): static

@@ -101,7 +101,6 @@ trait HasAttributeScopes
             ->all();
     }
 
-
     /** Expand root IDs to all NestedSet descendants. */
     private function expandToDescendants(Model $model, array $ids): array
     {

@@ -18,15 +18,11 @@ class Builder
 {
     /**
      * Current search query string.
-     *
-     * @var string|null
      */
     private ?string $query = null;
 
     /**
      * Parsed filters.
-     *
-     * @var ParsedFilters
      */
     private ParsedFilters $filter;
 
@@ -46,22 +42,16 @@ class Builder
 
     /**
      * Eloquent model instance for the entity type.
-     *
-     * @var Model|null
      */
     private ?Model $model = null;
 
     /**
      * Condition splitting the result set into a leading and a trailing group.
-     *
-     * @var ParsedFilters|null
      */
     private ?ParsedFilters $partition = null;
 
     /**
      * Whether documents matching the partition come first.
-     *
-     * @var bool
      */
     private bool $partitionFirst = true;
 
@@ -73,19 +63,19 @@ class Builder
     private array $order = [];
 
     /**
-     * @param iterable<FilterResolver> $resolvers
+     * @param  iterable<FilterResolver>  $resolvers
      */
     public function __construct(
         private readonly Engine $engine,
         private readonly iterable $resolvers,
         private readonly string $entityType,
     ) {
-        $this->filter = (new FilterParser())->parse([], []);
+        $this->filter = (new FilterParser)->parse([], []);
 
         $model = Relation::getMorphedModel($entityType) ?? $entityType;
 
         if (class_exists($model)) {
-            $this->model = new $model();
+            $this->model = new $model;
         }
     }
 
@@ -100,12 +90,12 @@ class Builder
     /** Parse and resolve JSON:API filters. */
     public function filter(array $filter): static
     {
-        $parsed = (new FilterParser())->parse($filter, []);
+        $parsed = (new FilterParser)->parse($filter, []);
 
         if ($this->model !== null) {
             $parsed = $parsed->withSanitized(
-                filters:   $this->resolveFilters($parsed->filters, $this->model),
-                orGroups:  $parsed->orGroups,
+                filters: $this->resolveFilters($parsed->filters, $this->model),
+                orGroups: $parsed->orGroups,
                 andGroups: $parsed->andGroups,
             );
         }
@@ -125,7 +115,7 @@ class Builder
         }
 
         $descending = str_starts_with($sort, '-');
-        $field      = $descending ? substr($sort, 1) : $sort;
+        $field = $descending ? substr($sort, 1) : $sort;
 
         foreach ($this->sortResolvers() as $resolver) {
             if ($resolver->resolve($this, $field, $descending ? 'desc' : 'asc', $this->model, $this->filter->included)) {
@@ -163,7 +153,7 @@ class Builder
      */
     public function orderBy(string $field, string $direction = 'asc'): static
     {
-        $this->order[] = $field . ':' . ($direction === 'desc' ? 'desc' : 'asc');
+        $this->order[] = $field.':'.($direction === 'desc' ? 'desc' : 'asc');
 
         return $this;
     }
@@ -171,22 +161,22 @@ class Builder
     /**
      * Order the result set by whether documents match a condition.
      *
-     * @param array<string, mixed> $condition
-     * @param bool $first Whether matches lead the result set.
+     * @param  array<string, mixed>  $condition
+     * @param  bool  $first  Whether matches lead the result set.
      */
     public function partition(array $condition, bool $first = true): static
     {
-        $parsed = (new FilterParser())->parse($condition, []);
+        $parsed = (new FilterParser)->parse($condition, []);
 
         if ($this->model !== null) {
             $parsed = $parsed->withSanitized(
-                filters:   $this->resolveFilters($parsed->filters, $this->model),
-                orGroups:  $parsed->orGroups,
+                filters: $this->resolveFilters($parsed->filters, $this->model),
+                orGroups: $parsed->orGroups,
                 andGroups: $parsed->andGroups,
             );
         }
 
-        $this->partition      = $parsed;
+        $this->partition = $parsed;
         $this->partitionFirst = $first;
 
         return $this;
@@ -202,6 +192,7 @@ class Builder
 
             if (! str_contains($key, '.') || $this->directlyIndexed($key, $model)) {
                 $result[$key] = $value;
+
                 continue;
             }
 

@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\Schema;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
 use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Tests\TestCase;

@@ -23,8 +23,7 @@ class AttributePersister
     public function __construct(
         private readonly Attributable $entity,
         private readonly ConnectionResolverInterface $db,
-    ) {
-    }
+    ) {}
 
     /** @param  Collection<int, Field>  $fields */
     public function persist(Collection $fields): void
@@ -70,7 +69,7 @@ class AttributePersister
     /**
      * Drop the given values and reindex — losing a value changes the document just as writing one does.
      *
-     * @param array<int> $ids
+     * @param  array<int>  $ids
      */
     private function dropValues(array $ids): void
     {

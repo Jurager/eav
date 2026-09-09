@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Models;
 
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Jurager\Eav\Eav;
@@ -16,8 +17,7 @@ use Jurager\Eav\Eav;
  * @property bool $unique
  * @property bool $filterable
  * @property bool $searchable
- *
- * @property-read \Illuminate\Database\Eloquent\Collection<int, Attribute> $attributes
+ * @property-read Collection<int, Attribute> $attributes
  */
 class AttributeType extends Model
 {

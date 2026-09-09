@@ -20,9 +20,7 @@ class BatchAttributePersister
     /** @var array<int|string, Attributable> */
     private array $entities = [];
 
-    public function __construct(private readonly ConnectionResolverInterface $db)
-    {
-    }
+    public function __construct(private readonly ConnectionResolverInterface $db) {}
 
     /** @param  Collection<int, Field>  $fields */
     public function add(Attributable $entity, Collection $fields): void

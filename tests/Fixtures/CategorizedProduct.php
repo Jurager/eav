@@ -5,10 +5,11 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Jurager\Eav\Concerns\HasInheritedAttributes;
 
 /**
  * A {@see Product} scoped by categories, the way a real product/offer pair would be — used to
- * exercise {@see \Jurager\Eav\Concerns\HasInheritedAttributes::attributeScopeMatchesTree()}
+ * exercise {@see HasInheritedAttributes::attributeScopeMatchesTree()}
  * without pulling in a nested-set dependency the base package doesn't require.
  */
 class CategorizedProduct extends Product

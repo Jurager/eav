@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Registry;
 
 use Illuminate\Support\Collection;
-use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Models\AttributeEnum;
 
 class EnumRegistry
 {

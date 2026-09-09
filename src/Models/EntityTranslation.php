@@ -6,6 +6,7 @@ namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphPivot;
+use Illuminate\Support\Carbon;
 use Jurager\Eav\Eav;
 
 /**
@@ -15,9 +16,8 @@ use Jurager\Eav\Eav;
  * @property int $locale_id
  * @property string $label
  * @property array $params
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- *
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
  * @property-read Locale|null $locale
  */
 class EntityTranslation extends MorphPivot

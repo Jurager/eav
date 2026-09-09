@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\JoinClause;
 use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\Enums\IndexCapability;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\IndexCapability;
 use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Builder as SearchBuilder;
@@ -29,19 +29,19 @@ class AttributeSortResolver implements SortResolver
         }
 
         $entityType = $model->getEntityType();
-        $eavField   = AttributeManager::for($entityType)->field($field);
+        $eavField = AttributeManager::for($entityType)->field($field);
 
         // Not an attribute of this entity — leave the field to the remaining resolvers.
         if (! $eavField) {
             return false;
         }
 
-        $qualifiedKey  = $model->qualifyColumn($model->getKeyName());
-        $valuesClass   = Eav::$entityAttributeModel;
-        $values        = new $valuesClass();
+        $qualifiedKey = $model->qualifyColumn($model->getKeyName());
+        $valuesClass = Eav::$entityAttributeModel;
+        $values = new $valuesClass;
 
         $subquery = $values->newQuery()
-            ->from($values->getTable() . ' as _ea')
+            ->from($values->getTable().' as _ea')
             ->whereColumn('_ea.entity_id', $qualifiedKey)
             ->where('_ea.entity_type', $entityType)
             ->where('_ea.attribute_id', $eavField->attribute()->getAttribute('id'))
@@ -49,13 +49,13 @@ class AttributeSortResolver implements SortResolver
             ->limit(1);
 
         if ($eavField->isLocalizable()) {
-            $localeId          = $this->resolveLocaleId();
+            $localeId = $this->resolveLocaleId();
             $translationsClass = Eav::$entityTranslationModel;
-            $translations      = new $translationsClass();
-            $valuesType        = $values->getMorphClass();
+            $translations = new $translationsClass;
+            $valuesType = $values->getMorphClass();
 
             $subquery
-                ->join($translations->getTable() . ' as _et', function (JoinClause $join) use ($localeId, $valuesType): void {
+                ->join($translations->getTable().' as _et', function (JoinClause $join) use ($localeId, $valuesType): void {
                     $join->on('_et.entity_id', '=', '_ea.id')
                         ->where('_et.entity_type', '=', $valuesType);
 
@@ -66,7 +66,7 @@ class AttributeSortResolver implements SortResolver
                 ->orderBy('_et.locale_id')
                 ->select('_et.label');
         } else {
-            $subquery->select('_ea.' . $eavField->column()->value);
+            $subquery->select('_ea.'.$eavField->column()->value);
         }
 
         $query->orderBy($subquery, $direction);
@@ -77,7 +77,7 @@ class AttributeSortResolver implements SortResolver
     /** Order search results by an indexed attribute. */
     private function orderIndex(SearchBuilder $query, string $field, string $direction, Model $model): bool
     {
-        $path = 'attributes.' . $field;
+        $path = 'attributes.'.$field;
 
         if (str_contains($field, '.') || ! IndexCapability::Sort->allowed($model, $path)) {
             return false;
@@ -92,7 +92,7 @@ class AttributeSortResolver implements SortResolver
     private function resolveLocaleId(): ?int
     {
         $registry = app(LocaleRegistry::class);
-        $codes    = $registry->get();
+        $codes = $registry->get();
 
         return empty($codes) ? null : $registry->find($codes[0]);
     }

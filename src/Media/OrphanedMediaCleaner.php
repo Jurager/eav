@@ -15,9 +15,7 @@ use Jurager\Media\Models\Media;
 /** Deletes media no longer referenced by a MediaField attribute value — register in config('media.cleaners'). */
 class OrphanedMediaCleaner implements MediaCleaner
 {
-    public function __construct(protected FieldFactory $fields)
-    {
-    }
+    public function __construct(protected FieldFactory $fields) {}
 
     public function orphaned(Collection $candidates, string $entityType, string $modelClass): Collection
     {

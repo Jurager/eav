@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
-use Laravel\Scout\Jobs\MakeSearchable;
 use Illuminate\Validation\ValidationException;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Managers\AttributeManager;
@@ -16,6 +15,7 @@ use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
+use Laravel\Scout\Jobs\MakeSearchable;
 
 class ParentInheritanceTest extends FeatureTestCase
 {
@@ -282,12 +282,12 @@ class ParentInheritanceTest extends FeatureTestCase
         // A held_by:parent attribute should never have a row on a variant, but legacy/import data
         // can still leave one behind — it must not be treated as a real duplicate.
         DB::table('entity_attribute')->insert([
-            'entity_type'   => 'product',
-            'entity_id'     => $variant->id,
-            'attribute_id'  => $attribute->id,
-            'value_text'    => 'shared-code',
-            'created_at'    => now(),
-            'updated_at'    => now(),
+            'entity_type' => 'product',
+            'entity_id' => $variant->id,
+            'attribute_id' => $attribute->id,
+            'value_text' => 'shared-code',
+            'created_at' => now(),
+            'updated_at' => now(),
         ]);
 
         $fields = $parent->validate([['code' => 'code', 'values' => 'shared-code']]);

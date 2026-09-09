@@ -5,11 +5,13 @@ declare(strict_types=1);
 namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
@@ -32,20 +34,20 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property bool $inherit_from_parent
  * @property array|null $validations
  * @property array|null $meta
- * @property \Illuminate\Support\Carbon|null $created_at
- * @property \Illuminate\Support\Carbon|null $updated_at
- * @property \Illuminate\Support\Carbon|null $deleted_at
- *
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  * @property-read AttributeType|null $type
  * @property-read AttributeGroup|null $group
- * @property-read \Illuminate\Database\Eloquent\Collection<int, AttributeEnum> $enums
- * @property-read \Illuminate\Database\Eloquent\Collection<int, Locale> $translations
+ * @property-read Collection<int, AttributeEnum> $enums
+ * @property-read Collection<int, Locale> $translations
  *
  * @mixin Builder
  */
 class Attribute extends Model
 {
     use SoftDeletes;
+
     protected $fillable = [
         'entity_type',
         'attribute_type_id',
@@ -104,19 +106,19 @@ class Attribute extends Model
     protected function casts(): array
     {
         return [
-            'attribute_type_id'  => 'integer',
+            'attribute_type_id' => 'integer',
             'attribute_group_id' => 'integer',
-            'sort'        => 'integer',
+            'sort' => 'integer',
             'validations' => 'array',
-            'meta'        => 'array',
-            'required'    => 'boolean',
+            'meta' => 'array',
+            'required' => 'boolean',
             'localizable' => 'boolean',
-            'multiple'    => 'boolean',
-            'unique'      => 'boolean',
-            'filterable'  => 'boolean',
-            'searchable'  => 'boolean',
+            'multiple' => 'boolean',
+            'unique' => 'boolean',
+            'filterable' => 'boolean',
+            'searchable' => 'boolean',
 
-            'held_by'             => HeldBy::class,
+            'held_by' => HeldBy::class,
             'inherit_from_parent' => 'boolean',
         ];
     }

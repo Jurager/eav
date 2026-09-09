@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Jurager\Eav\Support\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
-use Jurager\Eav\Enums\AttributeStorage;
-use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Events\EntityValuesChanged;
+use Jurager\Eav\Fields\Field;
 
 trait ExecutesPersistence
 {
@@ -68,7 +68,6 @@ trait ExecutesPersistence
 
         EntityValuesChanged::dispatch($type, array_keys($grouped));
     }
-
 
     /** @param  array<int, array{row: array, translations: array|null}>  $updates */
     private function applyUpdates(array $updates): void
@@ -292,7 +291,6 @@ trait ExecutesPersistence
 
     /**
      * @param  array<int, array{row: array, translations: array|null}>  $inserts
-     * @param  array  $created
      * @return array<int, array>
      */
     private function mapTranslationsToRecords(array $inserts, array $created): array
@@ -332,11 +330,11 @@ trait ExecutesPersistence
                 if (isset($t['locale_id'])) {
                     $rows[] = [
                         'entity_type' => $entityType,
-                        'entity_id'   => $recordId,
-                        'locale_id'   => (int) $t['locale_id'],
-                        'label'       => $t['value'] ?? null,
-                        'created_at'  => now(),
-                        'updated_at'  => now(),
+                        'entity_id' => $recordId,
+                        'locale_id' => (int) $t['locale_id'],
+                        'label' => $t['value'] ?? null,
+                        'created_at' => now(),
+                        'updated_at' => now(),
                     ];
                 }
             }
@@ -345,7 +343,6 @@ trait ExecutesPersistence
         return $rows;
     }
 
-    /** @param  array  $rows */
     private function chunk(array $rows, callable $callback): void
     {
         if (empty($rows)) {

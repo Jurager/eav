@@ -259,7 +259,7 @@ class AttributePersisterTest extends FeatureTestCase
     // flush(onError) — per-entity retry must not poison a surrounding transaction
     // -----------------------------------------------------------------------
 
-    public function test_flush_with_onError_keeps_the_connection_usable_after_a_failure(): void
+    public function test_flush_with_on_error_keeps_the_connection_usable_after_a_failure(): void
     {
         $p1 = $this->createProduct('P1');
         $p2 = $this->createProduct('P2');

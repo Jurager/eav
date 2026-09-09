@@ -58,7 +58,7 @@ class AttributeValidator
         $this->usesSoftDeletes = $modelClass && in_array(SoftDeletes::class, class_uses_recursive($modelClass));
 
         $this->parentForeignKey = $modelClass && in_array(HasInheritedAttributes::class, class_uses_recursive($modelClass))
-            ? (new $modelClass())->attributeParentRelation()?->getForeignKeyName()
+            ? (new $modelClass)->attributeParentRelation()?->getForeignKeyName()
             : null;
 
         $this->uniqueScopes = $modelClass && method_exists($modelClass, 'attributeUniqueScopes')
@@ -100,7 +100,7 @@ class AttributeValidator
 
         $this->manager->ensureFields($codes);
 
-        $side    = HeldBy::of($this->entity->isVariant());
+        $side = HeldBy::of($this->entity->isVariant());
         $message = __("eav::attributes.validation.held_by_{$side->opposite()->value}");
 
         $errors = [];
@@ -127,8 +127,8 @@ class AttributeValidator
     /**
      * Validate all fields and throw exception if errors found.
      *
-     * @param array<string, list<string>> $errors
-     * @param list<string> $touched
+     * @param  array<string, list<string>>  $errors
+     * @param  list<string>  $touched
      *
      * @throws ValidationException
      */
@@ -212,7 +212,7 @@ class AttributeValidator
             ->when($restrictToSide, fn ($q) => $field->attribute()->held_by === HeldBy::Variant
                 ? $q->whereNotNull($this->parentForeignKey)
                 : $q->whereNull($this->parentForeignKey))
-            ->select((new $modelClass())->getKeyName());
+            ->select((new $modelClass)->getKeyName());
     }
 
     /** Whether a localizable field's translated labels collide with an existing row. */

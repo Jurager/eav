@@ -15,7 +15,7 @@ class SyncsIndexFilters
     /**
      * Re-sync $entityType whenever rows of $source appear or disappear.
      *
-     * @param class-string<Model> $source
+     * @param  class-string<Model>  $source
      */
     public static function watch(string $source, string $entityType): void
     {

@@ -33,7 +33,7 @@ class Indexer
     /**
      * Queue reindexing of the given entities.
      *
-     * @param array<int, int|string> $entityIds
+     * @param  array<int, int|string>  $entityIds
      */
     public function ids(array $entityIds): void
     {
@@ -49,7 +49,7 @@ class Indexer
      *
      * A variant's document is built from its parent's values as well, so a change on the parent moves its variants' documents too.
      *
-     * @param array<int, int|string> $entityIds
+     * @param  array<int, int|string>  $entityIds
      */
     public function withVariants(array $entityIds): void
     {
@@ -59,7 +59,7 @@ class Indexer
     /**
      * Ids of the entities reading their values off the given ones.
      *
-     * @param array<int, int|string> $entityIds
+     * @param  array<int, int|string>  $entityIds
      * @return array<int, int|string>
      */
     private function variantIds(array $entityIds): array
@@ -68,7 +68,7 @@ class Indexer
             return [];
         }
 
-        $model = new $this->model();
+        $model = new $this->model;
 
         $relation = method_exists($model, 'attributeParentRelation') ? $model->attributeParentRelation() : null;
 
@@ -90,7 +90,7 @@ class Indexer
         }
 
         $model = $this->model;
-        $key = (new $model())->getScoutKeyName();
+        $key = (new $model)->getScoutKeyName();
 
         $model::query()
             ->where('updated_at', '>=', $since)

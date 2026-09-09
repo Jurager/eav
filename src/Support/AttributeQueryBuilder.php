@@ -16,15 +16,14 @@ use Jurager\Filterable\Support\FilterOperator;
 class AttributeQueryBuilder
 {
     /**
-     * @param \Closure(string): ?Field   $fieldResolver
-     * @param \Closure(string): ?string  $entityTypeResolver
+     * @param  \Closure(string): ?Field  $fieldResolver
+     * @param  \Closure(string): ?string  $entityTypeResolver
      */
     public function __construct(
         private readonly EnumRegistry $enumRegistry,
         private readonly \Closure $fieldResolver,
         private readonly \Closure $entityTypeResolver,
-    ) {
-    }
+    ) {}
 
     /** Build entity attribute subquery. */
     public function subquery(string $code, mixed $value = null, string $operator = '=', ?int $localeId = null): ?Builder
@@ -194,19 +193,19 @@ class AttributeQueryBuilder
         }
 
         match (FilterOperator::fromAlias($alias)) {
-            FilterOperator::Eq         => $query->where($column, '=', $value),
-            FilterOperator::Ne         => $query->where($column, '!=', $value),
-            FilterOperator::Gt         => $query->where($column, '>', $value),
-            FilterOperator::Gte        => $query->where($column, '>=', $value),
-            FilterOperator::Lt         => $query->where($column, '<', $value),
-            FilterOperator::Lte        => $query->where($column, '<=', $value),
-            FilterOperator::In         => $query->whereIn($column, (array) $value),
-            FilterOperator::Nin        => $query->whereNotIn($column, (array) $value),
-            FilterOperator::IsNull     => $query->whereNull($column),
-            FilterOperator::IsNotNull  => $query->whereNotNull($column),
-            FilterOperator::Between    => $query->whereBetween($column, $value),
+            FilterOperator::Eq => $query->where($column, '=', $value),
+            FilterOperator::Ne => $query->where($column, '!=', $value),
+            FilterOperator::Gt => $query->where($column, '>', $value),
+            FilterOperator::Gte => $query->where($column, '>=', $value),
+            FilterOperator::Lt => $query->where($column, '<', $value),
+            FilterOperator::Lte => $query->where($column, '<=', $value),
+            FilterOperator::In => $query->whereIn($column, (array) $value),
+            FilterOperator::Nin => $query->whereNotIn($column, (array) $value),
+            FilterOperator::IsNull => $query->whereNull($column),
+            FilterOperator::IsNotNull => $query->whereNotNull($column),
+            FilterOperator::Between => $query->whereBetween($column, $value),
             FilterOperator::NotBetween => $query->whereNotBetween($column, $value),
-            default                    => $query->where($column, $alias, $value),
+            default => $query->where($column, $alias, $value),
         };
     }
 
@@ -215,6 +214,6 @@ class AttributeQueryBuilder
     {
         $escaped = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], (string) $value);
 
-        $query->whereRaw($column . ' LIKE ?', ['%' . $escaped . '%']);
+        $query->whereRaw($column.' LIKE ?', ['%'.$escaped.'%']);
     }
 }

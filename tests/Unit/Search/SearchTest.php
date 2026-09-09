@@ -7,10 +7,13 @@ namespace Jurager\Eav\Tests\Unit\Search;
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Search\Builder;
+use Jurager\Eav\Search\Compiler;
 use Jurager\Eav\Search\Contracts\InteractsWithIndex;
 use Jurager\Eav\Search\Engine;
-use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Tests\TestCase;
+use Jurager\Filterable\Contracts\SortResolver;
 use Meilisearch\Client;
 use Mockery;
 use Psr\Log\LoggerInterface;
@@ -31,8 +34,8 @@ class SearchTest extends TestCase
             Mockery::mock(LoggerInterface::class),
             Mockery::mock(FieldFactory::class),
             Mockery::mock(LocaleRegistry::class),
-            Mockery::mock(\Jurager\Eav\Registry\SchemaRegistry::class),
-            new \Jurager\Eav\Search\Compiler(),
+            Mockery::mock(SchemaRegistry::class),
+            new Compiler,
         );
 
         $this->search = new Builder($this->engine, [], 'product');
@@ -78,7 +81,8 @@ class SearchTest extends TestCase
 
     public function test_a_model_implementing_interacts_with_index_supplies_its_own_map(): void
     {
-        $this->withModel(new class () extends Model implements InteractsWithIndex {
+        $this->withModel(new class extends Model implements InteractsWithIndex
+        {
             public function indexAliases(): array
             {
                 return ['categories.category_id' => 'category_ids'];
@@ -97,7 +101,8 @@ class SearchTest extends TestCase
 
     public function test_a_model_not_implementing_interacts_with_index_supplies_nothing(): void
     {
-        $this->withModel(new class () extends Model {
+        $this->withModel(new class extends Model
+        {
             //
         });
 
@@ -106,7 +111,8 @@ class SearchTest extends TestCase
 
     public function test_the_model_map_does_not_shadow_the_built_in_id_default(): void
     {
-        $this->withModel(new class () extends Model implements InteractsWithIndex {
+        $this->withModel(new class extends Model implements InteractsWithIndex
+        {
             public function indexAliases(): array
             {
                 return ['id' => 'something_else'];
@@ -172,11 +178,13 @@ class SearchTest extends TestCase
 
     public function test_sort_runs_the_filterable_resolvers_declared_on_the_model(): void
     {
-        $this->withModel(new class () extends Model {
+        $this->withModel(new class extends Model
+        {
             public function filterableResolvers(): array
             {
                 return [
-                    new class () implements \Jurager\Filterable\Contracts\SortResolver {
+                    new class implements SortResolver
+                    {
                         public function resolve(object $query, string $field, string $direction, Model $model, array $context = []): bool
                         {
                             if ($field !== 'in_stock' || ! $query instanceof Builder) {
@@ -201,7 +209,8 @@ class SearchTest extends TestCase
 
     public function test_sort_hands_included_constraints_to_the_resolver_as_context(): void
     {
-        $resolver = new class () implements \Jurager\Filterable\Contracts\SortResolver {
+        $resolver = new class implements SortResolver
+        {
             public array $seen = [];
 
             public function resolve(object $query, string $field, string $direction, Model $model, array $context = []): bool
@@ -212,7 +221,8 @@ class SearchTest extends TestCase
             }
         };
 
-        $this->withModel(new class () extends Model {
+        $this->withModel(new class extends Model
+        {
             public static array $resolvers = [];
 
             public function filterableResolvers(): array
@@ -231,8 +241,7 @@ class SearchTest extends TestCase
 
     public function test_a_sort_field_no_resolver_claims_is_ignored(): void
     {
-        $this->withModel(new class () extends Model {
-        });
+        $this->withModel(new class extends Model {});
 
         $this->search->sort('-whatever');
 

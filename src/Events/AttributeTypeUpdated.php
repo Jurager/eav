@@ -11,7 +11,5 @@ class AttributeTypeUpdated
 {
     use Dispatchable;
 
-    public function __construct(public readonly AttributeType $type)
-    {
-    }
+    public function __construct(public readonly AttributeType $type) {}
 }

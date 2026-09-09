@@ -38,7 +38,7 @@ class ActiveLocaleScopeTest extends FeatureTestCase
         $this->assertEqualsCanonicalizing(['en', 'ru'], Locale::query()->pluck('code')->all());
     }
 
-    public function test_applies_transparently_to_a_plain_loadMissing_with_no_closure(): void
+    public function test_applies_transparently_to_a_plain_load_missing_with_no_closure(): void
     {
         // The whole point: a generic caller with no notion of locales — a bare relation-name
         // eager load — still gets narrowed, because the scope lives on Locale itself.

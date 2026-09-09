@@ -6,22 +6,22 @@ namespace Jurager\Eav;
 
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
-use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
-use Jurager\Eav\Http\Middleware\SetLocaleContext;
 use Jurager\Eav\Builders\Attributes\AttributesFactory;
 use Jurager\Eav\Builders\Schema\SchemaFactory;
 use Jurager\Eav\Builders\Translator\TranslatorFactory;
+use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
-use Jurager\Eav\Events\EntityValuesChanged;
+use Jurager\Eav\Http\Middleware\SetLocaleContext;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Listeners\ReindexChangedEntities;
 use Jurager\Eav\Managers\SchemaManager;
@@ -95,13 +95,13 @@ class EavServiceProvider extends ServiceProvider
     /** Configure package models from config. */
     private function configureModels(): void
     {
-        Eav::$attributeModel       = config('eav.models.attribute', Eav::$attributeModel);
-        Eav::$attributeTypeModel   = config('eav.models.attribute_type', Eav::$attributeTypeModel);
-        Eav::$attributeGroupModel  = config('eav.models.attribute_group', Eav::$attributeGroupModel);
-        Eav::$attributeEnumModel   = config('eav.models.attribute_enum', Eav::$attributeEnumModel);
+        Eav::$attributeModel = config('eav.models.attribute', Eav::$attributeModel);
+        Eav::$attributeTypeModel = config('eav.models.attribute_type', Eav::$attributeTypeModel);
+        Eav::$attributeGroupModel = config('eav.models.attribute_group', Eav::$attributeGroupModel);
+        Eav::$attributeEnumModel = config('eav.models.attribute_enum', Eav::$attributeEnumModel);
         Eav::$entityAttributeModel = config('eav.models.entity_attribute', Eav::$entityAttributeModel);
         Eav::$entityTranslationModel = config('eav.models.entity_translation', Eav::$entityTranslationModel);
-        Eav::$localeModel          = config('eav.models.locale', Eav::$localeModel);
+        Eav::$localeModel = config('eav.models.locale', Eav::$localeModel);
     }
 
     /** Bootstrap package services. */
@@ -196,10 +196,10 @@ class EavServiceProvider extends ServiceProvider
     private function registerObservers(): void
     {
         $observers = [
-            Eav::$attributeModel       => AttributeObserver::class,
-            Eav::$attributeEnumModel   => AttributeEnumObserver::class,
-            Eav::$attributeGroupModel  => AttributeGroupObserver::class,
-            Eav::$attributeTypeModel   => AttributeTypeObserver::class,
+            Eav::$attributeModel => AttributeObserver::class,
+            Eav::$attributeEnumModel => AttributeEnumObserver::class,
+            Eav::$attributeGroupModel => AttributeGroupObserver::class,
+            Eav::$attributeTypeModel => AttributeTypeObserver::class,
         ];
 
         foreach ($observers as $model => $observer) {

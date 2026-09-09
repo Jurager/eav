@@ -23,8 +23,7 @@ class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
 
     public function __construct(
         protected string $entityType,
-    ) {
-    }
+    ) {}
 
     public function uniqueId(): string
     {
@@ -47,7 +46,7 @@ class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        $model = new $modelClass();
+        $model = new $modelClass;
         $fields = $model instanceof InteractsWithIndex ? $model->indexFields() : [];
 
         $index = $client->index($model->searchableAs());
@@ -64,7 +63,7 @@ class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
     /**
      * Index paths the model allows the given capability on.
      *
-     * @param array<string, list<IndexCapability>> $fields
+     * @param  array<string, list<IndexCapability>>  $fields
      * @return list<string>
      */
     protected function pathsFor(array $fields, IndexCapability $capability): array

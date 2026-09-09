@@ -16,8 +16,7 @@ class TranslatorFactory
     public function __construct(
         private readonly TranslationManager $manager,
         private readonly LocaleRegistry $locales,
-    ) {
-    }
+    ) {}
 
     /**
      * Start building a locale.

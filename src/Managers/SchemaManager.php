@@ -11,6 +11,8 @@ use Jurager\Eav\Managers\Schema\AttributeSchema;
 use Jurager\Eav\Managers\Schema\EnumSchema;
 use Jurager\Eav\Managers\Schema\GroupSchema;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Models\AttributeGroup;
 use Jurager\Eav\Models\AttributeType;
 
 class SchemaManager
@@ -20,8 +22,7 @@ class SchemaManager
         private AttributeSchema $attributeSchema,
         private GroupSchema $groupSchema,
         private EnumSchema $enumSchema,
-    ) {
-    }
+    ) {}
 
     /** Get the translation manager. */
     public function translations(): TranslationManager
@@ -59,7 +60,7 @@ class SchemaManager
         return Eav::$attributeModel::query();
     }
 
-    /** @return Builder<\Jurager\Eav\Models\AttributeEnum> */
+    /** @return Builder<AttributeEnum> */
     public function enumsQuery(Attribute $attribute): Builder
     {
         return $attribute->enums()->getQuery();
@@ -71,7 +72,7 @@ class SchemaManager
         return Eav::$attributeTypeModel::query();
     }
 
-    /** @return Builder<\Jurager\Eav\Models\AttributeGroup> */
+    /** @return Builder<AttributeGroup> */
     public function groupsQuery(): Builder
     {
         return Eav::$attributeGroupModel::query();
@@ -79,6 +80,7 @@ class SchemaManager
 
     /**
      * Perform a search on attributes using Laravel Scout.
+     *
      * @throws SearchNotAvailableException
      */
     public function search(string $query): mixed

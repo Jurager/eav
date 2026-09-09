@@ -105,10 +105,10 @@ class EnumSchema extends BaseSchema
 
             $rows[] = [
                 'attribute_id' => $data['attribute_id'],
-                'code'         => $data['code'],
-                'sort'         => $data['sort'] ?? 0,
-                'created_at'   => $now,
-                'updated_at'   => $now,
+                'code' => $data['code'],
+                'sort' => $data['sort'] ?? 0,
+                'created_at' => $now,
+                'updated_at' => $now,
             ];
         }
 

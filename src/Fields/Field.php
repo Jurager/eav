@@ -16,8 +16,8 @@ use Jurager\Eav\Registry\LocaleRegistry;
 /** Base attribute field. */
 abstract class Field
 {
-    use ValidatesPayload;
     use Indexable;
+    use ValidatesPayload;
 
     /** @var array<int, array{locale_id: int|null, value: mixed}> */
     protected array $values = [];
@@ -29,8 +29,7 @@ abstract class Field
         protected Attribute $attribute,
         protected LocaleRegistry $localeRegistry,
         protected EnumRegistry $enumRegistry,
-    ) {
-    }
+    ) {}
 
     abstract public function column(): AttributeStorage;
 
@@ -284,12 +283,12 @@ abstract class Field
     public function toMetadata(): array
     {
         return [
-            'code'       => $this->code(),
-            'type'       => $this->attribute->type?->getAttribute('code'),
+            'code' => $this->code(),
+            'type' => $this->attribute->type?->getAttribute('code'),
             'localizable' => $this->isLocalizable(),
-            'multiple'   => $this->isMultiple(),
-            'required'   => $this->isRequired(),
-            'unique'     => $this->isUnique(),
+            'multiple' => $this->isMultiple(),
+            'required' => $this->isRequired(),
+            'unique' => $this->isUnique(),
             'filterable' => $this->isFilterable(),
             'searchable' => $this->isSearchable(),
         ];

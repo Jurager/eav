@@ -17,7 +17,6 @@ class AttributeInheritanceResolver
      * Expand entities with their attribute-inheriting ancestors.
      *
      * @param  Collection<int, mixed>  $entities
-     * @param  string  $model
      * @return Collection<int, mixed>
      */
     public function resolve(Collection $entities, string $model): Collection
@@ -45,7 +44,7 @@ class AttributeInheritanceResolver
             return $base;
         }
 
-        $instance = new $model();
+        $instance = new $model;
         $columns = array_unique(array_merge($instance->getInheritanceColumns(), ['_lft', '_rgt']));
 
         $ancestors = $model::query()
@@ -94,7 +93,7 @@ class AttributeInheritanceResolver
         while ($currentIds->isNotEmpty() && $remaining-- > 0) {
             $parents = $model::query()
                 ->whereIn('id', $currentIds)
-                ->select((new $model())->getInheritanceColumns())
+                ->select((new $model)->getInheritanceColumns())
                 ->get()
                 ->keyBy('id');
 

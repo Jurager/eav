@@ -58,8 +58,8 @@ class AttributeRelationFilterResolver implements FilterResolver
     {
         return match (true) {
             $relation instanceof BelongsToMany => $relation->getRelatedPivotKeyName(),
-            $relation instanceof BelongsTo     => $relation->getForeignKeyName(),
-            default                            => Str::singular($name) . '_id',
+            $relation instanceof BelongsTo => $relation->getForeignKeyName(),
+            default => Str::singular($name).'_id',
         };
     }
 

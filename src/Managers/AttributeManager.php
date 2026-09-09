@@ -41,7 +41,6 @@ class AttributeManager
 
     private ?AttributeQueryBuilder $builder = null;
 
-    /** FQCN stored for schema-only managers created from a class string. */
     protected ?string $entityClass = null;
 
     public function __construct(
@@ -49,8 +48,7 @@ class AttributeManager
         private readonly ?FieldFactory $fieldFactory = null,
         private readonly ?EnumRegistry $enumRegistry = null,
         private readonly ?SchemaRegistry $schemaRegistry = null,
-    ) {
-    }
+    ) {}
 
     /** Create a manager for an entity instance, FQCN, or morph-map key. */
     public static function for(string|Attributable $entity): static
@@ -66,7 +64,7 @@ class AttributeManager
                 throw InvalidConfigurationException::missingAttributableContract($entity);
             }
 
-            $instance = new $entity();
+            $instance = new $entity;
             $manager = static::buildFromAttributable($instance, $registry);
             $manager->entityClass = $entity;
 
@@ -82,6 +80,7 @@ class AttributeManager
     }
 
     /** Return a schema-only manager for an entity or a preloaded attribute collection.
+     *
      * @throws JsonException
      */
     public static function schema(Attributable|Collection $entityOrAttributes): static
@@ -94,10 +93,10 @@ class AttributeManager
     /**
      * Persist attribute values for multiple entities in chunked batches.
      *
-     * @param Collection<int, array{entity: Attributable, data: array<string, mixed>}> $batch
-     * @param callable(Throwable, Attributable): void|null $onError Called when persisting an entity fails.
-     * @param callable(Attributable, string): void|null $onRejected Called for each attribute code silently
-     *  dropped because the entity's side (parent/variant) is not allowed to hold it (held_by mismatch).
+     * @param  Collection<int, array{entity: Attributable, data: array<string, mixed>}>  $batch
+     * @param  callable(Throwable, Attributable): void|null  $onError  Called when persisting an entity fails.
+     * @param  callable(Attributable, string): void|null  $onRejected  Called for each attribute code silently
+     *                                                                 dropped because the entity's side (parent/variant) is not allowed to hold it (held_by mismatch).
      */
     public static function sync(Collection $batch, ?self $prebuiltSchema = null, int $chunkSize = 500, ?callable $onError = null, ?callable $onRejected = null): void
     {
@@ -163,22 +162,15 @@ class AttributeManager
         }
     }
 
-    /**
-     * Attributes for the given codes, resolved once per entity type and scope.
-     *
-     * @param list<string> $codes
-     */
+    /** Attributes for the given codes, resolved once per entity type, scope, and code. */
     private function attributesFor(array $codes): Collection
     {
         $scope = $this->entity?->attributeScopeIds() ?? [];
         sort($scope);
 
-        $key = $this->resolveEntity()->getEntityType() . ':schema:' . implode(',', $scope);
+        $key = $this->resolveEntity()->getEntityType().':schema:'.implode(',', $scope);
 
-        return $this->schemaRegistry
-            ->resolve($key, fn (): Collection => $this->query($scope)?->get() ?? collect())
-            ->whereIn('code', $codes)
-            ->values();
+        return $this->schemaRegistry->resolveCodes($key, $codes, fn (array $missing): Collection => $this->query($scope)?->whereIn('code', $missing)->get() ?? collect());
     }
 
     /** Return all loaded Field objects. */
@@ -379,7 +371,7 @@ class AttributeManager
 
         $attributes = $registry->resolve(
             $registryKey,
-            fn () => $entity->getAvailableAttributesQuery($parameters)?->get() ?? new EloquentCollection()
+            fn () => $entity->getAvailableAttributesQuery($parameters)?->get() ?? new EloquentCollection
         );
 
         return static::buildFromCollection($attributes);
@@ -399,7 +391,7 @@ class AttributeManager
     /**
      * Stored values for the given attributes, reusing `attribute_values` when already loaded.
      *
-     * @param list<int> $attributeIds
+     * @param  list<int>  $attributeIds
      */
     private function storedValues(array $attributeIds): Collection
     {
@@ -493,8 +485,7 @@ class AttributeManager
      */
     private function indexableValues(): Collection
     {
-        $indexable = static fn (?Attribute $attribute): bool =>
-        (bool) ($attribute?->getAttribute('searchable') || $attribute?->getAttribute('filterable'));
+        $indexable = static fn (?Attribute $attribute): bool => (bool) ($attribute?->getAttribute('searchable') || $attribute?->getAttribute('filterable'));
 
         if (($loaded = $this->loadedValues()) !== null) {
             return $loaded->filter(fn (Model $value): bool => $indexable($value->attribute))->values();

@@ -15,8 +15,7 @@ class AttributeEnumObserver
 {
     public function __construct(
         protected EnumRegistry $enums,
-    ) {
-    }
+    ) {}
 
     /** Handle the "saved" event for the enum. */
     public function saved(AttributeEnum $enum): void

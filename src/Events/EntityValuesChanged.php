@@ -14,12 +14,11 @@ class EntityValuesChanged
     use Dispatchable;
 
     /**
-     * @param string $entityType Morph key of the entities.
-     * @param array<int, int|string> $entityIds
+     * @param  string  $entityType  Morph key of the entities.
+     * @param  array<int, int|string>  $entityIds
      */
     public function __construct(
         public readonly string $entityType,
         public readonly array $entityIds,
-    ) {
-    }
+    ) {}
 }

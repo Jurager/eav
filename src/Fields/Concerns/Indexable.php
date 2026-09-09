@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Fields\Concerns;
 
+use Jurager\Eav\Fields\Field;
+
 /**
  * Trait providing search index and facet support for fields.
  *
- * @phpstan-require-extends \Jurager\Eav\Fields\Field
+ * @phpstan-require-extends Field
  */
 trait Indexable
 {

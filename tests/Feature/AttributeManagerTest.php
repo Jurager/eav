@@ -43,6 +43,29 @@ class AttributeManagerTest extends FeatureTestCase
         $this->assertInstanceOf(AttributeManager::class, $manager);
     }
 
+    public function test_field_queries_only_the_requested_code_not_the_whole_available_schema(): void
+    {
+        foreach (['a', 'b', 'c', 'd', 'e'] as $code) {
+            $this->createAttribute($this->textType, ['code' => $code]);
+        }
+
+        $product = $this->createProduct();
+
+        DB::enableQueryLog();
+
+        $field = $product->eav()->field('c');
+
+        $attributesQueries = array_values(array_filter(
+            DB::getQueryLog(),
+            static fn (array $query): bool => str_contains($query['query'], '"attributes"')
+        ));
+
+        $this->assertNotNull($field);
+        $this->assertCount(1, $attributesQueries, 'field() should run exactly one query against the attributes table.');
+        $this->assertContains('c', $attributesQueries[0]['bindings']);
+        $this->assertNotContains('a', $attributesQueries[0]['bindings'], 'the query should be scoped to the requested code, not the whole available schema.');
+    }
+
     public function test_for_non_attributable_class_throws(): void
     {
         $this->expectException(InvalidConfigurationException::class);
@@ -494,7 +517,7 @@ class AttributeManagerTest extends FeatureTestCase
             ->count());
     }
 
-    public function test_sync_reports_rejected_codes_via_onRejected(): void
+    public function test_sync_reports_rejected_codes_via_on_rejected(): void
     {
         $this->createAttribute($this->textType, ['code' => 'code', 'held_by' => HeldBy::Parent]);
 

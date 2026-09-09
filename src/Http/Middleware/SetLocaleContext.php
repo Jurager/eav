@@ -11,9 +11,7 @@ use Symfony\Component\HttpFoundation\Response;
 
 class SetLocaleContext
 {
-    public function __construct(protected LocaleRegistry $localeRegistry)
-    {
-    }
+    public function __construct(protected LocaleRegistry $localeRegistry) {}
 
     public function handle(Request $request, Closure $next): Response
     {
