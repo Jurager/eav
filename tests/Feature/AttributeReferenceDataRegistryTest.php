@@ -76,9 +76,9 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
 
         $typeQueries = array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types'));
 
-        // Registry warms once on the very first Attribute retrieval; the second
-        // independent load must not re-query attribute_types.
-        $this->assertCount(1, $typeQueries);
+        // Registry warms once on the very first Attribute retrieval (a staleness stamp,
+        // then the rows); the second independent load must not re-query attribute_types.
+        $this->assertCount(2, $typeQueries);
     }
 
     public function test_updating_attribute_type_invalidates_the_registry(): void
@@ -131,5 +131,42 @@ class AttributeReferenceDataRegistryTest extends FeatureTestCase
         Event::assertDispatched(AttributeTypeCreated::class);
         Event::assertDispatched(AttributeTypeUpdated::class);
         Event::assertDispatched(AttributeTypeDeleted::class);
+    }
+
+    // -----------------------------------------------------------------------
+    // Cross-request caching (Octane: the registry is rebuilt, the reference data isn't)
+    // -----------------------------------------------------------------------
+
+    public function test_attribute_types_survive_a_fresh_registry_instance_with_only_a_stamp_check(): void
+    {
+        $this->createAttributeType('text');
+        app(AttributeTypeRegistry::class)->all();
+
+        // Simulate the next Octane request: the container drops the scoped instance,
+        // but the static state a fresh instance reads from must still be there.
+        app()->forgetScopedInstances();
+        $registry = app(AttributeTypeRegistry::class);
+
+        DB::enableQueryLog();
+        $all = $registry->all();
+
+        $this->assertCount(1, $all);
+        // Just the staleness stamp — not the rows themselves.
+        $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_types')));
+    }
+
+    public function test_attribute_groups_survive_a_fresh_registry_instance_with_only_a_stamp_check(): void
+    {
+        AttributeGroup::create(['code' => 'general', 'sort' => 0]);
+        app(AttributeGroupRegistry::class)->all();
+
+        app()->forgetScopedInstances();
+        $registry = app(AttributeGroupRegistry::class);
+
+        DB::enableQueryLog();
+        $all = $registry->all();
+
+        $this->assertCount(1, $all);
+        $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attribute_groups')));
     }
 }

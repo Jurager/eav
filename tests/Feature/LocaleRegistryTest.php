@@ -238,4 +238,36 @@ class LocaleRegistryTest extends TestCase
 
         $this->assertNull($this->registry->get());
     }
+
+    // -----------------------------------------------------------------------
+    // Cross-request caching (Octane: the registry is rebuilt, the locale list isn't)
+    // -----------------------------------------------------------------------
+
+    public function test_locales_survive_a_fresh_registry_instance_without_a_query(): void
+    {
+        $this->insertLocale('en', 'English');
+        $this->registry->all();
+
+        // Simulate the next Octane request: the container drops the scoped instance,
+        // but the static state a fresh instance reads from must still be there.
+        app()->forgetScopedInstances();
+        $registry = app(LocaleRegistry::class);
+
+        DB::enableQueryLog();
+        $all = $registry->all();
+
+        $this->assertCount(1, $all);
+        // Just the staleness stamp — not the rows themselves.
+        $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'locales')));
+    }
+
+    public function test_active_locales_do_not_leak_into_the_next_request(): void
+    {
+        $this->registry->set(['fr']);
+
+        app()->forgetScopedInstances();
+        $registry = app(LocaleRegistry::class);
+
+        $this->assertNull($registry->get());
+    }
 }

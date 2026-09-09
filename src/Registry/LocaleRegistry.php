@@ -12,9 +12,13 @@ use Jurager\Eav\Scopes\ActiveLocaleScope;
 class LocaleRegistry
 {
     /** @var Collection<int, string>|null id → code */
-    private ?Collection $locales = null;
+    private static ?Collection $locales = null;
 
-    private ?int $default = null;
+    private static ?string $stamp = null;
+
+    private static ?int $default = null;
+
+    private bool $checkedThisRequest = false;
 
     /** @var array<string>|null Active locales for the current request. */
     private ?array $active = null;
@@ -24,9 +28,11 @@ class LocaleRegistry
      */
     public function all(): Collection
     {
-        return $this->locales ??= Eav::$localeModel::query()
-            ->withoutGlobalScope(ActiveLocaleScope::class)
-            ->pluck('code', 'id');
+        if (self::$locales === null || $this->changed()) {
+            $this->load();
+        }
+
+        return self::$locales;
     }
 
     /** Get all locale IDs. */
@@ -82,13 +88,13 @@ class LocaleRegistry
      */
     public function default(): int
     {
-        if ($this->default !== null) {
-            return $this->default;
+        if (self::$default !== null) {
+            return self::$default;
         }
 
         $code = config('app.locale', 'en');
 
-        return $this->default = $this->find($code) ?? throw InvalidConfigurationException::localeNotFound($code);
+        return self::$default = $this->find($code) ?? throw InvalidConfigurationException::localeNotFound($code);
     }
 
     /** Set the active locales for the request context. */
@@ -106,8 +112,53 @@ class LocaleRegistry
     /** Clear the registry cache. */
     public function forget(): void
     {
-        $this->locales = null;
-        $this->default = null;
+        self::$locales = null;
+        self::$stamp = null;
+        self::$default = null;
+        $this->checkedThisRequest = false;
         $this->active = null;
+    }
+
+    /** Drop everything the process holds. */
+    public static function flush(): void
+    {
+        self::$locales = null;
+        self::$stamp = null;
+        self::$default = null;
+    }
+
+    /** Determine if the table changed since it was last read. Checked at most once per request. */
+    private function changed(): bool
+    {
+        if ($this->checkedThisRequest) {
+            return false;
+        }
+
+        $this->checkedThisRequest = true;
+
+        return $this->stamp() !== self::$stamp;
+    }
+
+    /** Read the table, dropping whatever was held before. */
+    private function load(): void
+    {
+        $this->checkedThisRequest = true;
+        self::$stamp = $this->stamp();
+        self::$locales = Eav::$localeModel::query()
+            ->withoutGlobalScope(ActiveLocaleScope::class)
+            ->pluck('code', 'id');
+    }
+
+    /** Get the state of the table, as far as a change is observable without an updated_at column. */
+    private function stamp(): string
+    {
+        $state = Eav::$localeModel::query()
+            ->withoutGlobalScope(ActiveLocaleScope::class)
+            ->toBase()
+            ->reorder()
+            ->selectRaw('count(*) as total, max(id) as last_id')
+            ->first();
+
+        return implode(':', [$state->total ?? 0, $state->last_id ?? 0]);
     }
 }

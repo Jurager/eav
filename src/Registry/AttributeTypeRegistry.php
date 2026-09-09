@@ -11,15 +11,23 @@ use Jurager\Eav\Models\AttributeType;
 class AttributeTypeRegistry
 {
     /** @var Collection<string, AttributeType>|null */
-    private ?Collection $types = null;
+    private static ?Collection $types = null;
 
     /** @var Collection<int, AttributeType>|null */
-    private ?Collection $typesById = null;
+    private static ?Collection $typesById = null;
+
+    private static ?string $stamp = null;
+
+    private bool $checkedThisRequest = false;
 
     /** Get all cached attribute types. */
     public function all(): Collection
     {
-        return $this->types ??= Eav::$attributeTypeModel::query()->get()->keyBy('code');
+        if (self::$types === null || $this->changed()) {
+            $this->load();
+        }
+
+        return self::$types;
     }
 
     /** Get all registered attribute type codes. */
@@ -43,13 +51,58 @@ class AttributeTypeRegistry
     /** Get an attribute type by its ID. */
     public function get(int $id): ?AttributeType
     {
-        return ($this->typesById ??= $this->all()->values()->keyBy('id'))->get($id);
+        $this->all();
+
+        return self::$typesById?->get($id);
     }
 
     /** Clear the internal cache. */
     public function forget(): void
     {
-        $this->types = null;
-        $this->typesById = null;
+        self::$types = null;
+        self::$typesById = null;
+        self::$stamp = null;
+        $this->checkedThisRequest = false;
+    }
+
+    /** Drop everything the process holds. */
+    public static function flush(): void
+    {
+        self::$types = null;
+        self::$typesById = null;
+        self::$stamp = null;
+    }
+
+    /** Determine if the table changed since it was last read. Checked at most once per request. */
+    private function changed(): bool
+    {
+        if ($this->checkedThisRequest) {
+            return false;
+        }
+
+        $this->checkedThisRequest = true;
+
+        return $this->stamp() !== self::$stamp;
+    }
+
+    /** Read the table, dropping whatever was held before. */
+    private function load(): void
+    {
+        $this->checkedThisRequest = true;
+        self::$stamp = $this->stamp();
+        self::$types = Eav::$attributeTypeModel::query()->get()->keyBy('code');
+        self::$typesById = self::$types->values()->keyBy('id');
+    }
+
+    /** Get the state of the table, as far as a change is observable without an updated_at column. */
+    private function stamp(): string
+    {
+        $state = Eav::$attributeTypeModel::query()
+            ->toBase()
+            ->reorder()
+            ->selectRaw('count(*) as total, max(id) as last_id')
+            ->first();
+
+        return implode(':', [$state->total ?? 0, $state->last_id ?? 0]);
     }
 }

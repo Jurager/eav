@@ -65,6 +65,9 @@ class EavServiceProvider extends ServiceProvider
         $this->app->scoped(AttributeRegistry::class);
 
         AttributeRegistry::flush();
+        AttributeTypeRegistry::flush();
+        AttributeGroupRegistry::flush();
+        LocaleRegistry::flush();
 
         // Managers & Support
         $this->app->singleton(AttributeInheritanceResolver::class);
