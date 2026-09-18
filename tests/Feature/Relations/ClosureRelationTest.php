@@ -82,4 +82,30 @@ class ClosureRelationTest extends FeatureTestCase
         $this->assertSame('Child of A', $ownerA->getRelation('sibling')->first()->name);
         $this->assertSame('Child of B', $ownerB->getRelation('sibling')->first()->name);
     }
+
+    /**
+     * jurager/filterable's included-relation scoping applies its constraint via __call()
+     * before match() runs the batch eager load — match() must replay that constraint for
+     * every parent, not just discard it and re-resolve each parent's query from scratch.
+     */
+    public function test_match_applies_constraint_from_call_to_every_parent(): void
+    {
+        $ownerA = $this->createProduct('Owner A');
+        $ownerB = $this->createProduct('Owner B');
+        $this->createProduct('Child of A - keep');
+        $this->createProduct('Child of A - drop');
+        $this->createProduct('Child of B - keep');
+        $this->createProduct('Child of B - drop');
+
+        $resolver = fn (Product $parent) => Product::query()
+            ->where('name', 'like', $parent->is($ownerA) ? 'Child of A%' : 'Child of B%');
+
+        $relation = new ClosureRelation(Product::query(), $ownerA, $resolver);
+        $relation->where('name', 'like', '%keep');
+
+        $relation->match([$ownerA, $ownerB], new Collection, 'sibling');
+
+        $this->assertSame(['Child of A - keep'], $ownerA->getRelation('sibling')->pluck('name')->all());
+        $this->assertSame(['Child of B - keep'], $ownerB->getRelation('sibling')->pluck('name')->all());
+    }
 }

@@ -29,6 +29,9 @@ class ClosureRelation extends Relation
 
     private bool $resolvedQuerySet = false;
 
+    /** Method calls applied via __call() while eager loading — replayed onto every other parent's own query. */
+    private array $queryCallbacks = [];
+
     /**
      * @param  Builder<TRelatedModel>  $query
      * @param  TDeclaringModel  $parent
@@ -83,7 +86,7 @@ class ClosureRelation extends Relation
         return $this->related->newCollection();
     }
 
-    /** Forward calls to the query resolved for parent. */
+    /** Forward calls to the query resolved for parent, recording them to replay on every other parent. */
     public function __call($method, $parameters): mixed
     {
         $query = $this->queryForParent() ?? $this->related->newQuery()->whereKey([]);
@@ -92,6 +95,7 @@ class ClosureRelation extends Relation
 
         if ($result instanceof Builder) {
             $this->resolvedQuery = $result;
+            $this->queryCallbacks[] = [$method, $parameters];
         }
 
         return $result;
@@ -111,8 +115,17 @@ class ClosureRelation extends Relation
     /** @return Collection<int, TRelatedModel> */
     protected function resolveFor(Model $parent): Collection
     {
-        return self::scopedQuery($this->resolver, $parent)?->get()
-            ?? $this->related->newCollection();
+        $query = self::scopedQuery($this->resolver, $parent);
+
+        if ($query === null) {
+            return $this->related->newCollection();
+        }
+
+        foreach ($this->queryCallbacks as [$method, $parameters]) {
+            $query->$method(...$parameters);
+        }
+
+        return $query->get();
     }
 
     /**
