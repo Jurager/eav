@@ -15,9 +15,12 @@ use Jurager\Eav\Search\Engine;
 use Jurager\Eav\Tests\TestCase;
 use Jurager\Filterable\Contracts\SortResolver;
 use Meilisearch\Client;
+use Meilisearch\Exceptions\ApiException;
 use Mockery;
+use Psr\Http\Message\ResponseInterface;
 use Psr\Log\LoggerInterface;
 use ReflectionClass;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class SearchTest extends TestCase
 {
@@ -254,5 +257,45 @@ class SearchTest extends TestCase
 
         $this->assertNull($this->search->getPartition());
         $this->assertTrue($this->search->partitionsFirst());
+    }
+
+    /** Build a Meilisearch ApiException carrying the given message, as multiSearch() would throw it. */
+    private function apiException(string $message): ApiException
+    {
+        $response = Mockery::mock(ResponseInterface::class);
+        $response->shouldReceive('getStatusCode')->andReturn(400);
+        $response->shouldReceive('getReasonPhrase')->andReturn('Bad Request');
+
+        return new ApiException($response, ['message' => $message]);
+    }
+
+    public function test_invalid_search_request_reports_as_unprocessable_not_bad_request(): void
+    {
+        $method = (new ReflectionClass($this->engine))->getMethod('invalidSearchRequest');
+        $method->setAccessible(true);
+
+        $exception = $method->invoke($this->engine, $this->apiException('Attribute `attributes.name` is not filterable.'));
+
+        $this->assertInstanceOf(UnprocessableEntityHttpException::class, $exception);
+        $this->assertSame(422, $exception->getStatusCode());
+    }
+
+    public function test_invalid_search_request_drops_the_raw_filter_meilisearch_echoes_back(): void
+    {
+        $method = (new ReflectionClass($this->engine))->getMethod('invalidSearchRequest');
+        $method->setAccessible(true);
+
+        $apiException = $this->apiException(
+            "Attribute `attributes.name` is not filterable. Available filterable attribute patterns are: `attributes.brand`.\n"
+            .'48:63 categories.id = 1 AND type.code != "offer" AND attributes.name = "test"'
+        );
+
+        $exception = $method->invoke($this->engine, $apiException);
+
+        $this->assertSame(
+            'Invalid search request: Attribute `attributes.name` is not filterable. Available filterable attribute patterns are: `attributes.brand`.',
+            $exception->getMessage(),
+        );
+        $this->assertSame($apiException, $exception->getPrevious());
     }
 }

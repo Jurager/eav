@@ -17,7 +17,7 @@ use Meilisearch\Contracts\SearchQuery;
 use Meilisearch\Exceptions\ApiException;
 use Meilisearch\Search\SearchResult as MeilisearchResult;
 use Psr\Log\LoggerInterface;
-use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\UnprocessableEntityHttpException;
 
 class Engine
 {
@@ -51,7 +51,7 @@ class Engine
         try {
             $response = $this->meilisearch->multiSearch(array_values($requests));
         } catch (ApiException $e) {
-            throw new BadRequestHttpException("Invalid search request: {$e->getMessage()}", $e);
+            throw $this->invalidSearchRequest($e);
         }
 
         $results = [];
@@ -97,10 +97,18 @@ class Engine
         try {
             $response = $this->meilisearch->multiSearch([$trailing]);
         } catch (ApiException $e) {
-            throw new BadRequestHttpException("Invalid search request: {$e->getMessage()}", $e);
+            throw $this->invalidSearchRequest($e);
         }
 
         return [...$ids, ...array_column((new MeilisearchResult($response['results'][0]))->getHits(), 'id')];
+    }
+
+    /** Wrap a rejected filter or sort as a human readable error — not the raw */
+    private function invalidSearchRequest(ApiException $e): UnprocessableEntityHttpException
+    {
+        $message = explode("\n", $e->getMessage(), 2)[0];
+
+        return new UnprocessableEntityHttpException("Invalid search request: {$message}", $e);
     }
 
     /**
