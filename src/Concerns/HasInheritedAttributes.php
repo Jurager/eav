@@ -159,8 +159,7 @@ trait HasInheritedAttributes
             return collect();
         }
 
-        $this->loadMissing($relation);
-
+        // A lazy read, not loadMissing(): in a collection with relationship autoloading it is loaded for all its models at once.
         $entities = Collection::wrap($this->{$relation});
 
         return $entities->isNotEmpty()
