@@ -103,6 +103,27 @@ trait HasInheritedAttributes
         return $relations;
     }
 
+    /**
+     * The fields that are attribute codes of this entity type address rows of `attribute_values`.
+     *
+     * Read by JSON:API resources to keep that relation under a sparse fieldset that names
+     * only codes, and to leave the codes out of the resource's own attributes.
+     *
+     * @param  list<string>  $fields
+     * @return array<string, list<string>>
+     */
+    public static function fieldRelations(array $fields): array
+    {
+        $codes = app(AttributeRegistry::class)
+            ->all((new static)->getEntityType())
+            ->whereIn('code', $fields)
+            ->pluck('code')
+            ->values()
+            ->all();
+
+        return $codes === [] ? [] : ['attribute_values' => $codes];
+    }
+
     /** Constrain attribute_values to the codes among the given fields, resolved for this entity's type. */
     protected function attributeValuesSparseConstraint(array $fields): Closure
     {
