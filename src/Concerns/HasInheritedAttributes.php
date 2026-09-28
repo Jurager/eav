@@ -104,10 +104,11 @@ trait HasInheritedAttributes
     }
 
     /**
-     * The fields that are attribute codes of this entity type address rows of `attribute_values`.
+     * The relations a set of field names addresses: the names that are attribute codes of this
+     * entity type select rows of `attribute_values`.
      *
-     * Read by JSON:API resources to keep that relation under a sparse fieldset that names
-     * only codes, and to leave the codes out of the resource's own attributes.
+     * A JSON:API layer reads this to keep that relation under a sparse fieldset that names only
+     * codes, and to leave the codes out of the resource's own attributes.
      *
      * @param  list<string>  $fields
      * @return array<string, list<string>>
