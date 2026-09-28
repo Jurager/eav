@@ -9,14 +9,17 @@ use Jurager\Eav\Models\EntityAttribute;
 
 class EagerLoadsSparseFieldConstraintTest extends FeatureTestCase
 {
-    public function test_eager_loads_returns_nothing_when_attribute_values_was_not_included(): void
+    public function test_eager_loads_load_the_values_even_when_they_were_not_included(): void
     {
         $type = $this->createAttributeType('text');
         $this->createAttribute($type, ['code' => 'color']);
         $product = $this->createProduct();
 
-        $this->assertSame([], $product->eagerLoads([], ['color']));
-        $this->assertSame([], $product->eagerLoads(['prices'], ['color']));
+        // Read through the entity's attributes, they are loaded (with the translations they need) either way.
+        $expected = ['parent.attribute_values.attribute.type', 'attribute_values.translations'];
+
+        $this->assertSame($expected, $product->eagerLoads([]));
+        $this->assertSame($expected, $product->eagerLoads(['prices']));
     }
 
     public function test_eager_loads_has_no_constraint_when_no_sparse_fields_were_requested(): void
@@ -93,5 +96,24 @@ class EagerLoadsSparseFieldConstraintTest extends FeatureTestCase
         $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
 
         DB::disableQueryLog();
+    }
+
+    public function test_eager_loads_constrain_values_to_the_requested_codes_when_they_were_not_included(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color']);
+        $size = $this->createAttribute($type, ['code' => 'size']);
+        $product = $this->createProduct();
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $size->id, 'value_text' => 'M']);
+
+        $relations = $product->eagerLoads([], ['color']);
+
+        $this->assertInstanceOf(\Closure::class, $relations['attribute_values']);
+        $this->assertContains('attribute_values.translations', $relations);
+
+        $product->load(['attribute_values' => $relations['attribute_values']]);
+
+        $this->assertSame(['color'], $product->attribute_values->map(fn ($ea) => $ea->attribute->code)->all());
     }
 }

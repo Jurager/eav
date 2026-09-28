@@ -82,7 +82,8 @@ trait HasInheritedAttributes
     }
 
     /**
-     * Relations to eager-load alongside the requested includes.
+     * Relations to eager-load alongside the requested includes: the entity's attribute values, narrowed to
+     * the attribute codes among the requested fields, so they aren't loaded per entity or in full.
      *
      * @param  list<string>  $included
      * @param  list<string>|null  $fields
@@ -90,14 +91,16 @@ trait HasInheritedAttributes
      */
     public function eagerLoads(array $included, ?array $fields = null): array
     {
-        if (! in_array('attribute_values', $included, true)) {
-            return [];
-        }
-
         $relations = $this->inheritedValueRelations();
 
         if ($fields !== null) {
             $relations['attribute_values'] = $this->attributeValuesSparseConstraint($fields);
+        }
+
+        // An entity is read through its attributes whether or not `attribute_values` was included, so its
+        // values are loaded once, here; the translations they need are loaded with them unless the include does.
+        if (! in_array('attribute_values', $included, true)) {
+            $relations[] = 'attribute_values.translations';
         }
 
         return $relations;
