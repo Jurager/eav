@@ -7,6 +7,7 @@ namespace Jurager\Eav\Tests\Unit\Registry;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Tests\TestCase;
 
@@ -26,47 +27,61 @@ class AttributeRegistryTest extends TestCase
 
         $type = AttributeType::create(['code' => 'text']);
 
-        $this->name = Attribute::create([
-            'entity_type' => 'product',
-            'attribute_type_id' => $type->id,
-            'code' => 'name',
-            'sort' => 0,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
-
-        $this->price = Attribute::create([
-            'entity_type' => 'product',
-            'attribute_type_id' => $type->id,
-            'code' => 'price',
-            'sort' => 1,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
-
-        $this->categoryCode = Attribute::create([
-            'entity_type' => 'category',
-            'attribute_type_id' => $type->id,
-            'code' => 'code',
-            'sort' => 0,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
+        $this->name = $this->createAttribute($type, 'name', 0, ['product']);
+        $this->price = $this->createAttribute($type, 'price', 1, ['product']);
+        $this->categoryCode = $this->createAttribute($type, 'code', 0, ['category']);
 
         $this->registry = app(AttributeRegistry::class);
         $this->registry->forget();
+    }
+
+    private function createAttribute(AttributeType $type, string $code, int $sort, array $entityTypes): Attribute
+    {
+        $attribute = Attribute::create([
+            'attribute_type_id' => $type->id,
+            'code' => $code,
+            'sort' => $sort,
+            'required' => false,
+            'localizable' => false,
+            'multiple' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
+        ]);
+
+        $attribute->entityTypes()->createMany(
+            array_map(fn (string $entityType) => ['entity_type' => $entityType], $entityTypes)
+        );
+        $attribute->unsetRelation('entityTypes');
+
+        // The `created` hook fired above before the pivot rows existed to see — a `touch()` isn't
+        // reliable here (same-second timestamps leave nothing dirty to save), so invalidate directly.
+        app(AttributeObserver::class)->forgetCaches($entityTypes);
+
+        return $attribute;
+    }
+
+    /** Insert a row straight into the tables, bypassing the model — simulates a write from another process. */
+    private function insertRawAttribute(string $code, array $entityTypes): int
+    {
+        $id = DB::table('attributes')->insertGetId([
+            'attribute_type_id' => $this->name->attribute_type_id,
+            'code' => $code,
+            'sort' => 2,
+            'required' => false,
+            'localizable' => false,
+            'multiple' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
+        ]);
+
+        DB::table('attribute_entity_types')->insert(array_map(
+            fn (string $entityType) => ['attribute_id' => $id, 'entity_type' => $entityType],
+            $entityTypes
+        ));
+
+        return $id;
     }
 
     /** Queries against the attributes table, ignoring the ones other registries warm themselves with. */
@@ -125,18 +140,7 @@ class AttributeRegistryTest extends TestCase
     {
         $this->registry->all('product');
 
-        Attribute::create([
-            'entity_type' => 'category',
-            'attribute_type_id' => $this->categoryCode->attribute_type_id,
-            'code' => 'seo_title',
-            'sort' => 1,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
+        $this->createAttribute($this->categoryCode->type, 'seo_title', 1, ['category']);
 
         // Not yet cached for 'category', so the freshly created row is visible.
         $this->assertCount(2, $this->registry->all('category'));
@@ -146,18 +150,7 @@ class AttributeRegistryTest extends TestCase
     {
         $first = $this->registry->all('product');
 
-        Attribute::create([
-            'entity_type' => 'product',
-            'attribute_type_id' => $this->name->attribute_type_id,
-            'code' => 'weight',
-            'sort' => 2,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
+        $this->createAttribute($this->name->type, 'weight', 2, ['product']);
 
         $second = $this->registry->all('product');
 
@@ -199,18 +192,7 @@ class AttributeRegistryTest extends TestCase
 
         // Written straight to the table: the observer that clears the registry runs in the process
         // performing the write, which on a long-running server is not this one.
-        $id = DB::table('attributes')->insertGetId([
-            'entity_type' => 'product',
-            'attribute_type_id' => $this->name->attribute_type_id,
-            'code' => 'weight',
-            'sort' => 2,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
+        $id = $this->insertRawAttribute('weight', ['product']);
 
         $attribute = $this->registry->get('product', $id);
 
@@ -222,18 +204,7 @@ class AttributeRegistryTest extends TestCase
     {
         $this->registry->all('product');
 
-        $id = DB::table('attributes')->insertGetId([
-            'entity_type' => 'product',
-            'attribute_type_id' => $this->name->attribute_type_id,
-            'code' => 'weight',
-            'sort' => 2,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
+        $id = $this->insertRawAttribute('weight', ['product']);
 
         $this->registry->get('product', $id);
 
@@ -287,18 +258,7 @@ class AttributeRegistryTest extends TestCase
         $this->registry->all('product');
 
         DB::table('attributes')->where('id', $this->price->id)->delete();
-        DB::table('attributes')->insertGetId([
-            'entity_type' => 'product',
-            'attribute_type_id' => $this->name->attribute_type_id,
-            'code' => 'weight',
-            'sort' => 2,
-            'required' => false,
-            'localizable' => false,
-            'multiple' => false,
-            'unique' => false,
-            'filterable' => false,
-            'searchable' => false,
-        ]);
+        $this->insertRawAttribute('weight', ['product']);
 
         $this->nextRequest();
 

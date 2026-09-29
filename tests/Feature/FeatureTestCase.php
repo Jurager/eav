@@ -13,6 +13,7 @@ use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Eav\Models\Locale;
+use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Registry\AttributeGroupRegistry;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
@@ -73,8 +74,10 @@ abstract class FeatureTestCase extends TestCase
 
     protected function createAttribute(AttributeType $type, array $overrides = []): Attribute
     {
-        return Attribute::create(array_merge([
-            'entity_type' => 'product',
+        $entityTypes = $overrides['entity_types'] ?? ['product'];
+        unset($overrides['entity_types']);
+
+        $attribute = Attribute::create(array_merge([
             'attribute_type_id' => $type->id,
             'code' => 'name',
             'sort' => 0,
@@ -85,6 +88,18 @@ abstract class FeatureTestCase extends TestCase
             'filterable' => false,
             'searchable' => false,
         ], $overrides));
+
+        $attribute->entityTypes()->createMany(
+            array_map(fn (string $entityType) => ['entity_type' => $entityType], $entityTypes)
+        );
+        $attribute->unsetRelation('entityTypes');
+
+        // The `created` hook fired above before the pivot rows existed to see — a `touch()` isn't
+        // reliable here (same-second timestamps leave nothing dirty to save), so invalidate directly.
+        app(AttributeObserver::class)->forgetCaches($entityTypes);
+        app(AttributeObserver::class)->syncAttributeStates($attribute);
+
+        return $attribute;
     }
 
     protected function createProduct(string $name = 'Widget'): Product

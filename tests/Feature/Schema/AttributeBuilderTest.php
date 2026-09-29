@@ -20,7 +20,7 @@ class AttributeBuilderTest extends FeatureTestCase
 
         $this->assertInstanceOf(Attribute::class, $attribute);
         $this->assertSame('name', $attribute->code);
-        $this->assertSame('product', $attribute->entity_type);
+        $this->assertSame(['product'], $attribute->applicableEntityTypes());
         $this->assertSame('text', $attribute->type->code);
     }
 

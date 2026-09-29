@@ -86,15 +86,23 @@ class AttributeObserver
         $this->syncAttributeStates($attribute);
     }
 
-    /** Clear the schema and attribute registry caches for the attribute's entity type. */
+    /** Clear the schema and attribute registry caches for every entity type the attribute is applicable to. */
     protected function invalidateCaches(Attribute $attribute): void
     {
-        $this->schema->forget($attribute->entity_type);
-        $this->registry->forget($attribute->entity_type);
+        $this->forgetCaches($attribute->applicableEntityTypes());
     }
 
-    /** Sync all relevant attribute states (searchable/filterable). */
-    protected function syncAttributeStates(Attribute $attribute): void
+    /** Clears schema and attribute registry caches for the given entity types. */
+    public function forgetCaches(array $entityTypes): void
+    {
+        foreach ($entityTypes as $entityType) {
+            $this->schema->forget($entityType);
+            $this->registry->forget($entityType);
+        }
+    }
+
+    /** Syncs attribute states for all applicable entity types. */
+    public function syncAttributeStates(Attribute $attribute): void
     {
         if ($attribute->searchable) {
             $this->syncSearchable($attribute);
@@ -105,15 +113,19 @@ class AttributeObserver
         }
     }
 
-    /** Dispatch the job to sync searchable index. */
+    /** Dispatch the job to sync searchable index for every applicable entity type. */
     protected function syncSearchable(Attribute $attribute): void
     {
-        SyncSearchable::dispatch($attribute->entity_type, $attribute->id)->afterCommit();
+        foreach ($attribute->applicableEntityTypes() as $entityType) {
+            SyncSearchable::dispatch($entityType, $attribute->id)->afterCommit();
+        }
     }
 
-    /** Dispatch the job to sync filterable index. */
+    /** Dispatch the job to sync filterable index for every applicable entity type. */
     protected function syncFilterable(Attribute $attribute): void
     {
-        SyncIndexSettings::dispatch($attribute->entity_type)->afterCommit();
+        foreach ($attribute->applicableEntityTypes() as $entityType) {
+            SyncIndexSettings::dispatch($entityType)->afterCommit();
+        }
     }
 }

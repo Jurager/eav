@@ -33,14 +33,19 @@ class AttributeBuilder extends Fluent
     /** @var list<array{locale_id: int, label: string}> */
     private array $translations = [];
 
+    /** @var list<string> */
+    private readonly array $entityTypes;
+
     public function __construct(
         private readonly AttributeSchema $schema,
         private readonly AttributeTypeRegistry $types,
         private readonly LocaleRegistry $locales,
         private readonly Attribute|string $subject,
-        private readonly ?string $entityType = null,
+        string|array|null $entityTypes = null,
     ) {
-        if (is_string($subject) && $entityType === null) {
+        $this->entityTypes = array_values(array_unique((array) ($entityTypes ?? [])));
+
+        if (is_string($subject) && $this->entityTypes === []) {
             throw FluentBuilderException::missingEntityType($subject);
         }
 
@@ -85,7 +90,7 @@ class AttributeBuilder extends Fluent
         }
 
         return [
-            'entity_type' => $this->entityType,
+            'entity_types' => $this->entityTypes,
             'code' => $this->subject,
             'translations' => $this->translations,
             ...$this->toArray(),
@@ -98,18 +103,12 @@ class AttributeBuilder extends Fluent
         return $this->schema->create($this->build())->refresh();
     }
 
-    /**
-     * Persist a new attribute, or return the existing one for its entity type and code.
-     *
-     * For an existing attribute only translations are updated — other queued fields
-     * are not applied. Requires the builder to have been constructed with a code
-     * and entity type.
-     */
+    /** Creates an attribute or attaches the entity types to the existing attribute. */
     public function firstOrCreate(): Attribute
     {
         $data = $this->build();
 
-        return $this->schema->findOrCreate($this->entityType, $data['code'], $data);
+        return $this->schema->findOrCreate($this->entityTypes, $data['code'], $data);
     }
 
     /** Apply the queued changes to an existing attribute. */

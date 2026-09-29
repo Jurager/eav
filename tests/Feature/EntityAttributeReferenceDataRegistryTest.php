@@ -63,7 +63,7 @@ class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
         $productAttribute = $this->createAttribute($type, ['code' => 'name']);
-        $this->createAttribute($type, ['entity_type' => 'category', 'code' => 'seo_title']);
+        $this->createAttribute($type, ['entity_types' => ['category'], 'code' => 'seo_title']);
         $product = $this->createProduct();
 
         EntityAttribute::create([

@@ -42,7 +42,7 @@ use Jurager\Eav\Models\AttributeType;
  *     ], fireEvents: false);
  *
  * @method static GroupBuilder group(AttributeGroup|string $code)
- * @method static AttributeBuilder attribute(Attribute|string $code, ?string $entityType = null)
+ * @method static AttributeBuilder attribute(Attribute|string $code, string|array|null $entityTypes = null)
  * @method static EnumBuilder enum(AttributeEnum|Attribute $subject, ?string $code = null)
  * @method static Collection batch(array $builders, bool $fireEvents = true)
  * @method static Attribute findAttribute(int $id)

@@ -41,8 +41,9 @@ class AttributeEnumObserver
         $this->enums->forget($enum->attribute_id);
 
         if ($enum->attribute?->searchable) {
-            SyncSearchable::dispatch($enum->attribute->entity_type, $enum->attribute_id)
-                ->afterCommit();
+            foreach ($enum->attribute->applicableEntityTypes() as $entityType) {
+                SyncSearchable::dispatch($entityType, $enum->attribute_id)->afterCommit();
+            }
         }
     }
 }

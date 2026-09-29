@@ -21,8 +21,8 @@ class BatchTest extends FeatureTestCase
         ]);
 
         $this->assertCount(2, $created);
-        $this->assertTrue($created->has('product:color'));
-        $this->assertTrue($created->has('product:weight'));
+        $this->assertTrue($created->has('color'));
+        $this->assertTrue($created->has('weight'));
     }
 
     public function test_batch_persists_translations(): void
@@ -34,7 +34,7 @@ class BatchTest extends FeatureTestCase
             Schema::attribute('color', 'product')->type('text')->label('Color', 'en'),
         ]);
 
-        $attribute = $created->get('product:color');
+        $attribute = $created->get('color');
         $labels = $attribute->translations->pluck('pivot.label', 'code')->all();
 
         $this->assertSame('Color', $labels['en']);

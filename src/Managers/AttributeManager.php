@@ -335,14 +335,14 @@ class AttributeManager
         return $this->resolveEntity()->getAvailableAttributesQuery($params);
     }
 
-    /** Return the attribute query builder. */
+    /** Returns the attribute query builder using the first applicable entity type as a fallback. */
     public function builder(): AttributeQueryBuilder
     {
         return $this->builder ??= new AttributeQueryBuilder(
             $this->enumRegistry,
             fn (string $code) => $this->field($code),
             fn (string $code) => $this->entity?->getEntityType()
-                ?? ($this->fields[$code] ?? null)?->attribute()->getAttribute('entity_type'),
+                ?? ($this->fields[$code] ?? null)?->attribute()->applicableEntityTypes()[0] ?? null,
         );
     }
 

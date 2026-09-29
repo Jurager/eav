@@ -59,10 +59,10 @@ class SchemaLookupTest extends FeatureTestCase
     public function test_attributes_returns_a_query_builder(): void
     {
         $type = $this->createAttributeType('text');
-        $this->createAttribute($type, ['code' => 'name', 'entity_type' => 'product']);
-        $this->createAttribute($type, ['code' => 'title', 'entity_type' => 'category']);
+        $this->createAttribute($type, ['code' => 'name', 'entity_types' => ['product']]);
+        $this->createAttribute($type, ['code' => 'title', 'entity_types' => ['category']]);
 
-        $results = Schema::attributes()->where('entity_type', 'product')->get();
+        $results = Schema::attributes()->forEntity('product')->get();
 
         $this->assertCount(1, $results);
         $this->assertSame('name', $results->first()->code);

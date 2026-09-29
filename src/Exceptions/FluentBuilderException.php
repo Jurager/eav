@@ -31,10 +31,10 @@ class FluentBuilderException extends EavException
         return new self(sprintf('Attribute [%s] has no type set. Call ->type($code) before ->create().', $code));
     }
 
-    /** Create a new exception for a builder constructed without an entity type for a new attribute. */
+    /** Create a new exception for a builder constructed without at least one entity type for a new attribute. */
     public static function missingEntityType(string $code): self
     {
-        return new self(sprintf('Schema::attribute(\'%s\', $entityType) needs an entity type to create a new attribute.', $code));
+        return new self(sprintf('Schema::attribute(\'%s\', $entityTypes) needs at least one entity type to create a new attribute.', $code));
     }
 
     /** Create a new exception for an enum builder constructed without a code for a new enum. */

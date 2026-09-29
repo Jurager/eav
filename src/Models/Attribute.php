@@ -19,7 +19,6 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
 
 /**
  * @property int $id
- * @property string $entity_type
  * @property int $attribute_type_id
  * @property int|null $attribute_group_id
  * @property string $code
@@ -41,6 +40,7 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property-read AttributeGroup|null $group
  * @property-read Collection<int, AttributeEnum> $enums
  * @property-read Collection<int, Locale> $translations
+ * @property-read Collection<int, AttributeEntityType> $entityTypes
  *
  * @mixin Builder
  */
@@ -49,7 +49,6 @@ class Attribute extends Model
     use SoftDeletes;
 
     protected $fillable = [
-        'entity_type',
         'attribute_type_id',
         'attribute_group_id',
         'code',
@@ -150,10 +149,21 @@ class Attribute extends Model
             ->withTimestamps();
     }
 
-    /** Scope a query to only include attributes for a given entity type. */
+    public function entityTypes(): HasMany
+    {
+        return $this->hasMany(AttributeEntityType::class);
+    }
+
+    /** The entity types this attribute is applicable to. */
+    public function applicableEntityTypes(): array
+    {
+        return $this->entityTypes->pluck('entity_type')->all();
+    }
+
+    /** Scope a query to only include attributes applicable to a given entity type. */
     public function scopeForEntity(Builder $query, string $entityType): Builder
     {
-        return $query->where('entity_type', $entityType);
+        return $query->whereHas('entityTypes', fn (Builder $q) => $q->where('entity_type', $entityType));
     }
 
     /** Scope a query to only include searchable attributes. */

@@ -36,9 +36,9 @@ class SchemaFactory
     }
 
     /** Start building an attribute. */
-    public function attribute(Attribute|string $code, ?string $entityType = null): AttributeBuilder
+    public function attribute(Attribute|string $code, string|array|null $entityTypes = null): AttributeBuilder
     {
-        return new AttributeBuilder($this->manager->attribute(), $this->types, $this->locales, $code, $entityType);
+        return new AttributeBuilder($this->manager->attribute(), $this->types, $this->locales, $code, $entityTypes);
     }
 
     /**

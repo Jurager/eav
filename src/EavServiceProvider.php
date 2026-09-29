@@ -175,8 +175,7 @@ class EavServiceProvider extends ServiceProvider
      */
     private static function syncableEntityTypes(): Collection
     {
-        return Eav::$attributeModel::query()
-            ->withoutGlobalScopes()
+        return DB::table('attribute_entity_types')
             ->distinct()
             ->pluck('entity_type')
             ->merge(self::entityTypesWithIndexPaths())

@@ -65,8 +65,8 @@ class ScoutFilterableSyncTest extends FeatureTestCase
         Relation::morphMap(['indexed_product' => IndexedProduct::class]);
 
         $type = $this->createAttributeType('text');
-        $this->createAttribute($type, ['code' => 'color', 'entity_type' => 'indexed_product']);
-        $this->createAttribute($type, ['code' => 'size', 'entity_type' => 'indexed_product']);
+        $this->createAttribute($type, ['code' => 'color', 'entity_types' => ['indexed_product']]);
+        $this->createAttribute($type, ['code' => 'size', 'entity_types' => ['indexed_product']]);
 
         $this->finishCommand();
 

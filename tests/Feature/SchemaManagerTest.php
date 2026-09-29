@@ -43,13 +43,14 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product',
+            'entity_types' => ['product'],
             'attribute_type_id' => $type->id,
             'code' => 'title',
         ]);
 
         $this->assertInstanceOf(Attribute::class, $attr);
-        $this->assertDatabaseHas('attributes', ['code' => 'title', 'entity_type' => 'product']);
+        $this->assertDatabaseHas('attributes', ['code' => 'title']);
+        $this->assertDatabaseHas('attribute_entity_types', ['attribute_id' => $attr->id, 'entity_type' => 'product']);
     }
 
     public function test_attribute_create_dispatches_created_event(): void
@@ -57,7 +58,7 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $this->schema->attribute()->create([
-            'entity_type' => 'product',
+            'entity_types' => ['product'],
             'attribute_type_id' => $type->id,
             'code' => 'title',
         ]);
@@ -70,10 +71,10 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $a1 = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'a1',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'a1',
         ]);
         $a2 = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'a2',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'a2',
         ]);
 
         $this->assertGreaterThan($a1->sort, $a2->sort);
@@ -87,7 +88,7 @@ class SchemaManagerTest extends FeatureTestCase
         $group = $this->schema->group()->create(['code' => 'general']);
 
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product',
+            'entity_types' => ['product'],
             'attribute_type_id' => (string) $type->id,
             'attribute_group_id' => (string) $group->id,
             'code' => 'color',
@@ -103,7 +104,7 @@ class SchemaManagerTest extends FeatureTestCase
         // AttributeType defaults: localizable=false, multiple=false, etc.
 
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product',
+            'entity_types' => ['product'],
             'attribute_type_id' => $type->id,
             'code' => 'constrained',
             'localizable' => true,   // should be forced to false by type constraint
@@ -116,7 +117,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
         $created = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'findme',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'findme',
         ]);
 
         $found = $this->schema->attribute()->find($created->id);
@@ -129,7 +130,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'old',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'old',
         ]);
 
         $this->schema->attribute()->update($attr, ['required' => true]);
@@ -141,7 +142,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'upd',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'upd',
         ]);
 
         $this->schema->attribute()->update($attr, ['required' => true]);
@@ -153,7 +154,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'deleteme',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'deleteme',
         ]);
 
         $this->schema->attribute()->delete($attr);
@@ -165,7 +166,7 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
         $attr = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'del2',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'del2',
         ]);
 
         $this->schema->attribute()->delete($attr);
@@ -177,8 +178,8 @@ class SchemaManagerTest extends FeatureTestCase
     {
         $type = $this->createAttributeType('text');
 
-        $attr = $this->schema->attribute()->findOrCreate('product', 'new_attr', [
-            'entity_type' => 'product',
+        $attr = $this->schema->attribute()->findOrCreate(['product'], 'new_attr', [
+            'entity_types' => ['product'],
             'attribute_type_id' => $type->id,
             'code' => 'new_attr',
         ]);
@@ -192,8 +193,8 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
         $existing = $this->createAttribute($type, ['code' => 'existing', 'required' => false]);
 
-        $this->schema->attribute()->findOrCreate('product', 'existing', [
-            'entity_type' => 'product',
+        $this->schema->attribute()->findOrCreate(['product'], 'existing', [
+            'entity_types' => ['product'],
             'attribute_type_id' => $type->id,
             'code' => 'existing',
             'required' => true,  // should NOT overwrite
@@ -207,13 +208,13 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $a1 = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 's1',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 's1',
         ]);
         $a2 = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 's2',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 's2',
         ]);
         $a3 = $this->schema->attribute()->create([
-            'entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 's3',
+            'entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 's3',
         ]);
 
         // Move a3 to position 0 (first)
@@ -233,9 +234,9 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $created = $this->schema->attribute()->batch([
-            ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch1'],
-            ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch2'],
-            ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'batch3'],
+            ['entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'batch1'],
+            ['entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'batch2'],
+            ['entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'batch3'],
         ]);
 
         $this->assertCount(3, $created);
@@ -249,8 +250,8 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $this->schema->attribute()->batch([
-            ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev1'],
-            ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'ev2'],
+            ['entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'ev1'],
+            ['entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'ev2'],
         ]);
 
         Event::assertDispatchedTimes(AttributeCreated::class, 2);
@@ -261,7 +262,7 @@ class SchemaManagerTest extends FeatureTestCase
         $type = $this->createAttributeType('text');
 
         $this->schema->attribute()->batch([
-            ['entity_type' => 'product', 'attribute_type_id' => $type->id, 'code' => 'silent'],
+            ['entity_types' => ['product'], 'attribute_type_id' => $type->id, 'code' => 'silent'],
         ], false);
 
         Event::assertNotDispatched(AttributeCreated::class);

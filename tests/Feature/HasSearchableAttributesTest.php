@@ -61,7 +61,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
         $this->createAttribute($textType, [
             'code' => 'description',
             'searchable' => true,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();
@@ -83,7 +83,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
         $this->createAttribute($textType, [
             'code' => 'sku',
             'searchable' => false,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();
@@ -98,7 +98,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
         $this->createAttribute($textType, [
             'code' => 'title',
             'searchable' => true,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();
@@ -113,7 +113,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
         $this->createAttribute($textType, [
             'code' => 'title',
             'searchable' => true,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();
@@ -128,7 +128,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
             'code' => 'sku',
             'filterable' => true,
             'searchable' => false,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();
@@ -147,7 +147,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
             'code' => 'sku',
             'filterable' => true,
             'searchable' => false,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();
@@ -163,7 +163,7 @@ class HasSearchableAttributesTest extends FeatureTestCase
             'code' => 'internal_note',
             'filterable' => false,
             'searchable' => false,
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
         ]);
 
         $product = $this->createSearchableProduct();

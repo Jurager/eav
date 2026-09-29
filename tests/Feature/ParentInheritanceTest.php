@@ -339,7 +339,7 @@ class ParentInheritanceTest extends FeatureTestCase
         Relation::morphMap(['searchable_product' => SearchableProduct::class]);
 
         $this->createAttribute($this->type, [
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
             'code' => 'title',
             'searchable' => true,
             'inherit_from_parent' => true,
@@ -365,7 +365,7 @@ class ParentInheritanceTest extends FeatureTestCase
         Relation::morphMap(['searchable_product' => SearchableProduct::class]);
 
         $this->createAttribute($this->type, [
-            'entity_type' => 'searchable_product',
+            'entity_types' => ['searchable_product'],
             'code' => 'title',
             'searchable' => true,
             'inherit_from_parent' => true,
