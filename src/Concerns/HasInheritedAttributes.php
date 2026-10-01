@@ -335,7 +335,8 @@ trait HasInheritedAttributes
             return null;
         }
 
-        return $this->attributeScopeSubquery($relation, $entityIds);
+        return $this->attributeScopeSubquery($relation, $entityIds)
+            ?->forEntity($this->getEntityType());
     }
 
     /** Load entities required for inheritance resolution. */
