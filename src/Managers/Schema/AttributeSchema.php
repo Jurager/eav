@@ -180,6 +180,7 @@ class AttributeSchema extends BaseSchema
             }
 
             $created = $this->query()
+                ->without('entityTypes')
                 ->whereIn('code', array_column($rows, 'code'))
                 ->where('id', '>', $maxIdBefore)
                 ->get()
@@ -188,7 +189,7 @@ class AttributeSchema extends BaseSchema
             $this->saveBatchTranslations($created, $translationMap, $now);
             $this->insertBatchEntityTypes($created, $pivotMap, $now);
 
-            return $created;
+            return $created->load('entityTypes');
         });
 
         if ($fireEvents) {

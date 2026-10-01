@@ -43,6 +43,9 @@ class AttributeManager
 
     protected ?string $entityClass = null;
 
+    /** Entity type the manager was built for by name, when no entity instance is bound. */
+    protected ?string $entityType = null;
+
     public function __construct(
         protected ?Attributable $entity = null,
         private readonly ?FieldFactory $fieldFactory = null,
@@ -67,6 +70,7 @@ class AttributeManager
             $instance = new $entity;
             $manager = static::buildFromAttributable($instance, $registry);
             $manager->entityClass = $entity;
+            $manager->entityType = $instance->getEntityType();
 
             return $manager;
         }
@@ -76,7 +80,10 @@ class AttributeManager
             fn () => Eav::$attributeModel::query()->forEntity($entity)->get(),
         );
 
-        return static::buildFromCollection($attributes);
+        $manager = static::buildFromCollection($attributes);
+        $manager->entityType = $entity;
+
+        return $manager;
     }
 
     /** Return a schema-only manager for an entity or a preloaded attribute collection.
@@ -342,6 +349,7 @@ class AttributeManager
             $this->enumRegistry,
             fn (string $code) => $this->field($code),
             fn (string $code) => $this->entity?->getEntityType()
+                ?? $this->entityType
                 ?? ($this->fields[$code] ?? null)?->attribute()->applicableEntityTypes()[0] ?? null,
         );
     }

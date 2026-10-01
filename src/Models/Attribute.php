@@ -65,6 +65,9 @@ class Attribute extends Model
         'meta',
     ];
 
+    /** Applicable types replaced a column every row carried. */
+    protected $with = ['entityTypes'];
+
     protected static function booted(): void
     {
         static::forceDeleting(fn (Attribute $attribute) => $attribute->translations()->detach());

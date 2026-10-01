@@ -9,9 +9,14 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (Schema::getConnection()->getDriverName() !== 'pgsql') {
+            Schema::table('attributes', function (Blueprint $table) {
+                $table->dropUnique(['entity_type', 'code']);
+                $table->dropIndex(['entity_type', 'searchable']);
+            });
+        }
+
         Schema::table('attributes', function (Blueprint $table) {
-            $table->dropUnique(['entity_type', 'code']);
-            $table->dropIndex(['entity_type', 'searchable']);
             $table->dropColumn('entity_type');
         });
 
@@ -20,11 +25,6 @@ return new class extends Migration
         });
     }
 
-    /**
-     * Best-effort rollback: restores the column and backfills it from the first entity_type
-     * recorded for each attribute in the pivot. An attribute that became applicable to more
-     * than one entity_type since the pivot was introduced loses the extra ones on rollback.
-     */
     public function down(): void
     {
         Schema::table('attributes', function (Blueprint $table) {

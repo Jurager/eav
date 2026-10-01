@@ -7,8 +7,10 @@ namespace Jurager\Eav\Tests\Feature\Schema;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema as DbSchema;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Facades\Schema;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Jobs\SyncSearchable;
@@ -16,6 +18,7 @@ use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
+use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\Service;
 
 class AttributeSharingTest extends FeatureTestCase
@@ -82,6 +85,23 @@ class AttributeSharingTest extends FeatureTestCase
             'entity_id' => $service->id,
             'value_text' => '12',
         ]);
+    }
+
+    public function test_where_attribute_scopes_to_the_morph_type_of_the_calling_model(): void
+    {
+        // Regression guard: the entity type a value is stored under comes from the calling model,
+        // not from the attribute's first applicable type — for a shared attribute those differ.
+        $this->createAttributeType('text');
+        $attribute = Schema::attribute('warranty_months', 'product')->type('text')->create();
+        Schema::attribute('warranty_months', 'service')->type('text')->firstOrCreate();
+
+        $this->assertSame(['product', 'service'], $attribute->fresh()->applicableEntityTypes());
+
+        $service = $this->createService();
+        $service->eav()->set('warranty_months', '12')->save('warranty_months');
+
+        $this->assertSame([$service->id], Service::whereAttribute('warranty_months', '12')->pluck('id')->all());
+        $this->assertCount(0, Product::whereAttribute('warranty_months', '12')->get());
     }
 
     public function test_toggling_searchable_dispatches_sync_for_every_applicable_type(): void
@@ -164,6 +184,23 @@ class AttributeSharingTest extends FeatureTestCase
             'attribute_id' => $attribute->id,
             'entity_type' => 'service',
         ]);
+    }
+
+    public function test_applicable_entity_types_of_a_loaded_list_do_not_query_per_attribute(): void
+    {
+        $this->createAttributeType('text');
+
+        foreach (range(1, 5) as $i) {
+            Schema::attribute("code_{$i}", ['product', 'service'])->type('text')->create();
+        }
+
+        DB::enableQueryLog();
+        DB::flushQueryLog();
+
+        $types = Eav::$attributeModel::query()->get()->map(fn ($attribute) => $attribute->applicableEntityTypes());
+
+        $this->assertCount(2, DB::getQueryLog());
+        $this->assertSame(array_fill(0, 5, ['product', 'service']), $types->all());
     }
 
     public function test_code_is_globally_unique_across_entity_types(): void
