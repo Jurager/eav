@@ -18,6 +18,7 @@ use Jurager\Eav\Builders\Schema\SchemaFactory;
 use Jurager\Eav\Builders\Translator\TranslatorFactory;
 use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Filterable\AttributeEntityTypeFilterResolver;
 use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
@@ -88,9 +89,15 @@ class EavServiceProvider extends ServiceProvider
         $this->app->singleton(AttributeFilterResolver::class);
         $this->app->singleton(AttributeSortResolver::class);
         $this->app->singleton(AttributeEnumUsageResolver::class);
+        $this->app->singleton(AttributeEntityTypeFilterResolver::class);
         $this->app->singleton(AttributeRelationFilterResolver::class);
 
-        $this->app->tag([AttributeFilterResolver::class, AttributeSortResolver::class, AttributeEnumUsageResolver::class], 'filterable.resolvers');
+        $this->app->tag([
+            AttributeFilterResolver::class,
+            AttributeSortResolver::class,
+            AttributeEnumUsageResolver::class,
+            AttributeEntityTypeFilterResolver::class,
+        ], 'filterable.resolvers');
         $this->app->tag(AttributeRelationFilterResolver::class, 'eav.search.resolvers');
 
         $this->app->when(SearchFactory::class)->needs('$resolvers')->giveTagged('eav.search.resolvers');

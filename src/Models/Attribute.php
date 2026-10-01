@@ -154,7 +154,7 @@ class Attribute extends Model
 
     public function entityTypes(): HasMany
     {
-        return $this->hasMany(AttributeEntityType::class);
+        return $this->hasMany(AttributeEntityType::class, 'attribute_id');
     }
 
     /** The entity types this attribute is applicable to. */
