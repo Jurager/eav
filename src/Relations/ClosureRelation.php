@@ -67,8 +67,21 @@ class ClosureRelation extends Relation
     /** Match the results to their parents. */
     public function match(array $models, Collection $results, $relation): array
     {
+        $resolved = [];
+
         foreach ($models as $model) {
-            $model->setRelation($relation, $this->resolveFor($model));
+            $query = $this->resolveQuery($model);
+
+            if ($query === null) {
+                $model->setRelation($relation, $this->related->newCollection());
+
+                continue;
+            }
+
+            // Parents whose scope resolves to the same query share one round trip and one set of models.
+            $key = $query->toRawSql();
+
+            $model->setRelation($relation, $resolved[$key] ??= $query->get());
         }
 
         return $models;
@@ -105,35 +118,36 @@ class ClosureRelation extends Relation
     private function queryForParent(): ?Builder
     {
         if (! $this->resolvedQuerySet) {
-            $this->resolvedQuery = self::scopedQuery($this->resolver, $this->parent);
+            $this->resolvedQuery = $this->scopedQuery($this->parent);
             $this->resolvedQuerySet = true;
         }
 
         return $this->resolvedQuery;
     }
 
-    /** @return Collection<int, TRelatedModel> */
-    protected function resolveFor(Model $parent): Collection
+    /** Resolve the query for a parent, replaying the calls made through the relation onto it. */
+    private function resolveQuery(Model $parent): ?Builder
     {
-        $query = self::scopedQuery($this->resolver, $parent);
+        $query = $this->scopedQuery($parent);
 
         if ($query === null) {
-            return $this->related->newCollection();
+            return null;
         }
 
         foreach ($this->queryCallbacks as [$method, $parameters]) {
             $query->$method(...$parameters);
         }
 
-        return $query->get();
+        return $query;
     }
 
     /**
-     * @param  Closure(Model): (Builder<TRelatedModel>|null)  $resolver
      * @return Builder<TRelatedModel>|null
      */
-    private static function scopedQuery(Closure $resolver, Model $parent): ?Builder
+    private function scopedQuery(Model $parent): ?Builder
     {
-        return $resolver($parent)?->setEagerLoads([]);
+        $query = ($this->resolver)($parent);
+
+        return $query?->setEagerLoads($this->query->getEagerLoads() + $query->getEagerLoads());
     }
 }
