@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature;
 
+use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Http\Middleware\SetLocaleContext;
 use Jurager\Eav\Managers\SchemaManager;
 use Jurager\Eav\Managers\TranslationManager;
 use Jurager\Eav\Registry\AttributeTypeRegistry;
@@ -155,5 +158,24 @@ class EavServiceProviderTest extends TestCase
         $this->assertTrue(
             Schema::hasTable('attribute_enums')
         );
+    }
+
+    // -----------------------------------------------------------------------
+    // Locale context
+    // -----------------------------------------------------------------------
+
+    public function test_locale_context_is_registered_in_api_group_only(): void
+    {
+        $kernel = app(Kernel::class);
+
+        $this->assertContains(SetLocaleContext::class, $kernel->getMiddlewareGroups()['api']);
+        $this->assertNotContains(SetLocaleContext::class, $kernel->getGlobalMiddleware());
+    }
+
+    public function test_routes_outside_api_group_do_not_need_locales(): void
+    {
+        Route::get('/health', fn () => 'ok');
+
+        $this->get('/health')->assertOk();
     }
 }

@@ -136,11 +136,12 @@ class EavServiceProvider extends ServiceProvider
         $this->registerLocaleContext();
     }
 
+    /** Prepend SetLocaleContext to the api middleware group. */
     private function registerLocaleContext(): void
     {
         $this->callAfterResolving(Kernel::class, function (Kernel $kernel): void {
-            if (method_exists($kernel, 'prependMiddleware')) {
-                $kernel->prependMiddleware(SetLocaleContext::class);
+            if (method_exists($kernel, 'prependMiddlewareToGroup')) {
+                $kernel->prependMiddlewareToGroup('api', SetLocaleContext::class);
             }
         });
     }
