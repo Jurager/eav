@@ -140,6 +140,64 @@ class SearchTest extends TestCase
         $this->assertSame('attributes.sku', $this->resolve('sku'));
     }
 
+    public function test_a_field_declared_boolean_via_filterable_fields_is_cast_from_a_query_string(): void
+    {
+        $this->withModel(new class extends Model
+        {
+            public function filterableFields(): array
+            {
+                return ['is_active' => 'boolean'];
+            }
+        });
+
+        // Query strings only ever carry "1"/"0", never a native bool.
+        $this->search->filter(['is_active' => '1']);
+
+        $this->assertSame(true, $this->search->getFilter()->filters['is_active']);
+    }
+
+    public function test_a_field_declared_boolean_via_eloquent_casts_is_cast_from_a_query_string(): void
+    {
+        $this->withModel(new class extends Model
+        {
+            protected $casts = ['is_active' => 'boolean'];
+        });
+
+        $this->search->filter(['is_active' => '0']);
+
+        $this->assertSame(false, $this->search->getFilter()->filters['is_active']);
+    }
+
+    public function test_a_boolean_field_wrapped_in_an_eq_operator_is_cast_too(): void
+    {
+        $this->withModel(new class extends Model
+        {
+            public function filterableFields(): array
+            {
+                return ['is_active' => 'boolean'];
+            }
+        });
+
+        $this->search->filter(['is_active' => ['eq' => '1']]);
+
+        $this->assertSame(true, $this->search->getFilter()->filters['is_active']);
+    }
+
+    public function test_a_field_not_declared_boolean_is_left_untouched(): void
+    {
+        $this->withModel(new class extends Model
+        {
+            public function filterableFields(): array
+            {
+                return ['is_active' => 'boolean', 'type_id' => ['eq', 'in']];
+            }
+        });
+
+        $this->search->filter(['type_id' => '1']);
+
+        $this->assertSame('1', $this->search->getFilter()->filters['type_id']);
+    }
+
     /** Compile one side of a partitioned search and read back its filter. */
     private function partitionFilter(bool $matching): ?string
     {

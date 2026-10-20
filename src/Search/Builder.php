@@ -191,7 +191,7 @@ class Builder
             $key = (string) $key;
 
             if (! str_contains($key, '.') || $this->directlyIndexed($key, $model)) {
-                $result[$key] = $value;
+                $result[$key] = $this->castBooleanFilterValue($key, $value, $model);
 
                 continue;
             }
@@ -206,7 +206,7 @@ class Builder
 
             [$resolvedKey, $resolvedValue] = $resolved ?? [$key, $value];
 
-            $result[$resolvedKey] = $resolvedValue;
+            $result[$resolvedKey] = $this->castBooleanFilterValue($resolvedKey, $resolvedValue, $model);
         }
 
         return $result;
@@ -216,6 +216,23 @@ class Builder
     private function directlyIndexed(string $key, Model $model): bool
     {
         return $model instanceof InteractsWithIndex && array_key_exists($key, $model->indexAliases());
+    }
+
+    /** Coerce a filter value to a native bool when the model declares the field boolean. */
+    private function castBooleanFilterValue(string $key, mixed $value, Model $model): mixed
+    {
+        $config = method_exists($model, 'filterableFields') ? ($model->filterableFields()[$key] ?? null) : null;
+
+        $isBoolean = $config === 'boolean' || in_array($model->getCasts()[$key] ?? '', ['bool', 'boolean'], true);
+
+        if (! $isBoolean) {
+            return $value;
+        }
+
+        $raw = is_array($value) ? ($value['eq'] ?? null) : $value;
+        $cast = filter_var($raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        return $cast ?? $value;
     }
 
     /** Check if filter is active for key. */
