@@ -14,6 +14,7 @@ use Jurager\Eav\Concerns\HasScopedRelations;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\BelongsToScoped;
 
@@ -78,15 +79,20 @@ class EntityAttribute extends Model
         if ($parent === null) {
             return $query->where('entity_id', $entity->id);
         }
+        
+        $heldByVariant = static fn (Builder $attribute) => $attribute->whereHeldBy(HeldBy::Variant);
 
         $own = static::query()
             ->select('attribute_id')
             ->where('entity_type', $entity->getEntityType())
             ->where('entity_id', $entity->id)
-            ->whereHasValue();
+            ->whereHasValue()
+            ->whereHas('attribute', $heldByVariant);
 
         return $query->where(fn (Builder $rows) => $rows
-            ->where(fn (Builder $ownRow) => $ownRow->where('entity_id', $entity->id)->whereHasValue())
+            ->where(fn (Builder $ownRow) => $ownRow->where('entity_id', $entity->id)
+                ->whereHasValue()
+                ->whereHas('attribute', $heldByVariant))
             ->orWhere(fn (Builder $inherited) => $inherited
                 ->where('entity_id', $parent->id)
                 ->whereNotIn('attribute_id', $own)

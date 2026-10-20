@@ -439,7 +439,9 @@ class AttributeManager
             return null;
         }
 
-        $filled = $own->filter(static fn (Model $value): bool => $value->hasValue());
+        $filled = $own->loadMissing('attribute')->filter(
+            static fn (Model $value): bool => $value->hasValue() && $value->attribute?->isHeldBy(HeldBy::Variant)
+        );
         $overridden = $filled->pluck('attribute_id')->all();
 
         return $filled->concat($parent->attribute_values->loadMissing('attribute')->filter(

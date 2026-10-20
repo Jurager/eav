@@ -86,6 +86,29 @@ class ParentInheritanceTest extends FeatureTestCase
         $this->assertSame('Variant title', $variant->fresh()->eav()->value('title'));
     }
 
+    public function test_held_by_parent_attribute_ignores_a_stray_value_on_the_variant(): void
+    {
+        $attribute = $this->createAttribute($this->type, ['code' => 'display', 'inherit_from_parent' => true, 'held_by' => HeldBy::Parent]);
+
+        $parent = $this->createProduct();
+        $parent->eav()->set('display', 'OLED')->save('display');
+
+        $variant = $this->createVariant($parent);
+
+        // held_by:parent means the variant's own side never fills this attribute in — but legacy/import
+        // data can still leave a row behind. It must not win over the parent's value when read.
+        DB::table('entity_attribute')->insert([
+            'entity_type' => 'product',
+            'entity_id' => $variant->id,
+            'attribute_id' => $attribute->id,
+            'value_text' => 'LCD',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertSame('OLED', $variant->fresh()->eav()->value('display'));
+    }
+
     public function test_value_is_not_inherited_when_the_attribute_forbids_it(): void
     {
         $this->createAttribute($this->type, ['code' => 'sku', 'inherit_from_parent' => false, 'held_by' => HeldBy::Both]);
