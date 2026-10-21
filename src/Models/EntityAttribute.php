@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Support\Carbon;
 use Jurager\Eav\Concerns\HasScopedRelations;
@@ -15,7 +16,10 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Enums\HeldBy;
+use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Relations\BelongsToAttribute;
 use Jurager\Eav\Relations\BelongsToScoped;
 
 /**
@@ -31,6 +35,7 @@ use Jurager\Eav\Relations\BelongsToScoped;
  * @property string|null $value_datetime
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property-read Model|null $entity
  * @property-read Attribute|null $attribute
  * @property-read AttributeEnum|null $enum
  * @property-read Collection<int, Locale> $translations
@@ -40,6 +45,8 @@ class EntityAttribute extends Model
     use HasScopedRelations;
 
     protected $table = 'entity_attribute';
+
+    protected $hidden = ['entity'];
 
     protected $fillable = [
         'entity_id', 'entity_type', 'attribute_id',
@@ -64,7 +71,11 @@ class EntityAttribute extends Model
 
         static::retrieved(function (EntityAttribute $entityAttribute) {
             if (! $entityAttribute->relationLoaded('attribute') && $entityAttribute->attribute_id !== null && $entityAttribute->entity_type !== null) {
-                $entityAttribute->setRelation('attribute', app(AttributeRegistry::class)->get($entityAttribute->entity_type, $entityAttribute->attribute_id));
+                $cached = app(AttributeRegistry::class)->cached($entityAttribute->entity_type, $entityAttribute->attribute_id);
+
+                if ($cached !== null) {
+                    $entityAttribute->setRelation('attribute', $cached);
+                }
             }
         });
     }
@@ -79,7 +90,7 @@ class EntityAttribute extends Model
         if ($parent === null) {
             return $query->where('entity_id', $entity->id);
         }
-        
+
         $heldByVariant = static fn (Builder $attribute) => $attribute->whereHeldBy(HeldBy::Variant);
 
         $own = static::query()
@@ -118,7 +129,34 @@ class EntityAttribute extends Model
 
     public function attribute(): BelongsTo
     {
-        return $this->belongsTo(Eav::$attributeModel);
+        $related = $this->newRelatedInstance(Eav::$attributeModel);
+
+        return new BelongsToAttribute($related->newQuery(), $this, 'attribute_id', $related->getKeyName(), 'attribute');
+    }
+
+    public function entity(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    public function field(): Field
+    {
+        return app(FieldFactory::class)->make($this->attribute);
+    }
+
+    /** Resolve a stored value through its field type and actual owning entity. */
+    public function resolveValue(): mixed
+    {
+        $field = $this->field();
+        $raw = $field->read($this);
+
+        if ($raw === null) {
+            return null;
+        }
+
+        $owner = $this->entity;
+
+        return $field->resolve($raw, $owner instanceof Attributable ? $owner : null);
     }
 
     public function enum(): BelongsToScoped

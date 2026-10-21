@@ -50,6 +50,11 @@ class MediaField extends File
         return (int) parent::normalize($value);
     }
 
+    public function eagerLoads(): array
+    {
+        return $this->entity instanceof InteractsWithMedia ? ['media.conversions'] : [];
+    }
+
     public function resolve(mixed $rawValue, ?Attributable $entity = null): mixed
     {
         if ($rawValue === null || ! $entity instanceof InteractsWithMedia) {

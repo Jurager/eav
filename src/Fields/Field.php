@@ -47,6 +47,16 @@ abstract class Field
         return $rawValue;
     }
 
+    /**
+     * Relations on the owning entity needed to resolve this field's stored value.
+     *
+     * @return list<string>
+     */
+    public function eagerLoads(): array
+    {
+        return [];
+    }
+
     public function isEnum(): bool
     {
         return false;

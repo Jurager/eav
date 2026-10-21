@@ -9,6 +9,24 @@ use Jurager\Eav\Models\EntityAttribute;
 
 class EagerLoadsSparseFieldConstraintTest extends FeatureTestCase
 {
+    public function test_sparse_fields_also_constrain_the_values_inherited_from_the_parent(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color', 'inherit_from_parent' => true]);
+        $size = $this->createAttribute($type, ['code' => 'size', 'inherit_from_parent' => true]);
+        $parent = $this->createProduct();
+        $variant = $this->createProduct();
+        $variant->update(['parent_id' => $parent->id]);
+
+        EntityAttribute::create(['entity_id' => $parent->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+        EntityAttribute::create(['entity_id' => $parent->id, 'entity_type' => 'product', 'attribute_id' => $size->id, 'value_text' => 'M']);
+
+        $variant->load($variant->eagerLoads(['attribute_values'], ['color']));
+
+        $this->assertSame(['color'], $variant->eav()->values()->map(fn ($value) => $value->attribute->code)->all());
+        $this->assertCount(1, $variant->parent->attribute_values);
+    }
+
     public function test_eager_loads_load_the_values_even_when_they_were_not_included(): void
     {
         $type = $this->createAttributeType('text');
@@ -16,7 +34,7 @@ class EagerLoadsSparseFieldConstraintTest extends FeatureTestCase
         $product = $this->createProduct();
 
         // Read through the entity's attributes, they are loaded (with the translations they need) either way.
-        $expected = ['parent.attribute_values.attribute.type', 'attribute_values.translations'];
+        $expected = ['attribute_values.attribute.type', 'attribute_values.translations', 'parent.attribute_values.attribute.type', 'parent.attribute_values.translations'];
 
         $this->assertSame($expected, $product->eagerLoads([]));
         $this->assertSame($expected, $product->eagerLoads(['prices']));
@@ -28,11 +46,10 @@ class EagerLoadsSparseFieldConstraintTest extends FeatureTestCase
         $this->createAttribute($type, ['code' => 'color']);
         $product = $this->createProduct();
 
-        // No "attribute_values" key at all — unconstrained, unchanged from before sparse fields
-        // existed. The fixture declares a parent relation, so inheritedValueRelations() still
-        // contributes its own (unrelated) entry.
-        $this->assertSame(['parent.attribute_values.attribute.type'], $product->eagerLoads(['attribute_values']));
-        $this->assertSame(['parent.attribute_values.attribute.type'], $product->eagerLoads(['attribute_values'], null));
+        // Value metadata and translations are dependencies even when only values were included.
+        // No closure constrains the rows when there is no fieldset.
+        $this->assertSame(['attribute_values.attribute.type', 'attribute_values.translations', 'parent.attribute_values.attribute.type', 'parent.attribute_values.translations'], $product->eagerLoads(['attribute_values']));
+        $this->assertSame(['attribute_values.attribute.type', 'attribute_values.translations', 'parent.attribute_values.attribute.type', 'parent.attribute_values.translations'], $product->eagerLoads(['attribute_values'], null));
         $this->assertArrayNotHasKey('attribute_values', $product->eagerLoads(['attribute_values']));
     }
 

@@ -46,6 +46,14 @@ class AttributeRegistry
         return $this->resolved($entityType, $id, fn () => Eav::$attributeModel::query()->forEntity($entityType)->find($id));
     }
 
+    /** Reuse a known attribute without querying it; freshness is checked once per request. */
+    public function cached(string $entityType, int $id): ?Attribute
+    {
+        $this->dropStaleCaches($entityType);
+
+        return (self::$byEntityType[$entityType] ?? null)?->get($id) ?? self::$resolvedItems[$entityType][$id] ?? null;
+    }
+
     /** Clear the cache. */
     public function forget(?string $entityType = null): void
     {

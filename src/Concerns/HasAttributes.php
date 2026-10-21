@@ -136,7 +136,9 @@ trait HasAttributes
     /** Define Eloquent relation to entity_attribute values. */
     public function attributeValues(): MorphMany
     {
-        return $this->morphMany(Eav::$entityAttributeModel, 'entity');
+        $relation = $this->morphMany(Eav::$entityAttributeModel, 'entity');
+
+        return method_exists($relation, 'chaperone') ? $relation->chaperone('entity') : $relation;
     }
 
     /** Get attribute validator instance. */

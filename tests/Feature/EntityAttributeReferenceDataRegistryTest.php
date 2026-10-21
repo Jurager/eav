@@ -10,6 +10,37 @@ use Jurager\Eav\Registry\AttributeRegistry;
 
 class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
 {
+    public function test_attribute_relation_preserves_eloquent_default_models(): void
+    {
+        $value = new EntityAttribute(['entity_type' => 'product']);
+
+        $attribute = $value->attribute()->withDefault(['code' => 'default'])->getResults();
+
+        $this->assertSame('default', $attribute->code);
+    }
+
+    public function test_eager_loading_a_cold_batch_does_not_query_attributes_once_per_code(): void
+    {
+        $type = $this->createAttributeType('text');
+        $product = $this->createProduct();
+
+        foreach (range(1, 20) as $i) {
+            $attribute = $this->createAttribute($type, ['code' => "field_{$i}"]);
+            EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $attribute->id, 'value_text' => (string) $i]);
+        }
+
+        app(AttributeRegistry::class)->forget();
+        DB::enableQueryLog();
+
+        $values = EntityAttribute::query()->with('attribute')->get();
+
+        $queries = array_filter(DB::getQueryLog(), fn ($query) => str_contains($query['query'], 'from "attributes"') && ! str_contains($query['query'], 'count(*)'));
+        DB::disableQueryLog();
+
+        $this->assertCount(20, $values);
+        $this->assertCount(1, $queries, 'The eager relation must be fetched once, without redundant point lookups from retrieved events.');
+    }
+
     public function test_attribute_relation_is_populated_from_registry_without_a_query(): void
     {
         $type = $this->createAttributeType('text');
@@ -49,8 +80,8 @@ class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
 
         // Two independent, unbatched fetches — mirrors a resource serializing each
         // row on its own (e.g. EntityAttributeResource::resolveAttributeValue()).
-        EntityAttribute::query()->where('value_text', 'A')->first();
-        EntityAttribute::query()->where('value_text', 'B')->first();
+        EntityAttribute::query()->where('value_text', 'A')->first()->attribute;
+        EntityAttribute::query()->where('value_text', 'B')->first()->attribute;
 
         $attributeQueries = array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"'));
 

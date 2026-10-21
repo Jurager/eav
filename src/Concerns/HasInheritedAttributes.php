@@ -15,6 +15,7 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
+use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Relations\ClosureRelation;
@@ -78,7 +79,7 @@ trait HasInheritedAttributes
     {
         $parent = $this->attributeParentRelationName();
 
-        return $parent !== null ? ["{$parent}.attribute_values.attribute.type"] : [];
+        return $parent !== null ? ["{$parent}.attribute_values.attribute.type", "{$parent}.attribute_values.translations"] : [];
     }
 
     /**
@@ -91,16 +92,32 @@ trait HasInheritedAttributes
      */
     public function eagerLoads(array $included, ?array $fields = null): array
     {
-        $relations = $this->inheritedValueRelations();
+        $relations = ['attribute_values.attribute.type', 'attribute_values.translations', ...$this->inheritedValueRelations()];
 
         if ($fields !== null) {
             $relations['attribute_values'] = $this->attributeValuesSparseConstraint($fields);
+
+            if (($parent = $this->attributeParentRelationName()) !== null) {
+                $relations["{$parent}.attribute_values"] = $relations['attribute_values'];
+            }
         }
 
-        // An entity is read through its attributes whether or not `attribute_values` was included, so its
-        // values are loaded once, here; the translations they need are loaded with them unless the include does.
-        if (! in_array('attribute_values', $included, true)) {
-            $relations[] = 'attribute_values.translations';
+        $attributes = app(AttributeRegistry::class)->all($this->getEntityType());
+
+        if ($fields !== null) {
+            $attributes = $attributes->whereIn('code', $fields);
+        }
+
+        $factory = app(FieldFactory::class);
+
+        foreach ($attributes as $attribute) {
+            foreach ($factory->make($attribute)->forEntity($this)->eagerLoads() as $relation) {
+                $relations[] = $relation;
+
+                if (($parent = $this->attributeParentRelationName()) !== null && $attribute->inherit_from_parent) {
+                    $relations[] = "{$parent}.{$relation}";
+                }
+            }
         }
 
         return $relations;
@@ -178,7 +195,7 @@ trait HasInheritedAttributes
 
     /**
      * Determine whether the entity's effective scope — own, or inherited from its parent when it carries none itself.
-     * 
+     *
      * @param  array<int>  $rootIds
      */
     public function attributeScopeMatchesTree(array $rootIds): bool

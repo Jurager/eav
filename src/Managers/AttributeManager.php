@@ -309,7 +309,10 @@ class AttributeManager
                 );
             }
 
-            return $collection->loadMissing(['attribute.type', 'translations'])->map($transform)->values();
+            $collection->loadMissing(['attribute.type', 'translations']);
+            $this->loadValueRelations($collection);
+
+            return $collection->map($transform)->values();
         }
 
         $query = $this->entityQuery();
@@ -327,7 +330,31 @@ class AttributeManager
             'attribute.translations', 'attribute.enums.translations', 'translations',
         ]);
 
-        return $paginated ? $query->paginate($paginated)->through($transform) : $query->get()->map($transform);
+        $result = $paginated ? $query->paginate($paginated) : $query->get();
+        $values = $paginated ? $result->getCollection() : $result;
+        $this->loadValueRelations($values);
+
+        return $paginated ? $result->through($transform) : $result->map($transform);
+    }
+
+    /** Load field dependencies once for the owners represented by a batch of stored values. */
+    private function loadValueRelations(Collection $values): void
+    {
+        $entity = $this->resolveEntity();
+        $parent = $entity->attributeParent();
+        $owners = new EloquentCollection;
+        $relations = [];
+
+        foreach ($values as $value) {
+            $owner = $parent !== null && (string) $value->entity_id === (string) $parent->getKey() ? $parent : $entity;
+            $value->setRelation('entity', $owner);
+            $owners->push($owner);
+            array_push($relations, ...$this->makeField($value->attribute)->eagerLoads());
+        }
+
+        if ($relations !== []) {
+            $owners->unique()->loadMissing(array_unique($relations));
+        }
     }
 
     /** Return memoized search index data. */
