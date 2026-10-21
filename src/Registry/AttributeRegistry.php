@@ -18,6 +18,9 @@ class AttributeRegistry
     /** @var array<string, Collection<int, Attribute>> */
     private static array $byEntityType = [];
 
+    /** @var array<string, Collection<string, Attribute|null>> */
+    private static array $byCode = [];
+
     /** Get all cached attributes for a given entity type, keyed by ID. */
     public function all(string $entityType): Collection
     {
@@ -32,6 +35,40 @@ class AttributeRegistry
     public function has(string $entityType, int $id): bool
     {
         return $this->get($entityType, $id) !== null;
+    }
+
+    /**
+     * Resolve only the requested definitions, remembering missing codes as well as matches.
+     *
+     * @param  list<string>  $codes
+     * @return Collection<int, Attribute>
+     */
+    public function forCodes(string $entityType, array $codes): Collection
+    {
+        if ($codes === []) {
+            return collect();
+        }
+
+        $this->dropStaleCaches($entityType);
+        $cached = self::$byCode[$entityType] ??= collect();
+        $missing = array_values(array_filter(array_unique($codes), fn (string $code): bool => ! $cached->has($code)));
+
+        if ($missing !== []) {
+            $attributes = isset(self::$byEntityType[$entityType])
+                ? collect()
+                : Eav::$attributeModel::query()->forEntity($entityType)->whereIn('code', $missing)->get();
+
+            foreach ($missing as $code) {
+                $cached->put($code, null);
+            }
+
+            foreach ($attributes as $attribute) {
+                $cached->put($attribute->code, $attribute);
+                self::$resolvedItems[$entityType][$attribute->getKey()] = $attribute;
+            }
+        }
+
+        return collect($codes)->unique()->map(fn (string $code) => $cached->get($code))->filter()->values();
     }
 
     /** Get an attribute by its ID, scoped to the given entity type, without loading the whole entity type for a single lookup. */
@@ -65,7 +102,7 @@ class AttributeRegistry
             return;
         }
 
-        unset(self::$byEntityType[$entityType]);
+        unset(self::$byEntityType[$entityType], self::$byCode[$entityType]);
         $this->forgetTableChange($entityType);
         $this->forgetResolved($entityType);
     }
@@ -74,6 +111,7 @@ class AttributeRegistry
     public static function flush(): void
     {
         self::$byEntityType = [];
+        self::$byCode = [];
         static::flushTableChanges();
         static::flushResolved();
     }
@@ -82,7 +120,7 @@ class AttributeRegistry
     private function dropStaleCaches(string $entityType): void
     {
         if ($this->tableChanged(fn () => $this->stamp($entityType), $entityType)) {
-            unset(self::$byEntityType[$entityType]);
+            unset(self::$byEntityType[$entityType], self::$byCode[$entityType]);
             $this->forgetResolved($entityType);
         }
     }
@@ -96,6 +134,8 @@ class AttributeRegistry
             ->forEntity($entityType)
             ->get()
             ->keyBy('id');
+
+        self::$byCode[$entityType] = self::$byEntityType[$entityType]->keyBy('code');
 
         $this->forgetResolved($entityType);
     }

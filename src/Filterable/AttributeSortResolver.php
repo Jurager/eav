@@ -10,13 +10,20 @@ use Illuminate\Database\Query\JoinClause;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\IndexCapability;
-use Jurager\Eav\Managers\AttributeManager;
+use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Builder as SearchBuilder;
 use Jurager\Filterable\Contracts\SortResolver;
 
 class AttributeSortResolver implements SortResolver
 {
+    public function __construct(
+        private readonly AttributeRegistry $attributes,
+        private readonly FieldFactory $fields,
+        private readonly LocaleRegistry $locales,
+    ) {}
+
     /** Resolve sort order for EAV attributes, in the database or in the search index. */
     public function resolve(object $query, string $field, string $direction, Model $model, array $context = []): bool
     {
@@ -29,12 +36,14 @@ class AttributeSortResolver implements SortResolver
         }
 
         $entityType = $model->getEntityType();
-        $eavField = AttributeManager::for($entityType)->field($field);
+        $attribute = $this->attributes->forCodes($entityType, [$field])->first();
 
         // Not an attribute of this entity — leave the field to the remaining resolvers.
-        if (! $eavField) {
+        if ($attribute === null) {
             return false;
         }
+
+        $eavField = $this->fields->make($attribute);
 
         $qualifiedKey = $model->qualifyColumn($model->getKeyName());
         $valuesClass = Eav::$entityAttributeModel;
@@ -91,9 +100,8 @@ class AttributeSortResolver implements SortResolver
     /** Resolve the current locale ID from registry. */
     private function resolveLocaleId(): ?int
     {
-        $registry = app(LocaleRegistry::class);
-        $codes = $registry->get();
+        $codes = $this->locales->get();
 
-        return empty($codes) ? null : $registry->find($codes[0]);
+        return empty($codes) ? null : $this->locales->find($codes[0]);
     }
 }

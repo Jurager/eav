@@ -317,4 +317,63 @@ class AttributeRegistryTest extends TestCase
         $this->assertCount(2, $this->registry->all('product'));
         $this->assertCount(1, $this->registry->all('category'));
     }
+
+    public function test_codes_are_scoped_and_reuse_the_same_definition_for_id_lookups(): void
+    {
+        $attributes = $this->registry->forCodes('product', ['price', 'code', 'missing']);
+
+        $this->assertSame(['price'], $attributes->pluck('code')->all());
+        DB::enableQueryLog();
+
+        $this->assertSame($attributes->first(), $this->registry->get('product', $this->price->id));
+        $this->assertCount(0, $this->registry->forCodes('product', ['code', 'missing']));
+        $this->assertSame([], DB::getQueryLog());
+        $this->assertSame(['code'], $this->registry->forCodes('category', ['code'])->pluck('code')->all());
+    }
+
+    public function test_code_lookups_reuse_a_complete_schema_without_querying_again(): void
+    {
+        $all = $this->registry->all('product');
+        DB::enableQueryLog();
+
+        $this->assertSame($all->get($this->price->id), $this->registry->forCodes('product', ['price'])->first());
+        $this->assertTrue($this->registry->forCodes('product', ['missing'])->isEmpty());
+        $this->assertSame([], DB::getQueryLog());
+    }
+
+    public function test_partial_code_lookups_do_not_replace_a_complete_schema(): void
+    {
+        $this->assertCount(1, $this->registry->forCodes('product', ['price']));
+        $this->assertCount(2, $this->registry->all('product'));
+        $this->assertSame(['name'], $this->registry->forCodes('product', ['name'])->pluck('code')->all());
+    }
+
+    public function test_missing_codes_are_invalidated_when_an_attribute_is_created(): void
+    {
+        $this->assertTrue($this->registry->forCodes('product', ['weight'])->isEmpty());
+        $attribute = $this->createAttribute($this->name->type, 'weight', 2, ['product']);
+
+        $this->assertSame($attribute->id, $this->registry->forCodes('product', ['weight'])->first()->id);
+    }
+
+    public function test_code_lookups_detect_external_edits_on_the_next_request(): void
+    {
+        $this->registry->forCodes('product', ['price', 'cost']);
+        DB::table('attributes')->where('id', $this->price->id)->update(['code' => 'cost', 'updated_at' => now()->addMinute()]);
+        $this->nextRequest();
+
+        $this->assertSame(['cost'], $this->registry->forCodes('product', ['price', 'cost'])->pluck('code')->all());
+    }
+
+    public function test_unchanged_code_lookups_only_check_freshness_on_the_next_request(): void
+    {
+        $this->registry->forCodes('product', ['price', 'missing']);
+        $this->nextRequest();
+        DB::enableQueryLog();
+
+        $this->registry->forCodes('product', ['price', 'missing']);
+        $this->registry->forCodes('product', ['price']);
+
+        $this->assertSame(1, $this->queriesOnAttributes());
+    }
 }

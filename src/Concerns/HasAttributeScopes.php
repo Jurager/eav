@@ -6,15 +6,15 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Jurager\Eav\Managers\AttributeManager;
 use Jurager\Eav\Support\AttributeQueryBuilder;
+use Jurager\Eav\Support\AttributeQueryFactory;
 
 trait HasAttributeScopes
 {
     /** Get attribute filter query builder. */
     protected function attributeFilterBuilder(): AttributeQueryBuilder
     {
-        return AttributeManager::for($this->getEntityType())->builder();
+        return app(AttributeQueryFactory::class)->for($this->getEntityType());
     }
 
     /** Filter by single attribute value. */

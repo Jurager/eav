@@ -102,11 +102,10 @@ trait HasInheritedAttributes
             }
         }
 
-        $attributes = app(AttributeRegistry::class)->all($this->getEntityType());
-
-        if ($fields !== null) {
-            $attributes = $attributes->whereIn('code', $fields);
-        }
+        $registry = app(AttributeRegistry::class);
+        $attributes = $fields === null
+            ? $registry->all($this->getEntityType())
+            : $registry->forCodes($this->getEntityType(), $fields);
 
         $factory = app(FieldFactory::class);
 
@@ -136,8 +135,7 @@ trait HasInheritedAttributes
     public static function fieldRelations(array $fields): array
     {
         $codes = app(AttributeRegistry::class)
-            ->all((new static)->getEntityType())
-            ->whereIn('code', $fields)
+            ->forCodes((new static)->getEntityType(), $fields)
             ->pluck('code')
             ->values()
             ->all();
@@ -149,8 +147,7 @@ trait HasInheritedAttributes
     protected function attributeValuesSparseConstraint(array $fields): Closure
     {
         $ids = app(AttributeRegistry::class)
-            ->all($this->getEntityType())
-            ->whereIn('code', $fields)
+            ->forCodes($this->getEntityType(), $fields)
             ->pluck('id')
             ->all();
 
