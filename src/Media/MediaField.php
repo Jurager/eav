@@ -61,7 +61,11 @@ class MediaField extends File
             return null;
         }
 
-        return $entity->getMedia($this->code())->firstWhere('id', (int) $rawValue);
+        $id = (int) $rawValue;
+
+        return $entity->getMedia($this->code())->first(
+            static fn (Media $media) => $media->getAttribute('id') == $id,
+        );
     }
 
     public function indexData(): array
