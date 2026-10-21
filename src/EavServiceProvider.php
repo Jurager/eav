@@ -45,6 +45,7 @@ use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
 use Jurager\Eav\Search\SearchFactory;
 use Jurager\Eav\Support\AttributeInheritanceResolver;
 use Jurager\Eav\Support\AttributeQueryFactory;
+use Jurager\Eav\Support\AttributeValueSorter;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Support\MediaCollectionResolverRegistry;
 
@@ -75,6 +76,7 @@ class EavServiceProvider extends ServiceProvider
         // Managers & Support
         $this->app->singleton(AttributeInheritanceResolver::class);
         $this->app->scoped(AttributeQueryFactory::class);
+        $this->app->scoped(AttributeValueSorter::class);
         $this->app->scoped(TranslationManager::class);
         $this->app->scoped(SchemaManager::class);
         $this->app->scoped(Engine::class);

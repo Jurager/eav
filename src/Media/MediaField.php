@@ -7,6 +7,7 @@ namespace Jurager\Eav\Media;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\File;
+use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Media\Contracts\InteractsWithMedia;
 use Jurager\Media\Conversions\Conversion;
 use Jurager\Media\MediaCollection;
@@ -66,6 +67,20 @@ class MediaField extends File
         return $entity->getMedia($this->code())->first(
             static fn (Media $media) => $media->getAttribute('id') == $id,
         );
+    }
+
+    public function sortOrder(EntityAttribute $value): int
+    {
+        $raw = $this->read($value);
+
+        if ($raw === null) {
+            return PHP_INT_MAX;
+        }
+
+        $owner = $value->entity;
+        $media = $this->resolve($raw, $owner instanceof Attributable ? $owner : null);
+
+        return $media instanceof Media ? ($media->order_column ?? PHP_INT_MAX) : PHP_INT_MAX;
     }
 
     public function indexData(): array

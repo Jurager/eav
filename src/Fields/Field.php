@@ -10,6 +10,7 @@ use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Concerns\Indexable;
 use Jurager\Eav\Fields\Concerns\ValidatesPayload;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 
@@ -55,6 +56,12 @@ abstract class Field
     public function eagerLoads(): array
     {
         return [];
+    }
+
+    /** Order a stored value among the other values of this field; equal keys retain storage order. */
+    public function sortOrder(EntityAttribute $value): int
+    {
+        return PHP_INT_MAX;
     }
 
     public function isEnum(): bool

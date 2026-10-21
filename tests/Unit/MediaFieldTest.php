@@ -8,6 +8,7 @@ use Illuminate\Support\Collection;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Media\MediaField;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Eav\Registry\EnumRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
@@ -55,5 +56,30 @@ class MediaFieldTest extends TestCase
         $this->assertNull($field->resolve(null, $owner));
         $this->assertNull($field->resolve(1));
         $this->assertNull($field->resolve(1, $this->createStub(Attributable::class)));
+    }
+
+    public function test_value_order_uses_the_owning_medias_collection_order(): void
+    {
+        $first = (new Media)->setRawAttributes(['id' => 1, 'order_column' => 20]);
+        $second = (new Media)->setRawAttributes(['id' => 2, 'order_column' => 5]);
+        $owner = $this->createMockForIntersectionOfInterfaces([Attributable::class, InteractsWithMedia::class]);
+        $owner->expects($this->exactly(3))->method('getMedia')
+            ->with('image_gallery')->willReturn(new Collection([$first, $second]));
+        $value = (new EntityAttribute(['value_integer' => 2]))->setRelation('entity', $owner);
+        $field = $this->field();
+
+        $this->assertSame(5, $field->sortOrder($value));
+        $value->value_integer = 1;
+        $this->assertSame(20, $field->sortOrder($value));
+        $value->value_integer = 99;
+        $this->assertSame(PHP_INT_MAX, $field->sortOrder($value));
+    }
+
+    public function test_empty_media_values_do_not_resolve_the_owner_to_sort(): void
+    {
+        $value = $this->getMockBuilder(EntityAttribute::class)->onlyMethods(['getRelationValue'])->getMock();
+        $value->expects($this->never())->method('getRelationValue');
+
+        $this->assertSame(PHP_INT_MAX, $this->field()->sortOrder($value));
     }
 }
