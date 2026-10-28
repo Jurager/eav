@@ -3,6 +3,7 @@
 [![Total Downloads](https://poser.pugx.org/jurager/eav/downloads)](https://packagist.org/packages/jurager/eav)
 [![PHP Version Require](https://poser.pugx.org/jurager/eav/require/php)](https://packagist.org/packages/jurager/eav)
 [![License](https://poser.pugx.org/jurager/eav/license)](https://packagist.org/packages/jurager/eav)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white)](https://ko-fi.com/jurager01)
 
 A flexible Entity-Attribute-Value (EAV) system for Laravel. Attach dynamic typed attributes to any Eloquent model without schema migrations, with support for localization, attribute inheritance, and enum-backed select fields.
 
