@@ -1,0 +1,55 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Models;
+
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Support\Carbon;
+use Jurager\Eav\Eav;
+
+/**
+ * @property int $id
+ * @property string $code
+ * @property int $sort
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property-read Collection<int, Locale> $translations
+ * @property-read Collection<int, Attribute> $attributes
+ */
+class AttributeGroup extends Model
+{
+    protected $fillable = ['code', 'sort'];
+
+    protected static function booted(): void
+    {
+        static::deleting(static function (AttributeGroup $group) {
+            $group->translations()->detach();
+        });
+    }
+
+    /**
+     * Scope a query to display order: by position, then creation.
+     */
+    public function scopeOrdered(Builder $query): Builder
+    {
+        return $query->orderBy($this->qualifyColumn('sort'))->orderBy($this->getQualifiedKeyName());
+    }
+
+    public function translations(): MorphToMany
+    {
+        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
+            ->using(Eav::$entityTranslationModel)
+            ->withPivot(['id', 'label', 'params'])
+            ->withTimestamps();
+    }
+
+    public function attributes(): HasMany
+    {
+        return $this->hasMany(Eav::$attributeModel, 'attribute_group_id');
+    }
+}

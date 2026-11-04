@@ -1,0 +1,136 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Tests\Feature;
+
+use Illuminate\Support\Facades\DB;
+use Jurager\Eav\Models\EntityAttribute;
+
+class EagerLoadsSparseFieldConstraintTest extends FeatureTestCase
+{
+    public function test_sparse_fields_also_constrain_the_values_inherited_from_the_parent(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color', 'inherit_from_parent' => true]);
+        $size = $this->createAttribute($type, ['code' => 'size', 'inherit_from_parent' => true]);
+        $parent = $this->createProduct();
+        $variant = $this->createProduct();
+        $variant->update(['parent_id' => $parent->id]);
+
+        EntityAttribute::create(['entity_id' => $parent->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+        EntityAttribute::create(['entity_id' => $parent->id, 'entity_type' => 'product', 'attribute_id' => $size->id, 'value_text' => 'M']);
+
+        $variant->load($variant->eagerLoads(['attribute_values'], ['color']));
+
+        $this->assertSame(['color'], $variant->eav()->values()->map(fn ($value) => $value->attribute->code)->all());
+        $this->assertCount(1, $variant->parent->attribute_values);
+    }
+
+    public function test_eager_loads_load_the_values_even_when_they_were_not_included(): void
+    {
+        $type = $this->createAttributeType('text');
+        $this->createAttribute($type, ['code' => 'color']);
+        $product = $this->createProduct();
+
+        // Read through the entity's attributes, they are loaded (with the translations they need) either way.
+        $expected = ['attribute_values.attribute.type', 'attribute_values.translations', 'parent.attribute_values.attribute.type', 'parent.attribute_values.translations'];
+
+        $this->assertSame($expected, $product->eagerLoads([]));
+        $this->assertSame($expected, $product->eagerLoads(['prices']));
+    }
+
+    public function test_eager_loads_has_no_constraint_when_no_sparse_fields_were_requested(): void
+    {
+        $type = $this->createAttributeType('text');
+        $this->createAttribute($type, ['code' => 'color']);
+        $product = $this->createProduct();
+
+        // Value metadata and translations are dependencies even when only values were included.
+        // No closure constrains the rows when there is no fieldset.
+        $this->assertSame(['attribute_values.attribute.type', 'attribute_values.translations', 'parent.attribute_values.attribute.type', 'parent.attribute_values.translations'], $product->eagerLoads(['attribute_values']));
+        $this->assertSame(['attribute_values.attribute.type', 'attribute_values.translations', 'parent.attribute_values.attribute.type', 'parent.attribute_values.translations'], $product->eagerLoads(['attribute_values'], null));
+        $this->assertArrayNotHasKey('attribute_values', $product->eagerLoads(['attribute_values']));
+    }
+
+    public function test_eager_loads_constrains_attribute_values_to_the_requested_codes(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color']);
+        $size = $this->createAttribute($type, ['code' => 'size']);
+        $weight = $this->createAttribute($type, ['code' => 'weight']);
+
+        $product = $this->createProduct();
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $size->id, 'value_text' => 'M']);
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $weight->id, 'value_text' => '1kg']);
+
+        $relations = $product->eagerLoads(['attribute_values'], ['color', 'size']);
+
+        $this->assertArrayHasKey('attribute_values', $relations);
+        $this->assertInstanceOf(\Closure::class, $relations['attribute_values']);
+
+        $product->load(['attribute_values' => $relations['attribute_values']]);
+
+        $this->assertCount(2, $product->attribute_values);
+        $this->assertSame(['color', 'size'], $product->attribute_values->map(fn ($ea) => $ea->attribute->code)->sort()->values()->all());
+    }
+
+    public function test_eager_loads_narrows_to_nothing_when_no_requested_field_is_a_real_attribute_code(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color']);
+
+        $product = $this->createProduct();
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+
+        // "name" and "type_id" aren't EAV codes for this entity type — no rows should match.
+        $relations = $product->eagerLoads(['attribute_values'], ['name', 'type_id']);
+
+        $product->load(['attribute_values' => $relations['attribute_values']]);
+
+        $this->assertCount(0, $product->attribute_values);
+    }
+
+    public function test_eager_loads_constraint_does_not_query_the_whole_entity_types_schema(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color']);
+
+        // Warm the registry once, outside of the assertion window — mirrors a request where
+        // something already touched the entity type's attribute schema.
+        $product = $this->createProduct();
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+        $product->eagerLoads(['attribute_values'], ['color']);
+
+        DB::enableQueryLog();
+
+        $relations = $product->eagerLoads(['attribute_values'], ['color']);
+        $product->load(['attribute_values' => $relations['attribute_values']]);
+
+        // Just the entity_attribute rows themselves — the attribute schema is already cached,
+        // so resolving "color" -> its id must not re-query the attributes table.
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
+
+        DB::disableQueryLog();
+    }
+
+    public function test_eager_loads_constrain_values_to_the_requested_codes_when_they_were_not_included(): void
+    {
+        $type = $this->createAttributeType('text');
+        $color = $this->createAttribute($type, ['code' => 'color']);
+        $size = $this->createAttribute($type, ['code' => 'size']);
+        $product = $this->createProduct();
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $color->id, 'value_text' => 'red']);
+        EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $size->id, 'value_text' => 'M']);
+
+        $relations = $product->eagerLoads([], ['color']);
+
+        $this->assertInstanceOf(\Closure::class, $relations['attribute_values']);
+        $this->assertContains('attribute_values.translations', $relations);
+
+        $product->load(['attribute_values' => $relations['attribute_values']]);
+
+        $this->assertSame(['color'], $product->attribute_values->map(fn ($ea) => $ea->attribute->code)->all());
+    }
+}

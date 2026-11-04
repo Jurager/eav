@@ -1,0 +1,116 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Tests\Feature;
+
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Schema;
+use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Models\EntityAttribute;
+use Jurager\Eav\Models\Locale;
+use Jurager\Eav\Registry\AttributeGroupRegistry;
+use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registry\AttributeTypeRegistry;
+use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Schema\SchemaSynchronizer;
+use Jurager\Eav\Tests\Fixtures\Product;
+use Jurager\Eav\Tests\TestCase;
+
+abstract class FeatureTestCase extends TestCase
+{
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Queue::fake();
+
+        // Consuming apps register this alias too; the translations relation needs it to find rows.
+        Relation::morphMap(['product' => Product::class, 'entity_attribute' => EntityAttribute::class]);
+
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->unsignedBigInteger('parent_id')->nullable();
+            $table->timestamps();
+        });
+
+        app(LocaleRegistry::class)->forget();
+        app(SchemaRegistry::class)->forget();
+        app(EnumRegistry::class)->forget();
+        app(AttributeTypeRegistry::class)->forget();
+        app(AttributeGroupRegistry::class)->forget();
+        app(AttributeRegistry::class)->forget();
+    }
+
+    protected function tearDown(): void
+    {
+        Schema::dropIfExists('products');
+        Relation::morphMap([]);
+        Product::$uniqueScopes = [];
+
+        parent::tearDown();
+    }
+
+    // -----------------------------------------------------------------------
+    // Seed helpers
+    // -----------------------------------------------------------------------
+
+    protected function createLocale(string $code = 'en'): Locale
+    {
+        return Locale::create(['code' => $code, 'name' => strtoupper($code)]);
+    }
+
+    protected function createAttributeType(string $code = 'text'): AttributeType
+    {
+        return AttributeType::create(['code' => $code]);
+    }
+
+    protected function createAttribute(AttributeType $type, array $overrides = []): Attribute
+    {
+        $entityTypes = $overrides['entity_types'] ?? ['product'];
+        unset($overrides['entity_types']);
+
+        $attribute = Attribute::create(array_merge([
+            'attribute_type_id' => $type->id,
+            'code' => 'name',
+            'sort' => 0,
+            'required' => false,
+            'localizable' => false,
+            'multiple' => false,
+            'unique' => false,
+            'filterable' => false,
+            'searchable' => false,
+        ], $overrides));
+
+        $attribute->entityTypes()->createMany(
+            array_map(fn (string $entityType) => ['entity_type' => $entityType], $entityTypes)
+        );
+        $attribute->unsetRelation('entityTypes');
+
+        // The `created` hook fired above before the pivot rows existed to see — a `touch()` isn't
+        // reliable here (same-second timestamps leave nothing dirty to save), so invalidate directly.
+        app(SchemaSynchronizer::class)->refresh($attribute);
+
+        return $attribute;
+    }
+
+    protected function createProduct(string $name = 'Widget'): Product
+    {
+        return Product::create(['name' => $name]);
+    }
+
+    protected function createEnum(Attribute $attribute, string $code): AttributeEnum
+    {
+        return AttributeEnum::create([
+            'attribute_id' => $attribute->id,
+            'code' => $code,
+        ]);
+    }
+}

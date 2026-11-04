@@ -1,0 +1,66 @@
+{
+    "name": "jurager/eav",
+    "description": "Flexible Entity-Attribute-Value (EAV) system for Laravel with typed storage, localization, and attribute inheritance",
+    "keywords": [
+        "laravel",
+        "eav",
+        "entity-attribute-value",
+        "dynamic-attributes",
+        "localization"
+    ],
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Yuri Gerassimov",
+            "email": "jurager01@gmail.com"
+        }
+    ],
+    "require": {
+        "php": "^8.4",
+        "illuminate/cache": "^13.0",
+        "illuminate/contracts": "^13.0",
+        "illuminate/database": "^13.0",
+        "illuminate/support": "^13.0",
+        "illuminate/validation": "^13.0",
+        "jurager/filterable": "^1.6"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^11.0",
+        "phpunit/phpunit": "^11.0|^12.0",
+        "laravel/scout": "^11.0",
+        "meilisearch/meilisearch-php": "^1.0"
+    },
+    "suggest": {
+        "laravel/scout": "Required to index attribute values for search (HasSearchableAttributes).",
+        "meilisearch/meilisearch-php": "Required for faceted search and filterable index settings with the Meilisearch engine.",
+        "jurager/media": "Adds a file/image attribute type backed by a media library.",
+        "jurager/microservice": "Serves attribute codes of JSON:API sparse fieldsets (InteractsWithSparseFieldsets)."
+    },
+    "autoload": {
+        "psr-4": {
+            "Jurager\\Eav\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Jurager\\Eav\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/phpunit"
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Jurager\\Eav\\EavServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true,
+    "config": {
+        "allow-plugins": {
+            "php-http/discovery": true
+        }
+    }
+}

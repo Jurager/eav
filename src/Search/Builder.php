@@ -1,0 +1,397 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Search;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\Relation;
+use Jurager\Eav\Search\Contracts\FilterResolver;
+use Jurager\Eav\Search\Contracts\InteractsWithIndex;
+use Jurager\Filterable\Concerns\HasFilterable;
+use Jurager\Filterable\Contracts\SortResolver;
+use Jurager\Filterable\FilterableServiceProvider;
+use Jurager\Filterable\Parsing\FilterParser;
+use Jurager\Filterable\Support\ParsedFilters;
+
+/**
+ * Build search queries for EAV entities.
+ */
+class Builder
+{
+    /**
+     * Current search query string.
+     */
+    private ?string $query = null;
+
+    /**
+     * Parsed filters.
+     */
+    private ParsedFilters $filter;
+
+    /**
+     * Map of filter keys to indexed fields.
+     *
+     * @var array<string, string>
+     */
+    private array $map = [];
+
+    /**
+     * Configured search facets.
+     *
+     * @var array<int, string>
+     */
+    private array $facets = [];
+
+    /**
+     * Eloquent model instance for the entity type.
+     */
+    private ?Model $model = null;
+
+    /**
+     * Condition splitting the result set into a leading and a trailing group.
+     */
+    private ?ParsedFilters $partition = null;
+
+    /**
+     * Whether documents matching the partition come first.
+     */
+    private bool $partitionFirst = true;
+
+    /**
+     * Native engine ordering, as `field:direction` pairs.
+     *
+     * @var list<string>
+     */
+    private array $order = [];
+
+    /**
+     * @param  iterable<FilterResolver>  $resolvers
+     */
+    public function __construct(
+        private readonly Engine $engine,
+        private readonly iterable $resolvers,
+        private readonly string $entityType,
+    ) {
+        $this->filter = (new FilterParser)->parse([], []);
+
+        $model = Relation::getMorphedModel($entityType) ?? $entityType;
+
+        if (class_exists($model)) {
+            $this->model = new $model;
+        }
+    }
+
+    /**
+     * Set search query string.
+     */
+    public function query(?string $query): static
+    {
+        $this->query = $query;
+
+        return $this;
+    }
+
+    /**
+     * Parse and resolve JSON:API filters.
+     */
+    public function filter(array $filter): static
+    {
+        $parsed = (new FilterParser)->parse($filter, []);
+
+        if ($this->model !== null) {
+            $parsed = $parsed->withSanitized(
+                filters: $this->resolveFilters($parsed->filters, $this->model),
+                orGroups: $parsed->orGroups,
+                andGroups: $parsed->andGroups,
+            );
+        }
+
+        $this->filter = $parsed;
+
+        return $this;
+    }
+
+    /**
+     * Apply a sort specification through the model's Filterable sort resolvers.
+     */
+    public function sort(?string $sort): static
+    {
+        if ($sort === null || $sort === '' || $this->model === null) {
+            return $this;
+        }
+
+        $descending = str_starts_with($sort, '-');
+        $field = $descending ? substr($sort, 1) : $sort;
+
+        foreach ($this->sortResolvers() as $resolver) {
+            if ($resolver->resolve($this, $field, $descending ? 'desc' : 'asc', $this->model, $this->filter->included)) {
+                break;
+            }
+        }
+
+        return $this;
+    }
+
+    /**
+     * Sort resolvers from the container tag and from the model, matching how Filterable collects them.
+     *
+     * @return list<SortResolver>
+     */
+    private function sortResolvers(): array
+    {
+        $declared = self::filterable($this->model) ? $this->model->filterableResolvers() : [];
+
+        $resolvers = [];
+
+        foreach ([...app()->tagged(FilterableServiceProvider::RESOLVER_TAG), ...$declared] as $resolver) {
+            $resolver = is_string($resolver) ? app($resolver) : $resolver;
+
+            if ($resolver instanceof SortResolver) {
+                $resolvers[] = $resolver;
+            }
+        }
+
+        return $resolvers;
+    }
+
+    /**
+     * Order the result set by an indexed field.
+     */
+    public function orderBy(string $field, string $direction = 'asc'): static
+    {
+        $this->order[] = $field.':'.($direction === 'desc' ? 'desc' : 'asc');
+
+        return $this;
+    }
+
+    /**
+     * Order the result set by whether documents match a condition.
+     *
+     * @param  array<string, mixed>  $condition
+     * @param  bool  $first  Whether matches lead the result set.
+     */
+    public function partition(array $condition, bool $first = true): static
+    {
+        $parsed = (new FilterParser)->parse($condition, []);
+
+        if ($this->model !== null) {
+            $parsed = $parsed->withSanitized(
+                filters: $this->resolveFilters($parsed->filters, $this->model),
+                orGroups: $parsed->orGroups,
+                andGroups: $parsed->andGroups,
+            );
+        }
+
+        $this->partition = $parsed;
+        $this->partitionFirst = $first;
+
+        return $this;
+    }
+
+    /**
+     * Resolve filters unhandled by search index.
+     */
+    private function resolveFilters(array $filters, Model $model): array
+    {
+        $result = [];
+
+        foreach ($filters as $key => $value) {
+            $key = (string) $key;
+
+            if (! str_contains($key, '.') || $this->directlyIndexed($key, $model)) {
+                $result[$key] = $this->castBooleanFilterValue($key, $value, $model);
+
+                continue;
+            }
+
+            $resolved = null;
+
+            foreach ($this->resolvers as $resolver) {
+                if (($resolved = $resolver->resolve($key, $value, $model)) !== null) {
+                    break;
+                }
+            }
+
+            [$resolvedKey, $resolvedValue] = $resolved ?? [$key, $value];
+
+            $result[$resolvedKey] = $this->castBooleanFilterValue($resolvedKey, $resolvedValue, $model);
+        }
+
+        return $result;
+    }
+
+    /**
+     * Check if filter key is directly indexed.
+     */
+    private function directlyIndexed(string $key, Model $model): bool
+    {
+        return $model instanceof InteractsWithIndex && array_key_exists($key, $model->indexAliases());
+    }
+
+    /**
+     * Coerce a filter value to a native bool when the model declares the field boolean.
+     */
+    private function castBooleanFilterValue(string $key, mixed $value, Model $model): mixed
+    {
+        $config = self::filterable($model) ? ($model->filterableFields()[$key] ?? null) : null;
+
+        $isBoolean = $config === 'boolean' || in_array($model->getCasts()[$key] ?? '', ['bool', 'boolean'], true);
+
+        if (! $isBoolean) {
+            return $value;
+        }
+
+        $raw = is_array($value) ? ($value['eq'] ?? null) : $value;
+        $cast = filter_var($raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+
+        return $cast ?? $value;
+    }
+
+    /**
+     * Check if filter is active for key.
+     */
+    public function hasFilter(string $key): bool
+    {
+        return array_key_exists($key, $this->filter->filters);
+    }
+
+    /**
+     * Read numeric IDs from filter.
+     */
+    public function ids(string $key): array
+    {
+        $value = $this->filter->filters[$key] ?? null;
+
+        if (is_array($value)) {
+            $value = $value['in'] ?? $value['eq'] ?? $value;
+        }
+
+        if (blank($value)) {
+            return [];
+        }
+
+        $items = is_array($value) ? $value : explode(',', (string) $value);
+        $result = [];
+
+        foreach ($items as $item) {
+            $id = (int) $item;
+
+            if ($id > 0) {
+                $result[] = $id;
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Set filter keys mapping.
+     */
+    public function map(array $map): static
+    {
+        $this->map = $map;
+
+        return $this;
+    }
+
+    /**
+     * Set facets for computation.
+     */
+    public function facets(array $facets): static
+    {
+        $this->facets = $facets;
+
+        return $this;
+    }
+
+    /**
+     * Execute search via engine.
+     */
+    public function search(int $perPage = 15, int $page = 1): Result
+    {
+        return $this->engine->search($this, $perPage, $page);
+    }
+
+    /**
+     * Get entity type.
+     */
+    public function getEntityType(): string
+    {
+        return $this->entityType;
+    }
+
+    /**
+     * Get Eloquent model instance.
+     */
+    public function getModel(): ?Model
+    {
+        return $this->model;
+    }
+
+    /**
+     * Get current search query.
+     */
+    public function getQuery(): ?string
+    {
+        return $this->query;
+    }
+
+    /**
+     * Get parsed filters.
+     */
+    public function getFilter(): ParsedFilters
+    {
+        return $this->filter;
+    }
+
+    /**
+     * Get configured facets.
+     */
+    public function getFacets(): array
+    {
+        return $this->facets;
+    }
+
+    /**
+     * Get filter map.
+     */
+    public function getMap(): array
+    {
+        return $this->map;
+    }
+
+    /**
+     * Get the partition condition, if the result set is to be split.
+     */
+    public function getPartition(): ?ParsedFilters
+    {
+        return $this->partition;
+    }
+
+    /**
+     * Whether documents matching the partition lead the result set.
+     */
+    public function partitionsFirst(): bool
+    {
+        return $this->partitionFirst;
+    }
+
+    /**
+     * Native engine ordering, as `field:direction` pairs.
+     *
+     * @return list<string>
+     */
+    public function getOrder(): array
+    {
+        return $this->order;
+    }
+
+    /**
+     * Whether a model declares its filters through jurager/filterable.
+     */
+    private static function filterable(?Model $model): bool
+    {
+        return $model !== null && in_array(HasFilterable::class, class_uses_recursive($model), true);
+    }
+}

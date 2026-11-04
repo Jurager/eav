@@ -1,0 +1,175 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Tests\Feature;
+
+use Illuminate\Support\Facades\DB;
+use Jurager\Eav\Models\EntityAttribute;
+use Jurager\Eav\Registry\AttributeRegistry;
+
+class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
+{
+    public function test_attribute_relation_preserves_eloquent_default_models(): void
+    {
+        $value = new EntityAttribute(['entity_type' => 'product']);
+
+        $attribute = $value->attribute()->withDefault(['code' => 'default'])->getResults();
+
+        $this->assertSame('default', $attribute->code);
+    }
+
+    public function test_eager_loading_a_cold_batch_does_not_query_attributes_once_per_code(): void
+    {
+        $type = $this->createAttributeType('text');
+        $product = $this->createProduct();
+
+        foreach (range(1, 20) as $i) {
+            $attribute = $this->createAttribute($type, ['code' => "field_{$i}"]);
+            EntityAttribute::create(['entity_id' => $product->id, 'entity_type' => 'product', 'attribute_id' => $attribute->id, 'value_text' => (string) $i]);
+        }
+
+        app(AttributeRegistry::class)->forget();
+        DB::enableQueryLog();
+
+        $values = EntityAttribute::query()->with('attribute')->get();
+
+        $queries = array_filter(DB::getQueryLog(), fn ($query) => str_contains($query['query'], 'from "attributes"') && ! str_contains($query['query'], 'count(*)'));
+        DB::disableQueryLog();
+
+        $this->assertCount(20, $values);
+        $this->assertCount(1, $queries, 'The eager relation must be fetched once, without redundant point lookups from retrieved events.');
+    }
+
+    public function test_attribute_relation_is_populated_from_registry_without_a_query(): void
+    {
+        $type = $this->createAttributeType('text');
+        $attribute = $this->createAttribute($type, ['code' => 'name']);
+        $product = $this->createProduct();
+
+        $value = EntityAttribute::create([
+            'entity_id' => $product->id,
+            'entity_type' => 'product',
+            'attribute_id' => $attribute->id,
+            'value_text' => 'Widget',
+        ]);
+
+        // Warm the registry once, outside of the assertion window.
+        app(AttributeRegistry::class)->all('product');
+
+        DB::enableQueryLog();
+
+        $fetched = EntityAttribute::query()->find($value->id);
+
+        $this->assertTrue($fetched->relationLoaded('attribute'));
+        $this->assertSame('name', $fetched->attribute->code);
+        $this->assertSame([], array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'attributes')));
+    }
+
+    public function test_repeated_fetches_across_separate_rows_share_the_same_attribute_query_count(): void
+    {
+        $type = $this->createAttributeType('text');
+        $attribute = $this->createAttribute($type, ['code' => 'name']);
+        $productA = $this->createProduct('A');
+        $productB = $this->createProduct('B');
+
+        EntityAttribute::create(['entity_id' => $productA->id, 'entity_type' => 'product', 'attribute_id' => $attribute->id, 'value_text' => 'A']);
+        EntityAttribute::create(['entity_id' => $productB->id, 'entity_type' => 'product', 'attribute_id' => $attribute->id, 'value_text' => 'B']);
+
+        DB::enableQueryLog();
+
+        // Two independent, unbatched fetches — mirrors a resource serializing each
+        // row on its own (e.g. EntityAttributeResource::resolveAttributeValue()).
+        EntityAttribute::query()->where('value_text', 'A')->first()->attribute;
+        EntityAttribute::query()->where('value_text', 'B')->first()->attribute;
+
+        $attributeQueries = array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"'));
+
+        // One warm-up for the entity type — its rows — rather than a query per row.
+        $this->assertCount(1, $attributeQueries);
+    }
+
+    public function test_scoping_by_entity_type_does_not_warm_unrelated_attributes(): void
+    {
+        $type = $this->createAttributeType('text');
+        $productAttribute = $this->createAttribute($type, ['code' => 'name']);
+        $this->createAttribute($type, ['entity_types' => ['category'], 'code' => 'seo_title']);
+        $product = $this->createProduct();
+
+        EntityAttribute::create([
+            'entity_id' => $product->id,
+            'entity_type' => 'product',
+            'attribute_id' => $productAttribute->id,
+            'value_text' => 'Widget',
+        ]);
+
+        DB::enableQueryLog();
+
+        EntityAttribute::query()->where('entity_type', 'product')->first()->attribute;
+
+        // The rows of the 'product' scope alone.
+        $this->assertCount(1, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
+
+        // The 'category' scope was never touched, so it still triggers its own warm-up.
+        app(AttributeRegistry::class)->all('category');
+
+        $this->assertCount(2, array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"')));
+    }
+
+    public function test_attribute_relation_resolves_by_point_lookup_without_loading_the_whole_entity_type(): void
+    {
+        $type = $this->createAttributeType('text');
+        $touched = $this->createAttribute($type, ['code' => 'name']);
+
+        // A wide schema for this entity type — sized so a whole-table dump would be obviously
+        // wrong for what this request actually needs (one attribute, on one stored value).
+        foreach (range(1, 20) as $i) {
+            $this->createAttribute($type, ['code' => "unused_{$i}"]);
+        }
+
+        $product = $this->createProduct();
+
+        $value = EntityAttribute::create([
+            'entity_id' => $product->id,
+            'entity_type' => 'product',
+            'attribute_id' => $touched->id,
+            'value_text' => 'Widget',
+        ]);
+
+        DB::enableQueryLog();
+
+        $fetched = EntityAttribute::query()->find($value->id);
+
+        $this->assertSame('name', $fetched->attribute->code);
+
+        $attributeQueries = array_values(array_filter(DB::getQueryLog(), fn ($q) => str_contains($q['query'], 'from "attributes"') && ! str_contains($q['query'], 'count(*)')));
+
+        // The rows query must be a point lookup by id — not a scan of the whole entity type
+        // (which, with 21 rows here and thousands in a real catalog, is exactly the cost this
+        // path exists to avoid).
+        $this->assertCount(1, $attributeQueries);
+        $this->assertStringContainsString('"id" = ?', $attributeQueries[0]['query']);
+    }
+
+    public function test_updating_attribute_invalidates_the_registry(): void
+    {
+        $type = $this->createAttributeType('text');
+        $attribute = $this->createAttribute($type, ['code' => 'name']);
+        $product = $this->createProduct();
+
+        $value = EntityAttribute::create([
+            'entity_id' => $product->id,
+            'entity_type' => 'product',
+            'attribute_id' => $attribute->id,
+            'value_text' => 'Widget',
+        ]);
+
+        EntityAttribute::query()->find($value->id)->attribute;
+
+        $attribute->update(['code' => 'renamed']);
+
+        $fetched = EntityAttribute::query()->find($value->id);
+
+        $this->assertSame('renamed', $fetched->attribute->code);
+    }
+}

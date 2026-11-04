@@ -1,0 +1,245 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Models;
+
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphToMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
+use Jurager\Eav\Eav;
+use Jurager\Eav\Enums\HeldBy;
+use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Registry\AttributeGroupRegistry;
+use Jurager\Eav\Registry\AttributeTypeRegistry;
+
+/**
+ * @property int $id
+ * @property int $attribute_type_id
+ * @property int|null $attribute_group_id
+ * @property string $code
+ * @property int $sort
+ * @property bool $required
+ * @property bool $localizable
+ * @property bool $multiple
+ * @property bool $unique
+ * @property bool $filterable
+ * @property bool $searchable
+ * @property HeldBy $held_by
+ * @property bool $inherit_from_parent
+ * @property array|null $validations
+ * @property array|null $meta
+ * @property Carbon|null $created_at
+ * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
+ * @property-read AttributeType|null $type
+ * @property-read AttributeGroup|null $group
+ * @property-read Collection<int, AttributeEnum> $enums
+ * @property-read Collection<int, Locale> $translations
+ * @property-read Collection<int, AttributeEntityType> $entityTypes
+ *
+ * @mixin Builder
+ */
+class Attribute extends Model
+{
+    use SoftDeletes;
+
+    protected $fillable = [
+        'attribute_type_id',
+        'attribute_group_id',
+        'code',
+        'sort',
+        'required',
+        'localizable',
+        'multiple',
+        'unique',
+        'filterable',
+        'searchable',
+        'held_by',
+        'inherit_from_parent',
+        'validations',
+        'meta',
+    ];
+
+    /**
+     * Applicable types replaced a column every row carried.
+     */
+    protected $with = ['entityTypes'];
+
+    protected static function booted(): void
+    {
+        // A block body: a halting event stops at the first listener returning anything but null.
+        static::forceDeleting(static function (Attribute $attribute): void {
+            $attribute->translations()->detach();
+        });
+
+        static::saving(static fn (Attribute $attribute) => static::enforceFieldCapabilities($attribute));
+
+        // Type and group come from the registries, so attributes fetched separately within a
+        // request share one instance of each instead of querying them again.
+        static::retrieved(static fn (Attribute $attribute) => static::hydrateFromRegistries($attribute));
+    }
+
+    /**
+     * Scope a query to schema order: by group, then position within it.
+     */
+    public function scopeOrdered(Builder $query): Builder
+    {
+        return $query
+            ->orderBy($this->qualifyColumn('attribute_group_id'))
+            ->orderBy($this->qualifyColumn('sort'))
+            ->orderBy($this->getQualifiedKeyName());
+    }
+
+    /**
+     * Turn off flags the attribute's field type cannot honour, e.g. localization of a select.
+     */
+    protected static function enforceFieldCapabilities(Attribute $attribute): void
+    {
+        $code = $attribute->type?->code;
+        $fields = app(FieldFactory::class);
+
+        if ($code !== null && $fields->has($code) && ! $fields->resolve($code)::localizable()) {
+            $attribute->setAttribute('localizable', false);
+        }
+    }
+
+    /**
+     * Populate the type and group relations from the registry cache.
+     */
+    protected static function hydrateFromRegistries(Attribute $attribute): void
+    {
+        if (! $attribute->relationLoaded('type')) {
+            $attribute->setRelation('type', $attribute->getAttribute('attribute_type_id') !== null
+                ? app(AttributeTypeRegistry::class)->get($attribute->getAttribute('attribute_type_id'))
+                : null);
+        }
+
+        if (! $attribute->relationLoaded('group')) {
+            $attribute->setRelation('group', static::hydrateGroup($attribute->getAttribute('attribute_group_id')));
+        }
+    }
+
+    /**
+     * Resolve the group relation, shared for however this attribute id was fetched.
+     */
+    private static function hydrateGroup(?int $groupId): ?AttributeGroup
+    {
+        return $groupId !== null ? app(AttributeGroupRegistry::class)->own($groupId) : null;
+    }
+
+    protected function casts(): array
+    {
+        return [
+            'attribute_type_id' => 'integer',
+            'attribute_group_id' => 'integer',
+            'sort' => 'integer',
+            'validations' => 'array',
+            'meta' => 'array',
+            'required' => 'boolean',
+            'localizable' => 'boolean',
+            'multiple' => 'boolean',
+            'unique' => 'boolean',
+            'filterable' => 'boolean',
+            'searchable' => 'boolean',
+
+            'held_by' => HeldBy::class,
+            'inherit_from_parent' => 'boolean',
+        ];
+    }
+
+    public function type(): BelongsTo
+    {
+        return $this->belongsTo(Eav::$attributeTypeModel, 'attribute_type_id');
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(Eav::$attributeGroupModel, 'attribute_group_id');
+    }
+
+    public function enums(): HasMany
+    {
+        return $this->hasMany(Eav::$attributeEnumModel, 'attribute_id')->ordered();
+    }
+
+    public function translations(): MorphToMany
+    {
+        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
+            ->using(Eav::$entityTranslationModel)
+            ->withPivot(['id', 'label', 'params'])
+            ->withTimestamps();
+    }
+
+    public function entityTypes(): HasMany
+    {
+        return $this->hasMany(Eav::$attributeEntityTypeModel, 'attribute_id');
+    }
+
+    /**
+     * The entity types this attribute is applicable to.
+     */
+    public function applicableEntityTypes(): array
+    {
+        return $this->entityTypes->pluck('entity_type')->all();
+    }
+
+    /**
+     * Scope a query to only include attributes applicable to a given entity type.
+     */
+    public function scopeForEntity(Builder $query, string $entityType): Builder
+    {
+        return $query->whereHas('entityTypes', fn (Builder $q) => $q->where('entity_type', $entityType));
+    }
+
+    /**
+     * Scope a query to only include searchable attributes.
+     */
+    public function scopeWhereSearchable(Builder $query): Builder
+    {
+        return $query->where('searchable', true);
+    }
+
+    /**
+     * Scope a query to only include filterable attributes.
+     */
+    public function scopeWhereFilterable(Builder $query): Builder
+    {
+        return $query->where('filterable', true);
+    }
+
+    /**
+     * Scope a query to the attributes the given side fills in.
+     */
+    public function scopeWhereHeldBy(Builder $query, HeldBy $side): Builder
+    {
+        return $query->whereIn('held_by', [$side, HeldBy::Both]);
+    }
+
+    /**
+     * Scope a query to the attributes a variant takes from its parent when it has no value of its own.
+     */
+    public function scopeWhereInheritable(Builder $query): Builder
+    {
+        return $query->where('inherit_from_parent', true);
+    }
+
+    /**
+     * Determine if the given side fills this attribute in.
+     */
+    public function isHeldBy(HeldBy $side): bool
+    {
+        return $this->getAttribute('held_by') === $side || $this->getAttribute('held_by') === HeldBy::Both;
+    }
+
+    /** @return array{int, int, int} */
+    public function schemaPosition(): array
+    {
+        return [(int) $this->getAttribute('attribute_group_id'), (int) $this->getAttribute('sort'), (int) $this->getKey()];
+    }
+}
