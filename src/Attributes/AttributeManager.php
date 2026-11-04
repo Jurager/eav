@@ -28,11 +28,13 @@ class AttributeManager
      */
     private bool $complete = false;
 
-    /** @var array<string, true> Codes set in memory since they were last saved. */
+    /** @var array<string, Field> Unsaved fields keyed by code. */
     private array $dirty = [];
 
     /** @var array<string, mixed>|null */
     private ?array $indexData = null;
+
+    private int $schemaRevision = -1;
 
     public function __construct(
         private readonly Attributable $entity,
@@ -61,6 +63,8 @@ class AttributeManager
      */
     public function ensureSchema(): static
     {
+        $this->refreshSchema();
+
         if (! $this->complete) {
             $this->load($this->schema->attributes()->reject(fn ($attribute) => isset($this->fields[$attribute->code])));
             $this->complete = true;
@@ -76,6 +80,8 @@ class AttributeManager
      */
     public function ensureFields(array $codes): static
     {
+        $this->refreshSchema();
+
         $missing = array_values(array_diff($codes, array_keys($this->fields)));
 
         if ($missing !== [] && ! $this->complete) {
@@ -92,6 +98,8 @@ class AttributeManager
      */
     public function fields(): array
     {
+        $this->refreshSchema();
+
         return $this->fields;
     }
 
@@ -131,7 +139,7 @@ class AttributeManager
         $field = $this->fieldOrFail($code);
 
         $field->set($value, $this->localeFor($field, $localeId, $value));
-        $this->dirty[$code] = true;
+        $this->dirty[$code] = $field;
 
         return $this;
     }
@@ -146,7 +154,7 @@ class AttributeManager
         $field = $this->fieldOrFail($code);
 
         $field->add($value, $this->localeFor($field, $localeId));
-        $this->dirty[$code] = true;
+        $this->dirty[$code] = $field;
 
         return $this;
     }
@@ -166,7 +174,7 @@ class AttributeManager
      */
     public function getDirty(): array
     {
-        return array_intersect_key($this->fields, $this->dirty);
+        return $this->dirty;
     }
 
     /**
@@ -194,6 +202,7 @@ class AttributeManager
             return;
         }
 
+        $this->assertAvailable($fields);
         $filled = array_filter($fields, static fn (Field $field): bool => $field->isFilled());
         $emptied = array_diff_key($fields, $filled);
 
@@ -214,6 +223,7 @@ class AttributeManager
      */
     public function attach(array $fields): void
     {
+        $this->assertAvailable($fields);
         $this->fields = [...$this->fields, ...$fields];
         $this->dirty = array_diff_key($this->dirty, $fields);
         $this->indexData = null;
@@ -228,6 +238,7 @@ class AttributeManager
      */
     public function replace(array $fields): void
     {
+        $this->assertAvailable($fields);
         $this->fields = $fields;
         $this->complete = false;
         $this->dirty = [];
@@ -283,6 +294,32 @@ class AttributeManager
     private function fieldOrFail(string $code): Field
     {
         return $this->field($code) ?? throw UnknownAttributeException::code($code, $this->entity->getEntityType());
+    }
+
+    private function refreshSchema(): void
+    {
+        $revision = $this->schema->revision();
+
+        if ($this->schemaRevision === $revision) {
+            return;
+        }
+
+        $fields = array_replace($this->fields, $this->dirty);
+        $this->fields = $this->schema->filterFields($fields);
+        $this->complete = false;
+        $this->indexData = null;
+        $this->schemaRevision = $revision;
+    }
+
+    /** @param array<string, Field> $fields */
+    private function assertAvailable(array $fields): void
+    {
+        $this->refreshSchema();
+        $available = $this->schema->filterFields($fields);
+
+        foreach (array_diff_key($fields, $available) as $field) {
+            throw UnknownAttributeException::code($field->attribute()->code, $this->entity->getEntityType());
+        }
     }
 
     /**

@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Jurager\Eav\Concerns\HasAttributes;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeScope;
 
 /** Category that takes its parent's attributes when it inherits properties, walking the tree by `parent_id`. */
 class TreeCategory extends Category implements Attributable
@@ -26,7 +27,7 @@ class TreeCategory extends Category implements Attributable
 
     public function attributeScopeRelation(): BelongsToMany
     {
-        return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id');
+        return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id')->using(AttributeScope::class);
     }
 
     public function shouldInheritAttributes(): bool

@@ -8,11 +8,18 @@ use Illuminate\Support\Collection;
 
 class SchemaRegistry
 {
+    private int $revision = 0;
+
     /** @var array<string, Collection<array-key, mixed>> Cached schemas indexed by their registry key. */
     private array $schemasByKey = [];
 
     /** @var array<string, array<int|string, list<int|string>>> Available attribute IDs per scope entity, grouped by model class. */
     private array $scopeAttributes = [];
+
+    public function revision(): int
+    {
+        return $this->revision;
+    }
 
     /**
      * Resolve a schema once and reuse it for subsequent requests with the same key.
@@ -65,6 +72,7 @@ class SchemaRegistry
      */
     public function forget(?string $entityType = null): void
     {
+        $this->revision++;
         $this->scopeAttributes = [];
 
         if ($entityType === null) {

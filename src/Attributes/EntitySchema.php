@@ -23,6 +23,8 @@ class EntitySchema
     /** @var Collection<int, Attribute>|null */
     private ?Collection $definitions = null;
 
+    private int $revision = -1;
+
     /**
      * @param  Attributable|null  $scope  Entity whose scope narrows the schema; null for every attribute of the type.
      */
@@ -39,6 +41,16 @@ class EntitySchema
         return $this->entityType;
     }
 
+    public function revision(): int
+    {
+        if ($this->revision !== $this->schemas->revision()) {
+            $this->definitions = null;
+            $this->revision = $this->schemas->revision();
+        }
+
+        return $this->revision;
+    }
+
     /**
      * Get all definitions in schema order.
      *
@@ -46,6 +58,8 @@ class EntitySchema
      */
     public function attributes(): Collection
     {
+        $this->revision();
+
         return $this->definitions ??= $this->load()->loadMissing('type');
     }
 
@@ -57,6 +71,8 @@ class EntitySchema
      */
     public function only(array $codes): Collection
     {
+        $this->revision();
+
         if ($codes === []) {
             return collect();
         }
@@ -73,6 +89,19 @@ class EntitySchema
         }
 
         return $attributes->sortBy(static fn (Attribute $attribute): array => $attribute->schemaPosition())->values();
+    }
+
+    /**
+     * Keep fields allowed by the current schema.
+     *
+     * @param  array<string, Field>  $fields
+     * @return array<string, Field>
+     */
+    public function filterFields(array $fields): array
+    {
+        $available = $this->only(array_keys($fields))->keyBy('id');
+
+        return array_filter($fields, static fn (Field $field): bool => $available->has($field->attribute()->getKey()));
     }
 
     /**
@@ -147,7 +176,19 @@ class EntitySchema
 
         return $this->schemas->resolve(
             "{$this->entityType}:scope:".($scope === [] ? 'none' : md5(json_encode($scope, JSON_THROW_ON_ERROR))),
-            fn () => $this->scope->getAvailableAttributesQuery($scope)?->get() ?? new EloquentCollection,
+            function (): Collection {
+                $ids = $this->idsInScope();
+
+                if ($ids === []) {
+                    return new EloquentCollection;
+                }
+
+                return Eav::$attributeModel::query()
+                    ->forEntity($this->entityType)
+                    ->when($ids !== null, fn ($query) => $query->whereKey($ids))
+                    ->ordered()
+                    ->get();
+            },
         );
     }
 

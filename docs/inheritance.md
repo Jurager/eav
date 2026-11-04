@@ -29,11 +29,15 @@ Override `attributeScopeRelation()` on the scope model to use a dedicated assign
 // Category.php
 public function attributeScopeRelation(): BelongsToMany
 {
-    return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id');
+    return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id')
+        ->using(\Jurager\Eav\Models\AttributeScope::class);
 }
 ```
 
 `$product->availableAttributes()` now resolves to the union of attributes assigned to every category the product belongs to.
+
+`AttributeScope` clears cached schemas when assignments change. After raw SQL changes, call
+`app(\Jurager\Eav\Registry\SchemaRegistry::class)->forget()`.
 
 ## Scoped uniqueness
 

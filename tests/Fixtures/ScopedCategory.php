@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Jurager\Eav\Concerns\HasAttributes;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Models\AttributeScope;
 
 /** Category whose attribute pivot (`category_attribute`) is shared by every scoped entity type. */
 class ScopedCategory extends Category implements Attributable
@@ -21,7 +22,7 @@ class ScopedCategory extends Category implements Attributable
 
     public function attributeScopeRelation(): BelongsToMany
     {
-        return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id');
+        return $this->belongsToMany(Attribute::class, 'category_attribute', 'category_id', 'attribute_id')->using(AttributeScope::class);
     }
 
     public function getInheritanceColumns(): array
