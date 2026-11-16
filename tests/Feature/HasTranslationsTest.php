@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature;
 
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Tests\Fixtures\SoftDeletingTranslatableEntity;
 use Jurager\Eav\Tests\Fixtures\TranslatableEntity;
 
 class HasTranslationsTest extends FeatureTestCase
@@ -71,5 +74,39 @@ class HasTranslationsTest extends FeatureTestCase
     public function test_translations_relation_exposes_both_locales(): void
     {
         $this->assertCount(2, $this->fresh()->translations);
+    }
+
+    public function test_deleting_the_model_removes_only_its_translations(): void
+    {
+        $other = TranslatableEntity::create(['name' => 'Almaty']);
+        $other->translations()->attach([$this->en->id => ['label' => 'Almaty']]);
+
+        $this->entity->delete();
+
+        $this->assertDatabaseMissing('entity_translations', ['entity_type' => $this->entity->getMorphClass(), 'entity_id' => $this->entity->id]);
+        $this->assertDatabaseHas('entity_translations', ['entity_type' => $other->getMorphClass(), 'entity_id' => $other->id]);
+        $this->assertDatabaseCount('locales', 2);
+    }
+
+    public function test_a_soft_deleted_model_keeps_its_translations_until_force_deleted(): void
+    {
+        Schema::create('soft_deleting_entities', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+            $table->softDeletes();
+        });
+
+        $entity = SoftDeletingTranslatableEntity::create(['name' => 'Shymkent']);
+        $entity->translations()->attach([$this->en->id => ['label' => 'Shymkent']]);
+        $key = ['entity_type' => $entity->getMorphClass(), 'entity_id' => $entity->id];
+
+        $entity->delete();
+        $this->assertDatabaseHas('entity_translations', $key);
+
+        $entity->forceDelete();
+        $this->assertDatabaseMissing('entity_translations', $key);
+
+        Schema::drop('soft_deleting_entities');
     }
 }
