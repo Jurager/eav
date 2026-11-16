@@ -112,31 +112,63 @@ Translator::batch([
 
 ## Translating non-eav models
 
-Add a translations relation to use labels on other models:
+Add the `HasTranslations` trait to use labels on other models:
 
 ```php
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\MorphToMany;
-use Jurager\Eav\Eav;
+use Jurager\Eav\Concerns\HasTranslations;
 
 class Region extends Model
 {
-    public function translations(): MorphToMany
-    {
-        return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
-            ->using(Eav::$entityTranslationModel)
-            ->withPivot(['id', 'label', 'params'])
-            ->withTimestamps()
-            ->active();
-    }
+    use HasTranslations;
 }
 ```
 
-The `active()` scope limits labels to the request's locales. Use the same translator API:
+The trait adds the `translations` relation with labels in every locale, and `label()`, which returns the label in the request's locale, or the first one when that locale has none. Use the same translator API:
 
 ```php
 Translator::for($region)
     ->label('Europe', 'en')
     ->label('Европа', 'ru')
     ->save();
+
+$region->label(); // 'Европа' for a Russian request
 ```
+
+Labels are removed when the model is deleted. A model using `SoftDeletes` keeps them until it is force deleted. Deleting rows with a query builder, such as `Region::query()->delete()`, fires no model events and leaves the labels.
+
+## Validating translations
+
+Add the `HasTranslationRules` trait to a form request that accepts translations:
+
+```php
+use Illuminate\Foundation\Http\FormRequest;
+use Jurager\Eav\Concerns\HasTranslationRules;
+
+class StoreRegionRequest extends FormRequest
+{
+    use HasTranslationRules;
+
+    public function rules(): array
+    {
+        return [
+            'code' => ['required', 'string'],
+
+            ...$this->translationRules(),
+        ];
+    }
+
+    public function after(): array
+    {
+        return [$this->noDuplicateLocales()];
+    }
+}
+```
+
+`translationRules()` requires an array of translations with existing `locale_id` values and at least one non-empty label. Pass `required: false` to make the array optional. `extra` sets the rules of other fields of each translation, or replaces the rules of `label`:
+
+```php
+...$this->translationRules(extra: ['short_name' => ['nullable', 'string', 'max:30']]),
+```
+
+`noDuplicateLocales()` rejects two translations for the same locale. The package has the messages in English; translate them in the application's `lang/vendor/eav/{locale}/translations.php`.
