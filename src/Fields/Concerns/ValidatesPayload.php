@@ -109,7 +109,7 @@ trait ValidatesPayload
     protected function normalizeValues(mixed $values): array
     {
         if (! $this->isLocalizable()) {
-            return [self::UNLOCALIZED => is_array($values)
+            return [self::UNLOCALIZED => $this->isMultiple() && is_array($values)
                 ? array_map(fn (mixed $value) => $this->normalize($value), $values)
                 : $this->normalize($values)];
         }
@@ -177,6 +177,16 @@ trait ValidatesPayload
     }
 
     /**
+     * Rules prepended to the attribute rules, e.g. `numeric` so that `min` and `max` compare numbers, not string length.
+     *
+     * @return list<string>
+     */
+    protected function baseRules(): array
+    {
+        return [];
+    }
+
+    /**
      * Determine if a single value uses an array payload.
      */
     protected function isComposite(): bool
@@ -204,6 +214,6 @@ trait ValidatesPayload
             $rules[] = $param !== null ? "$prefix:$param" : $prefix;
         }
 
-        return $rules;
+        return $rules === [] ? [] : [...$this->baseRules(), ...$rules];
     }
 }

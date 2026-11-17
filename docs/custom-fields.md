@@ -59,6 +59,6 @@ To start from `Jurager\Eav\Fields\Field`, implement these methods:
 | `validate()` | Check a value and use `addError()` to report failures |
 | `normalize()` | Convert an accepted value to its storage format |
 
-Override `resolve()` to customize the value returned when reading. For array or object payloads, override `validatePayload()` to handle their shape.
+Override `resolve()` to customize the value returned when reading. For array or object payloads, override `validatePayload()` to handle their shape, or return `true` from `isComposite()` when one value is an object such as `{"value": 2, "unit_id": 5}`. A composite value of a single-value attribute is normalized and stored as one value; a multiple attribute takes a list of such objects. Override `ruleSubject()` to choose what attribute rules are checked against, and `baseRules()` to prepend rules such as `numeric`.
 
 A field that cannot be translated can return `false` from its static `localizable()` method. Enable supported capabilities on the type record before using flags such as `multiple` or `searchable` on an attribute.

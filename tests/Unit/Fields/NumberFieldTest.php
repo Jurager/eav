@@ -181,4 +181,24 @@ class NumberFieldTest extends TestCase
         $this->assertCount(1, $storage);
         $this->assertSame(7, $storage[0]['value']);
     }
+
+    // -----------------------------------------------------------------------
+    // validations — min / max
+    // -----------------------------------------------------------------------
+
+    public function test_max_rule_compares_numbers_not_string_length(): void
+    {
+        $field = $this->makeField(['validations' => [['type' => 'max', 'value' => 5]]]);
+
+        $this->assertFalse($field->fill(6));
+        $this->assertTrue($field->fill(1.2345));
+    }
+
+    public function test_min_rule_compares_numbers_not_string_length(): void
+    {
+        $field = $this->makeField(['validations' => [['type' => 'min', 'value' => 10]]]);
+
+        $this->assertFalse($field->fill(9.99999));
+        $this->assertTrue($field->fill(10));
+    }
 }

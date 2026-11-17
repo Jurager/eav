@@ -67,6 +67,8 @@ These map to Laravel's standard validation rules at runtime:
 | `after`       | `after:date`         |
 | `before`      | `before:date`        |
 
+For `number` fields the rules are applied together with `numeric`, so `min` and `max` compare the value as a number. A custom field can prepend its own rules the same way by overriding `baseRules()`.
+
 ## Working with Select fields
 
 Select fields expose selected options and their translated labels:

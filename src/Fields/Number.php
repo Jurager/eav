@@ -18,6 +18,14 @@ class Number extends Field
     }
 
     /**
+     * Compare `min` and `max` as numbers.
+     */
+    protected function baseRules(): array
+    {
+        return ['numeric'];
+    }
+
+    /**
      * Validate the field value.
      */
     protected function validate(mixed $value, ?Attributable $entity = null): bool
