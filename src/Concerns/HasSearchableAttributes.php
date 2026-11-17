@@ -6,10 +6,13 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Jurager\Eav\Search\Index\Document;
+use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\Index\IndexFactory;
 use Laravel\Scout\Searchable;
 
 /**
- * Add Scout search support with attribute indexing.
+ * Index the entity with Scout: the fields it declares in `searchIndex()` and its indexed attributes.
  *
  * @mixin Searchable
  */
@@ -17,24 +20,14 @@ trait HasSearchableAttributes
 {
     use Searchable;
 
+    /**
+     * Declare the model's own index fields; indexed attributes are added on top.
+     */
+    public function searchIndex(Index $index): void {}
+
     public function toSearchableArray(): array
     {
-        return ['id' => (string) $this->getScoutKey(), ...$this->eav()->indexData()];
-    }
-
-    public function shouldBeSearchable(): bool
-    {
-        return ! empty($this->eav()->indexData());
-    }
-
-    /**
-     * Columns whose change alters the index document.
-     *
-     * @return list<string>
-     */
-    protected function searchableColumns(): array
-    {
-        return [];
+        return app(Document::class)->build($this);
     }
 
     /**
@@ -46,19 +39,9 @@ trait HasSearchableAttributes
             return true;
         }
 
-        $columns = $this->searchableColumns();
+        $columns = app(IndexFactory::class)->for($this)->watched();
 
         return $columns !== [] && $this->wasChanged($columns);
-    }
-
-    /**
-     * Relations this entity needs beyond its attribute values, on top of what EAV loads itself.
-     *
-     * @return list<string>
-     */
-    protected function searchableWith(): array
-    {
-        return [];
     }
 
     /**
@@ -84,7 +67,7 @@ trait HasSearchableAttributes
     }
 
     /**
-     * Attribute value relations are always included — a model declaring its own cannot drop them.
+     * Attribute value relations, plus the relations declared fields are read from.
      *
      * @return list<string>
      */
@@ -93,7 +76,7 @@ trait HasSearchableAttributes
         $relations = [
             'attribute_values.attribute.enums.translations',
             'attribute_values.translations',
-            ...$this->searchableWith(),
+            ...app(IndexFactory::class)->for($this)->relations(),
         ];
 
         if (($parent = $this->attributeParentRelationName()) !== null) {

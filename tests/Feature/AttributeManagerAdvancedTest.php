@@ -158,51 +158,6 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData() — searchable attribute values for Scout
-    // -----------------------------------------------------------------------
-
-    public function test_index_data_returns_empty_when_no_searchable_attributes(): void
-    {
-        $this->createAttribute($this->textType, ['code' => 'title', 'searchable' => false]);
-
-        $product = $this->createProduct();
-        $product->eav()->set('title', 'Widget')->save('title');
-
-        $data = $product->fresh()->eav()->indexData();
-
-        $this->assertSame([], $data);
-    }
-
-    public function test_index_data_includes_searchable_attribute_values(): void
-    {
-        $this->createAttribute($this->textType, ['code' => 'title', 'searchable' => true]);
-
-        $product = $this->createProduct();
-        $product->eav()->set('title', 'Widget')->save('title');
-
-        $data = $product->fresh()->eav()->indexData();
-
-        $this->assertArrayHasKey('attributes', $data);
-        $this->assertArrayHasKey('title', $data['attributes']);
-        $this->assertSame('Widget', $data['attributes']['title']);
-    }
-
-    public function test_index_data_is_memoized(): void
-    {
-        $this->createAttribute($this->textType, ['code' => 'title', 'searchable' => true]);
-
-        $product = $this->createProduct();
-        $product->eav()->set('title', 'Widget')->save('title');
-
-        $product = $product->fresh();
-
-        $first = $product->eav()->indexData();
-        $second = $product->eav()->indexData();
-
-        $this->assertSame($first, $second);
-    }
-
-    // -----------------------------------------------------------------------
     // Attributes::schema()
     // -----------------------------------------------------------------------
 

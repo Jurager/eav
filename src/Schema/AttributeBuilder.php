@@ -22,6 +22,7 @@ use Jurager\Eav\Schema\Repositories\AttributeRepository;
  * @method $this multiple(bool $value = true)
  * @method $this filterable(bool $value = true)
  * @method $this searchable(bool $value = true)
+ * @method $this sortable(bool $value = true)
  * @method $this held_by(HeldBy $side)
  * @method $this inherit_from_parent(bool $value = true)
  * @method $this sort(int $position)

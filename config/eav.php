@@ -98,4 +98,63 @@ return [
         'link' => Link::class,
     ],
 
+    /*
+     * Search with Laravel Scout and Meilisearch.
+     */
+    'search' => [
+
+        /*
+         * Meilisearch settings applied to every index, and to the index of
+         * one entity type. Searchable, filterable and sortable fields, the
+         * distinct field and localized fields are derived from the index
+         * definition and merged on top.
+         *
+         * Run `php artisan eav:search:sync` after changing these.
+         *
+         * Synonyms and stop words apply to an index as a whole, not per locale.
+         */
+        'settings' => [
+            // 'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
+            // 'synonyms' => ['sneakers' => ['trainers']],
+            // 'stopWords' => ['the', 'a'],
+            // 'pagination' => ['maxTotalHits' => 10000],
+            // 'faceting' => ['maxValuesPerFacet' => 200],
+        ],
+
+        'indexes' => [
+            // 'product' => ['rankingRules' => ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness']],
+        ],
+
+        /*
+         * The Meilisearch language of a locale, by locale code. A locale not
+         * listed here uses the first two letters of its code, e.g. "en_US"
+         * is "en". Set this when the code is not an ISO 639-1 language.
+         */
+        'locales' => [
+            // 'ua' => 'uk',
+        ],
+
+        /*
+         * Whether the "like" filter operator is allowed. It compiles to the
+         * CONTAINS operator, an experimental Meilisearch feature you must
+         * enable on the server. When off, "like" is rejected with a 422.
+         */
+        'contains' => false,
+
+        /*
+         * Resolvers for filter keys the index does not hold. Add
+         * AttributeRelationFilterResolver to filter by an attribute of a
+         * related entity, e.g. "category.color".
+         */
+        'resolvers' => [
+            // \Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver::class,
+        ],
+
+        /*
+         * The most related records a relation filter may match. The ids are
+         * sent in the filter expression, so a broader filter is rejected.
+         */
+        'relation_limit' => 1000,
+    ],
+
 ];

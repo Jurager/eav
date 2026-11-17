@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature\Schema;
 use Illuminate\Support\Facades\Queue;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Facades\Schema;
-use Jurager\Eav\Jobs\SyncSearchable;
+use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
 
@@ -42,8 +42,8 @@ class BatchTest extends FeatureTestCase
         $attribute = $created->get('warranty_months');
 
         $this->assertSame(['product', 'service'], $attribute->applicableEntityTypes());
-        Queue::assertPushed(SyncSearchable::class, fn (SyncSearchable $job) => $job->uniqueId() === "product:{$attribute->id}");
-        Queue::assertPushed(SyncSearchable::class, fn (SyncSearchable $job) => $job->uniqueId() === "service:{$attribute->id}");
+        Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "product:{$attribute->id}");
+        Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "service:{$attribute->id}");
     }
 
     public function test_batch_persists_translations(): void

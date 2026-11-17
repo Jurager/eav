@@ -4,12 +4,10 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Schema;
 
-use Jurager\Eav\Jobs\SyncIndexSettings;
-use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Search\Indexer;
+use Jurager\Eav\Search\Index\Synchronizer;
 
 /**
  * Synchronize cached schemas and search indexes with attribute definitions.
@@ -19,23 +17,21 @@ class SchemaSynchronizer
     public function __construct(
         private readonly SchemaRegistry $schemas,
         private readonly AttributeRegistry $attributes,
+        private readonly Synchronizer $indexes,
     ) {
     }
 
     /**
-     * Refresh an attribute's cached schemas and affected search indexes.
+     * Refresh an attribute's cached schemas and the search indexes it is part of.
+     *
+     * @param  bool|null  $indexed  Whether what the index depends on changed; null to decide from the attribute's flags.
      */
-    public function refresh(Attribute $attribute, ?bool $documents = null, ?bool $settings = null): void
+    public function refresh(Attribute $attribute, ?bool $indexed = null): void
     {
         $entityTypes = $this->entityTypes($attribute);
 
         $this->forget($entityTypes);
-        $this->reindex(
-            $attribute,
-            $entityTypes,
-            $documents ?? ($attribute->searchable || $attribute->filterable),
-            $settings ?? (bool) $attribute->filterable,
-        );
+        $this->indexes->attribute($attribute, $entityTypes, $indexed);
     }
 
     /**
@@ -60,28 +56,6 @@ class SchemaSynchronizer
         foreach (array_unique($entityTypes) as $entityType) {
             $this->schemas->forget($entityType);
             $this->attributes->forget($entityType);
-        }
-    }
-
-    /**
-     * Queue document and filter settings updates for an attribute.
-     *
-     * @param  list<string>  $entityTypes
-     */
-    private function reindex(Attribute $attribute, array $entityTypes, bool $documents, bool $settings): void
-    {
-        if (! Indexer::available()) {
-            return;
-        }
-
-        foreach ($entityTypes as $entityType) {
-            if ($documents || $settings) {
-                SyncSearchable::dispatch($entityType, $attribute->getKey())->afterCommit();
-            }
-
-            if ($settings) {
-                SyncIndexSettings::dispatch($entityType)->afterCommit();
-            }
         }
     }
 }

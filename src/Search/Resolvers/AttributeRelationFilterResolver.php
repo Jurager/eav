@@ -10,11 +10,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Str;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Filterable\Support\FilterOperator;
 
 /**
- * Resolve a relation filter key into a concrete foreign key ID list.
+ * Resolve a filter on a related entity's attribute (`category.color`) into a list of related ids.
+ *
+ * Opt in through `eav.search.resolvers`. The index must declare the relation's key filterable:
+ * the foreign key itself for a belongs-to (`category_id`), `{relation}.{key}` otherwise (`categories.category_id`).
  */
 class AttributeRelationFilterResolver implements FilterResolver
 {
@@ -42,14 +46,25 @@ class AttributeRelationFilterResolver implements FilterResolver
 
         [$operator, $operand] = $this->parseCondition($value);
 
+        $limit = (int) config('eav.search.relation_limit', 1000);
+
         $ids = $related->newQuery()
             ->whereAttribute($attribute, $operand, $operator)
+            ->limit($limit + 1)
             ->pluck($related->getKeyName())
             ->all();
 
+        // The ids travel in the filter expression: refuse a list too long to send rather than cut it short.
+        if (count($ids) > $limit) {
+            throw InvalidSearchQueryException::tooManyMatches($name, $limit);
+        }
+
         // If no results found, return '0' to ensure an empty result set
         $idString = empty($ids) ? '0' : implode(',', $ids);
-        $resolvedKey = "{$relation}.{$this->foreignKey($instance, $relation)}";
+        $foreignKey = $this->foreignKey($instance, $relation);
+
+        // A belongs-to key is a column of the entity itself; other relations are indexed under the relation's name.
+        $resolvedKey = $instance instanceof BelongsTo ? $foreignKey : "{$relation}.{$foreignKey}";
 
         return [
             $resolvedKey,

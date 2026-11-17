@@ -1,0 +1,112 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Jurager\Eav\Tests\Feature\Search;
+
+class DocumentTest extends SearchTestCase
+{
+    public function test_document_holds_the_key_and_declared_fields(): void
+    {
+        $parent = $this->product('Model');
+        $product = $this->product('Widget', $parent->id);
+
+        $this->assertSame(
+            ['id' => $product->id, 'name' => 'Widget', 'parent_id' => $parent->id],
+            $product->toSearchableArray(),
+        );
+    }
+
+    public function test_an_entity_without_indexed_values_is_still_indexed(): void
+    {
+        $this->attribute('text', 'notes');
+
+        $product = $this->product();
+        $product->eav()->set('notes', 'Internal')->save();
+
+        $this->assertTrue($product->shouldBeSearchable());
+        $this->assertArrayNotHasKey('attributes', $product->fresh()->toSearchableArray());
+    }
+
+    public function test_indexed_attributes_are_nested_under_attributes(): void
+    {
+        $this->attribute('text', 'sku', ['searchable' => true]);
+        $this->attribute('number', 'price', ['filterable' => true]);
+        $this->attribute('number', 'weight', ['sortable' => true]);
+        $this->attribute('text', 'notes');
+
+        $product = $this->product();
+        $product->eav()->set('sku', 'AB-1')->set('price', 100)->set('weight', 3)->set('notes', 'x')->save();
+
+        $this->assertEquals(
+            ['sku' => 'AB-1', 'price' => 100, 'weight' => 3],
+            $product->fresh()->toSearchableArray()['attributes'],
+        );
+    }
+
+    public function test_localizable_values_are_keyed_by_locale_code(): void
+    {
+        $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
+
+        $product = $this->product();
+        $product->eav()->set('title', 'Red shoes', $this->en->id)->set('title', 'Красные кроссовки', $this->ru->id)->save();
+
+        $this->assertSame(
+            ['title' => ['en' => 'Red shoes', 'ru' => 'Красные кроссовки']],
+            $product->fresh()->toSearchableArray()['attributes'],
+        );
+    }
+
+    public function test_a_select_is_indexed_by_code_with_labels_per_locale(): void
+    {
+        $color = $this->attribute('select', 'color', ['filterable' => true, 'searchable' => true]);
+        $red = $this->option($color, 'red', ['en' => 'Red', 'ru' => 'Красный']);
+
+        $product = $this->product();
+        $product->eav()->set('color', $red->id)->save();
+
+        $this->assertSame(
+            ['color' => 'red', 'color_label' => ['en' => 'Red', 'ru' => 'Красный']],
+            $product->fresh()->toSearchableArray()['attributes'],
+        );
+    }
+
+    public function test_dates_are_indexed_as_timestamps_and_booleans_as_booleans(): void
+    {
+        $this->attribute('date', 'released', ['filterable' => true]);
+        $this->attribute('boolean', 'active', ['filterable' => true]);
+
+        $product = $this->product();
+        $product->eav()->set('released', '2026-01-02 00:00:00')->set('active', false)->save();
+
+        $attributes = $product->fresh()->toSearchableArray()['attributes'];
+
+        $this->assertSame(strtotime('2026-01-02 00:00:00'), $attributes['released']);
+        $this->assertFalse($attributes['active']);
+    }
+
+    public function test_a_variant_document_includes_inherited_values(): void
+    {
+        $this->attribute('text', 'title', ['searchable' => true, 'inherit_from_parent' => true]);
+
+        $parent = $this->product('Model');
+        $parent->eav()->set('title', 'Parent title')->save();
+        $variant = $this->product('Variant', $parent->id);
+
+        $this->assertSame('Parent title', $variant->fresh()->toSearchableArray()['attributes']['title']);
+    }
+
+    public function test_a_save_reindexes_only_when_a_declared_column_changed(): void
+    {
+        $product = $this->product();
+
+        $this->assertTrue($product->searchIndexShouldBeUpdated());
+
+        $product = $product->fresh();
+        $product->touch();
+        $this->assertFalse($product->searchIndexShouldBeUpdated());
+
+        $product->update(['name' => 'Gadget']);
+        $this->assertTrue($product->searchIndexShouldBeUpdated());
+    }
+}

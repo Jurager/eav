@@ -9,11 +9,9 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\JoinClause;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
-use Jurager\Eav\Enums\IndexCapability;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\AttributeRegistry;
 use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Search\Builder as SearchBuilder;
 use Jurager\Filterable\Contracts\SortResolver;
 
 class AttributeSortResolver implements SortResolver
@@ -25,14 +23,10 @@ class AttributeSortResolver implements SortResolver
     ) {}
 
     /**
-     * Resolve sort order for EAV attributes, in the database or in the search index.
+     * Resolve sort order for EAV attributes.
      */
     public function resolve(object $query, string $field, string $direction, Model $model, array $context = []): bool
     {
-        if ($query instanceof SearchBuilder) {
-            return $this->orderIndex($query, $field, $direction, $model);
-        }
-
         if (! $query instanceof Builder || str_contains($field, '.') || ! $model instanceof Attributable) {
             return false;
         }
@@ -81,22 +75,6 @@ class AttributeSortResolver implements SortResolver
         }
 
         $query->orderBy($subquery, $direction);
-
-        return true;
-    }
-
-    /**
-     * Order search results by an indexed attribute.
-     */
-    private function orderIndex(SearchBuilder $query, string $field, string $direction, Model $model): bool
-    {
-        $path = 'attributes.'.$field;
-
-        if (str_contains($field, '.') || ! IndexCapability::Sort->allowed($model, $path)) {
-            return false;
-        }
-
-        $query->orderBy($path, $direction);
 
         return true;
     }

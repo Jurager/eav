@@ -30,6 +30,7 @@ class SelectFieldTest extends TestCase
         $this->localeRegistry->shouldReceive('has')->andReturn(true);
         $this->localeRegistry->shouldReceive('default')->andReturn(1);
         $this->localeRegistry->shouldReceive('ids')->andReturn([1]);
+        $this->localeRegistry->shouldReceive('code')->andReturn('en');
 
         $this->enumRegistry = Mockery::mock(EnumRegistry::class);
         $this->enumRegistry->shouldReceive('isValidId')
@@ -237,13 +238,17 @@ class SelectFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // filterableKeys()
+    // indexFields()
     // -----------------------------------------------------------------------
 
-    public function test_filterable_keys_returns_attribute_code(): void
+    public function test_index_fields_are_the_option_code_and_its_localized_labels(): void
     {
-        $field = $this->makeField(['code' => 'color']);
+        $fields = $this->makeField(['code' => 'color', 'filterable' => true, 'searchable' => true])->indexFields();
 
-        $this->assertSame(['color'], $field->filterableKeys());
+        $this->assertSame(['attributes.color', 'attributes.color_label'], array_column($fields, 'path'));
+        $this->assertTrue($fields[0]->filterable);
+        $this->assertFalse($fields[0]->searchable);
+        $this->assertTrue($fields[1]->searchable);
+        $this->assertTrue($fields[1]->localized);
     }
 }

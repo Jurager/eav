@@ -227,7 +227,7 @@ class LocalizableFieldTest extends FeatureTestCase
     // indexData() for localizable fields
     // -----------------------------------------------------------------------
 
-    public function test_index_data_returns_all_locale_values(): void
+    public function test_index_data_keys_values_by_locale_code(): void
     {
         $field = $this->makeField();
 
@@ -236,11 +236,6 @@ class LocalizableFieldTest extends FeatureTestCase
             ['locale_id' => $this->frLocaleId, 'values' => 'Couleur'],
         ]);
 
-        $data = $field->indexData();
-
-        $this->assertArrayHasKey('label', $data);
-        $this->assertIsArray($data['label']);
-        $this->assertContains('Color', $data['label']);
-        $this->assertContains('Couleur', $data['label']);
+        $this->assertSame(['label' => ['en' => 'Color', 'fr' => 'Couleur']], $field->indexData());
     }
 }

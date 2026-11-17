@@ -55,7 +55,7 @@ class EntityValues
     }
 
     /**
-     * Get rows for searchable or filterable attributes.
+     * Get rows of the attributes the search index holds.
      *
      * @return Collection<int, Model>
      */
@@ -66,7 +66,7 @@ class EntityValues
         }
 
         return $this->query()
-            ->whereHas('attribute', fn ($query) => $query->whereAny(['searchable', 'filterable'], true))
+            ->whereHas('attribute', fn ($query) => $query->whereAny(['searchable', 'filterable', 'sortable'], true))
             ->with([
                 'attribute',
                 'attribute.enums.translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
@@ -180,7 +180,7 @@ class EntityValues
 
     private static function indexed(?Attribute $attribute): bool
     {
-        return (bool) ($attribute?->searchable || $attribute?->filterable);
+        return (bool) ($attribute?->searchable || $attribute?->filterable || $attribute?->sortable);
     }
 
     /**

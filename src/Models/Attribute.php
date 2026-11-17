@@ -30,6 +30,7 @@ use Jurager\Eav\Registry\AttributeTypeRegistry;
  * @property bool $unique
  * @property bool $filterable
  * @property bool $searchable
+ * @property bool $sortable
  * @property HeldBy $held_by
  * @property bool $inherit_from_parent
  * @property array|null $validations
@@ -60,6 +61,7 @@ class Attribute extends Model
         'unique',
         'filterable',
         'searchable',
+        'sortable',
         'held_by',
         'inherit_from_parent',
         'validations',
@@ -147,6 +149,7 @@ class Attribute extends Model
             'unique' => 'boolean',
             'filterable' => 'boolean',
             'searchable' => 'boolean',
+            'sortable' => 'boolean',
 
             'held_by' => HeldBy::class,
             'inherit_from_parent' => 'boolean',

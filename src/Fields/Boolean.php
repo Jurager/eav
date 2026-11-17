@@ -6,6 +6,7 @@ namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Enums\IndexType;
 
 /**
  * Boolean attribute field with tolerant input parsing.
@@ -33,21 +34,17 @@ class Boolean extends Field
         return (bool) $raw;
     }
 
-    /** @return array<string, bool|list<bool>> */
-    public function indexData(): array
+    public function indexType(): IndexType
     {
-        $code = $this->code();
+        return IndexType::Boolean;
+    }
 
-        if (! $this->isLocalizable()) {
-            return [$code => $this->value() ?? false];
-        }
-
-        $values = array_values(array_filter(
-            array_map(static fn (mixed $value) => $value !== null ? (bool) $value : null, $this->values),
-            static fn ($v) => $v !== null
-        ));
-
-        return $values ? [$code => $values] : [];
+    /**
+     * A boolean with a stored row is always indexed, so `false` can be filtered on.
+     */
+    public function toIndex(?int $localeId = null): bool
+    {
+        return $this->value($localeId) ?? false;
     }
 
     protected function validate(mixed $value, ?Attributable $entity = null): bool
