@@ -165,18 +165,12 @@ class MeilisearchEngine implements Engine, FederatesSearches, SearchesFacetValue
      */
     private function hits(Builder $search, array $hits): array
     {
-        return array_map(static function (array $hit) use ($search): Hit {
-            $score = $hit['_rankingScore'] ?? null;
-
-            return new Hit(
-                key: $hit['id'],
-                entityType: $search->index->entityType,
-                document: array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
-                formatted: $hit['_formatted'] ?? [],
-                score: $score === null ? null : (float) $score,
-                search: $search,
-            );
-        }, array_values($hits));
+        return array_map(static fn (array $hit): Hit => $search->hit(
+            $hit['id'],
+            array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
+            $hit['_formatted'] ?? [],
+            isset($hit['_rankingScore']) ? (float) $hit['_rankingScore'] : null,
+        ), array_values($hits));
     }
 
     /**

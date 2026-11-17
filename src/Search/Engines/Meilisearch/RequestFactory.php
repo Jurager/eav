@@ -40,13 +40,7 @@ class RequestFactory
             $request['filter'] = $filter;
         }
 
-        foreach ($builder->orders as [$name, $direction]) {
-            $field = $builder->field($name);
-
-            if (! $field->sortable) {
-                throw InvalidSearchQueryException::notSortable($name);
-            }
-
+        foreach ($builder->orders as [$field, $direction]) {
             $request['sort'][] = $builder->path($field).':'.$direction;
         }
 
@@ -112,13 +106,7 @@ class RequestFactory
         $paths = [];
 
         foreach ($builder->searchOn as $name) {
-            $field = $builder->field($name);
-
-            if (! $field->searchable) {
-                throw InvalidSearchQueryException::notSearchable($name);
-            }
-
-            array_push($paths, ...$field->paths($builder->locales()));
+            array_push($paths, ...$builder->field($name)->paths($builder->locales()));
         }
 
         return array_values(array_unique($paths));
@@ -134,12 +122,12 @@ class RequestFactory
         $locale = $builder->locales()[0] ?? null;
         $filters = [];
 
-        foreach ($builder->filters as $parsed) {
-            $filters[] = $this->compiler->compile($parsed, $builder->index, $locale, $except);
+        foreach ($builder->filters as $group) {
+            $filters[] = $this->compiler->compile($group->except($except), $locale);
         }
 
         if ($side !== null && $builder->partition !== null) {
-            $condition = $this->compiler->compile($builder->partition, $builder->index, $locale);
+            $condition = $this->compiler->compile($builder->partition, $locale);
             $filters[] = $condition === null || $side ? $condition : "NOT ({$condition})";
         }
 

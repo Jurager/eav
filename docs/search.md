@@ -384,7 +384,12 @@ class TypesenseEngine implements Engine
         // Translate $search->query, $search->filters, $search->orders, $search->facets ...
         // into a request, then return the hits, the total, and the facets.
 
-        return new Response($hits, $total, $facets);
+        $hits = array_map(
+            fn (array $document) => $search->hit($document['id'], $document, score: $document['score']),
+            $found['documents'],
+        );
+
+        return new Response($hits, $found['total'], $facets);
     }
 }
 
@@ -393,7 +398,13 @@ Search::extend('typesense', fn ($app) => new TypesenseEngine($app->make(Client::
 
 Then set `EAV_SEARCH_DRIVER=typesense`.
 
-The builder gives the engine names already checked against the index definition: use `$search->field($name)` and `$search->path($field)` to turn them into document paths. Return each facet keyed by the name it was asked for, as a map of value to count, or as `min` and `max` for a numeric or date field. The package adds labels and loads the models.
+The builder is checked against the index definition before it reaches the engine, so every engine is equally strict:
+
+- `$search->filters` are groups of `Condition` objects: a filterable field, a `Comparison`, and a value already cast to the field's type. A request with an unknown field, an operator the field's type does not allow, or a value that does not fit is refused with a 422 before any engine is asked.
+- `$search->orders` are sortable fields with a direction; `$search->facets` are names of filterable fields.
+- `$search->path($field)` gives a field's document path in the searched locale.
+
+Return each facet keyed by the name it was asked for, as a map of value to count, or as `min` and `max` for a numeric or date field. The package adds labels and loads the models. `$perPage` is 0 when only the total or the facets are wanted.
 
 An engine may implement more contracts for what it can do natively. Without them the package falls back:
 

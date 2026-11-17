@@ -6,7 +6,11 @@ namespace Jurager\Eav\Tests\Feature\Search;
 
 use Illuminate\Support\Facades\Queue;
 use InvalidArgumentException;
+use Jurager\Eav\Enums\Comparison;
+use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Facades\Search;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\Engines\MeilisearchEngine;
 use Jurager\Eav\Search\Testing\FakeEngine;
@@ -58,6 +62,56 @@ class SearchManagerTest extends SearchTestCase
         $this->assertSame([], $this->engine->searches, 'Meilisearch is not asked.');
 
         $engine->assertSearched(fn (Builder $search) => $search->query === 'shoes' && $search->index->entityType === 'searchable_product');
+    }
+
+    public function test_an_engine_is_handed_conditions_already_checked_and_cast(): void
+    {
+        $engine = $this->useCustomEngine();
+        $this->attribute('number', 'price', ['filterable' => true, 'sortable' => true]);
+        $this->attribute('date', 'released', ['filterable' => true]);
+
+        Search::for(SearchableProduct::class)
+            ->filter(['price' => ['gte' => '10'], 'released' => ['lt' => '2026-01-01']])
+            ->whereIn('parent', ['1', '2'])
+            ->sort('-price')
+            ->paginate();
+
+        $search = $engine->searches[0];
+        [$price, $released] = $search->filters[0]->members;
+        [$parent] = $search->filters[1]->members;
+
+        $this->assertSame(['attributes.price', Comparison::GreaterOrEqual, 10], [$price->field->path, $price->comparison, $price->value]);
+        $this->assertSame([Comparison::Less, strtotime('2026-01-01')], [$released->comparison, $released->value]);
+        $this->assertSame(['parent_id', Comparison::In, [1, 2]], [$parent->field->path, $parent->comparison, $parent->value]);
+        $this->assertSame(['attributes.price', 'desc'], [$search->orders[0][0]->path, $search->orders[0][1]]);
+    }
+
+    public function test_a_request_is_refused_before_it_reaches_any_engine(): void
+    {
+        $engine = $this->useCustomEngine();
+        $this->attribute('text', 'sku', ['searchable' => true]);
+
+        $attempts = [
+            fn ($search) => $search->filter(['nope = 1 OR id > 0 OR nope' => 1]),
+            fn ($search) => $search->filter(['sku' => 'x']),
+            fn ($search) => $search->where('parent', 'not a number'),
+            fn ($search) => $search->sort('sku'),
+            fn ($search) => $search->facets('sku'),
+            fn ($search) => $search->searchOn('parent'),
+            fn ($search) => $search->distinct('sku'),
+            fn ($search) => $search->highlight('nope'),
+        ];
+
+        foreach ($attempts as $attempt) {
+            try {
+                $attempt(Search::for(SearchableProduct::class))->paginate();
+                $this->fail('The request should have been refused.');
+            } catch (InvalidSearchQueryException) {
+                // Refused, as it should be.
+            }
+        }
+
+        $engine->assertNothingSearched();
     }
 
     public function test_facets_of_any_engine_get_labels_and_one_shape(): void
@@ -137,6 +191,16 @@ class SearchManagerTest extends SearchTestCase
 
         $this->assertSame([], $this->engine->settings);
         Queue::assertPushed(MakeSearchable::class, 1);
+    }
+
+    public function test_index_settings_are_skipped_when_the_engine_is_not_installed(): void
+    {
+        // Scout indexing entities on its own, without the client of the engine named as the driver.
+        Search::extend('meilisearch', fn () => throw SearchNotAvailableException::notInstalled());
+
+        $this->app->call([new SyncIndexSettings('searchable_product'), 'handle']);
+
+        $this->assertSame([], $this->engine->settings);
     }
 
     public function test_fake_answers_searches_and_records_them(): void

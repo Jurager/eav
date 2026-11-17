@@ -45,13 +45,11 @@ class FakeEngine implements Engine
 
         $response = $this->responses[$search->index->entityType] ?? ['hits' => [], 'total' => 0, 'facets' => []];
 
-        $hits = array_map(static fn (array $hit): Hit => new Hit(
-            key: $hit['id'],
-            entityType: $search->index->entityType,
-            document: array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
-            formatted: $hit['_formatted'] ?? [],
-            score: isset($hit['_score']) ? (float) $hit['_score'] : null,
-            search: $search,
+        $hits = array_map(static fn (array $hit): Hit => $search->hit(
+            $hit['id'],
+            array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
+            $hit['_formatted'] ?? [],
+            isset($hit['_score']) ? (float) $hit['_score'] : null,
         ), array_slice($response['hits'], ($page - 1) * $perPage, $perPage));
 
         return new Response($hits, $response['total'], array_intersect_key($response['facets'], array_flip($search->facets)));

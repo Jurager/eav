@@ -5,17 +5,13 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search\Engines\Meilisearch;
 
 use Illuminate\Contracts\Config\Repository;
+use Jurager\Eav\Enums\Comparison;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Index\Index;
-use Jurager\Eav\Search\Index\IndexField;
-use Jurager\Filterable\Support\FilterOperator;
-use Jurager\Filterable\Support\ParsedFilters;
+use Jurager\Eav\Search\Filters\Condition;
+use Jurager\Eav\Search\Filters\Group;
 
 /**
- * Compile parsed filters into a Meilisearch filter expression.
- *
- * Only fields the index declares filterable may appear, and every value is cast to the field's type —
- * a condition is never dropped or passed through unchecked.
+ * Write checked search conditions as a Meilisearch filter expression.
  */
 class FilterCompiler
 {
@@ -23,184 +19,66 @@ class FilterCompiler
 
     /**
      * @param  string|null  $locale  Locale whose slot of a localized field is compared.
-     * @param  list<string>  $except  Paths of fields whose top-level conditions are left out (disjunctive facets).
      *
-     * @throws InvalidSearchQueryException
+     * @throws InvalidSearchQueryException When a condition needs a feature that is turned off.
      */
-    public function compile(ParsedFilters $parsed, Index $index, ?string $locale = null, array $except = []): ?string
+    public function compile(Group $group, ?string $locale = null): ?string
     {
-        $parts = $this->block($parsed->filters, $index, $locale, $except);
+        $parts = array_map(fn (Condition|Group $member): string => $this->member($member, $locale), $group->members);
 
-        foreach (['AND' => $parsed->andGroups, 'OR' => $parsed->orGroups] as $glue => $groups) {
-            $group = [];
-
-            foreach ($groups as $conditions) {
-                $compiled = $this->block($conditions, $index, $locale);
-
-                if ($compiled !== []) {
-                    $group[] = count($compiled) > 1 ? '('.implode(' AND ', $compiled).')' : $compiled[0];
-                }
-            }
-
-            if ($group !== []) {
-                $parts[] = '('.implode(" {$glue} ", $group).')';
-            }
-        }
-
-        return $parts === [] ? null : implode(' AND ', $parts);
+        return $parts === [] ? null : implode($group->any ? ' OR ' : ' AND ', $parts);
     }
 
-    /**
-     * @param  array<array-key, mixed>  $conditions
-     * @param  list<string>  $except
-     * @return list<string>
-     */
-    private function block(array $conditions, Index $index, ?string $locale, array $except = []): array
+    private function member(Condition|Group $member, ?string $locale): string
     {
-        $parts = [];
-
-        foreach ($conditions as $name => $value) {
-            $name = (string) $name;
-            $field = $index->find($name) ?? throw InvalidSearchQueryException::unknownField($name);
-
-            if (! $field->filterable) {
-                throw InvalidSearchQueryException::notFilterable($name);
-            }
-
-            if (in_array($field->path, $except, true)) {
-                continue;
-            }
-
-            $parts[] = $this->field($name, $field, $field->pathFor($locale), $value);
+        if ($member instanceof Condition) {
+            return $this->condition($member, $member->field->pathFor($locale));
         }
 
-        return $parts;
+        $expression = (string) $this->compile($member, $locale);
+
+        return count($member->members) > 1 ? "({$expression})" : $expression;
     }
 
-    private function field(string $name, IndexField $field, string $path, mixed $value): string
+    private function condition(Condition $condition, string $path): string
     {
-        if (! is_array($value)) {
-            return $this->equality($name, $field, $path, '=', $value);
-        }
+        $value = $condition->value;
 
-        if (array_is_list($value)) {
-            return $this->in($name, $field, $path, $value, false);
-        }
-
-        $parts = [];
-
-        foreach ($value as $alias => $operand) {
-            $parts[] = $this->operand($name, $field, $path, (string) $alias, $operand);
-        }
-
-        return count($parts) > 1 ? '('.implode(' AND ', $parts).')' : $parts[0];
-    }
-
-    private function operand(string $name, IndexField $field, string $path, string $alias, mixed $operand): string
-    {
-        return match (FilterOperator::fromAlias($alias)) {
-            FilterOperator::Eq => $this->equality($name, $field, $path, '=', $operand),
-            FilterOperator::Ne => $this->equality($name, $field, $path, '!=', $operand),
-            FilterOperator::Gt => $this->comparison($name, $field, $path, '>', $operand),
-            FilterOperator::Gte => $this->comparison($name, $field, $path, '>=', $operand),
-            FilterOperator::Lt => $this->comparison($name, $field, $path, '<', $operand),
-            FilterOperator::Lte => $this->comparison($name, $field, $path, '<=', $operand),
-            FilterOperator::In => $this->in($name, $field, $path, $operand, false),
-            FilterOperator::Nin => $this->in($name, $field, $path, $operand, true),
-            FilterOperator::Between => $this->range($name, $field, $path, $operand, false),
-            FilterOperator::NotBetween => $this->range($name, $field, $path, $operand, true),
-            FilterOperator::IsNull => $this->exists($path, $operand, true),
-            FilterOperator::IsNotNull => $this->exists($path, $operand, false),
-            FilterOperator::Like => $this->contains($name, $path, $operand),
-            default => throw InvalidSearchQueryException::unsupportedOperator($name, $alias),
+        return match ($condition->comparison) {
+            Comparison::Equal => "{$path} = ".self::literal($value),
+            Comparison::NotEqual => "{$path} != ".self::literal($value),
+            Comparison::Greater => "{$path} > ".self::literal($value),
+            Comparison::GreaterOrEqual => "{$path} >= ".self::literal($value),
+            Comparison::Less => "{$path} < ".self::literal($value),
+            Comparison::LessOrEqual => "{$path} <= ".self::literal($value),
+            Comparison::In => "{$path} IN [".implode(', ', array_map(self::literal(...), $value)).']',
+            Comparison::NotIn => "NOT {$path} IN [".implode(', ', array_map(self::literal(...), $value)).']',
+            Comparison::Between => "({$path} >= ".self::literal($value[0])." AND {$path} <= ".self::literal($value[1]).')',
+            Comparison::NotBetween => "({$path} < ".self::literal($value[0])." OR {$path} > ".self::literal($value[1]).')',
+            Comparison::Exists => "{$path} EXISTS",
+            Comparison::Missing => "{$path} NOT EXISTS",
+            Comparison::Contains => $this->contains($condition, $path),
         };
     }
 
-    private function equality(string $name, IndexField $field, string $path, string $operator, mixed $value): string
-    {
-        return "{$path} {$operator} ".$this->literal($name, $field, $value, $operator);
-    }
-
-    private function comparison(string $name, IndexField $field, string $path, string $operator, mixed $value): string
-    {
-        if (! $field->type->isNumeric()) {
-            throw InvalidSearchQueryException::unsupportedOperator($name, $operator);
-        }
-
-        return "{$path} {$operator} ".$this->literal($name, $field, $value, $operator);
-    }
-
-    private function in(string $name, IndexField $field, string $path, mixed $value, bool $negate): string
-    {
-        $items = is_array($value) ? array_values($value) : explode(',', (string) $value);
-        $literals = array_map(fn (mixed $item): string => $this->literal($name, $field, $item, 'in'), $items);
-
-        return ($negate ? 'NOT ' : '')."{$path} IN [".implode(', ', $literals).']';
-    }
-
-    private function range(string $name, IndexField $field, string $path, mixed $value, bool $negate): string
-    {
-        $pair = is_array($value) ? array_values($value) : explode(',', (string) $value, 2);
-
-        if (! $field->type->isNumeric()) {
-            throw InvalidSearchQueryException::unsupportedOperator($name, 'between');
-        }
-
-        if (count($pair) !== 2) {
-            throw InvalidSearchQueryException::invalidValue($name, 'between');
-        }
-
-        $min = $this->literal($name, $field, $pair[0], 'between');
-        $max = $this->literal($name, $field, $pair[1], 'between');
-
-        return $negate ? "({$path} < {$min} OR {$path} > {$max})" : "({$path} >= {$min} AND {$path} <= {$max})";
-    }
-
-    private function exists(string $path, mixed $value, bool $negate): string
-    {
-        $truthy = filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE) ?? true;
-
-        return $truthy !== $negate ? "{$path} EXISTS" : "{$path} NOT EXISTS";
-    }
-
     /**
-     * Substring match — an experimental engine feature, off unless enabled in the configuration.
+     * Substring match — an experimental Meilisearch feature, off unless enabled in the configuration.
      */
-    private function contains(string $name, string $path, mixed $value): string
+    private function contains(Condition $condition, string $path): string
     {
         if (! $this->config->get('eav.search.engines.meilisearch.contains', false)) {
-            throw InvalidSearchQueryException::unsupportedOperator($name, 'like');
+            throw InvalidSearchQueryException::unsupportedOperator($condition->name, $condition->comparison->value);
         }
 
-        $parts = [];
-
-        foreach ((array) $value as $item) {
-            if (! is_scalar($item) || ($needle = trim((string) $item, '%')) === '') {
-                throw InvalidSearchQueryException::invalidValue($name, 'like');
-            }
-
-            $parts[] = "{$path} CONTAINS ".self::quote($needle);
-        }
-
-        return count($parts) > 1 ? '('.implode(' OR ', $parts).')' : $parts[0];
+        return "{$path} CONTAINS ".self::literal($condition->value);
     }
 
-    /**
-     * Render a value as the field's type, quoted and escaped where it is a string.
-     */
-    private function literal(string $name, IndexField $field, mixed $value, string $operator): string
+    private static function literal(string|int|float|bool $value): string
     {
-        $cast = $field->type->cast($value) ?? throw InvalidSearchQueryException::invalidValue($name, $operator);
-
         return match (true) {
-            is_bool($cast) => $cast ? 'true' : 'false',
-            is_string($cast) => self::quote($cast),
-            default => (string) $cast,
+            is_bool($value) => $value ? 'true' : 'false',
+            is_string($value) => '"'.addcslashes($value, '"\\').'"',
+            default => (string) $value,
         };
-    }
-
-    private static function quote(string $value): string
-    {
-        return '"'.addcslashes($value, '"\\').'"';
     }
 }

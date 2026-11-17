@@ -13,6 +13,8 @@ use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Contracts\Search\FilterResolver;
 use Jurager\Eav\Contracts\Search\SearchesFacetValues;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Jurager\Eav\Search\Filters\Group;
+use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\Indexer;
 use Jurager\Eav\Search\Index\IndexField;
@@ -33,19 +35,19 @@ class Builder
 
     public ?string $query = null;
 
-    /** @var list<ParsedFilters> Conditions that must all hold. */
+    /** @var list<Group> Checked conditions that must all hold. */
     public array $filters = [];
 
-    /** @var list<array{0: string, 1: string}> Sort fields and directions. */
+    /** @var list<array{0: IndexField, 1: string}> Sortable fields and their directions. */
     public array $orders = [];
 
-    /** @var list<string> */
+    /** @var list<string> Names of the filterable fields facets are asked for. */
     public array $facets = [];
 
     /** @var list<string> Locale codes the search runs in. */
     private array $locales;
 
-    /** @var list<string>|null Fields the text is matched against; every searchable field when null. */
+    /** @var list<string>|null Names of the searchable fields the text is matched against; all of them when null. */
     public ?array $searchOn = null;
 
     /** @var list<string>|null Fields to highlight matches in; empty for every searched field. */
@@ -55,7 +57,7 @@ class Builder
 
     public ?float $weight = null;
 
-    public ?ParsedFilters $partition = null;
+    public ?Group $partition = null;
 
     /**
      * Trashed entities to include: none (false), all alongside the rest (true), or only them (null).
@@ -174,8 +176,8 @@ class Builder
      */
     public function filter(?array $filter): static
     {
-        if ($filter !== null && $filter !== []) {
-            $this->filters[] = $this->parse($filter);
+        if ($filter !== null && $filter !== [] && ! ($group = $this->parse($filter))->isEmpty()) {
+            $this->filters[] = $group;
         }
 
         return $this;
@@ -195,7 +197,13 @@ class Builder
 
     public function orderBy(string $field, string $direction = 'asc'): static
     {
-        $this->orders[] = [$field, strtolower($direction) === 'desc' ? 'desc' : 'asc'];
+        $sortable = $this->field($field);
+
+        if (! $sortable->sortable) {
+            throw InvalidSearchQueryException::notSortable($field);
+        }
+
+        $this->orders[] = [$sortable, strtolower($direction) === 'desc' ? 'desc' : 'asc'];
 
         return $this;
     }
@@ -226,6 +234,8 @@ class Builder
      */
     public function facets(array|string $facets): static
     {
+        array_map($this->filterable(...), (array) $facets);
+
         $this->facets = array_values(array_unique([...$this->facets, ...(array) $facets]));
 
         return $this;
@@ -250,6 +260,12 @@ class Builder
      */
     public function searchOn(string ...$fields): static
     {
+        foreach ($fields as $name) {
+            if (! $this->field($name)->searchable) {
+                throw InvalidSearchQueryException::notSearchable($name);
+            }
+        }
+
         $this->searchOn = array_values($fields);
 
         return $this;
@@ -260,6 +276,8 @@ class Builder
      */
     public function highlight(string ...$fields): static
     {
+        array_map($this->field(...), $fields);
+
         $this->highlight = array_values($fields);
 
         return $this;
@@ -290,6 +308,8 @@ class Builder
      */
     public function distinct(string $field): static
     {
+        $this->filterable($field);
+
         $this->distinct = $field;
 
         return $this;
@@ -485,15 +505,18 @@ class Builder
      */
     public function constrains(IndexField $field): bool
     {
-        foreach ($this->filters as $parsed) {
-            foreach (array_keys($parsed->filters) as $name) {
-                if ($this->index->find((string) $name) === $field) {
-                    return true;
-                }
-            }
-        }
+        return array_any($this->filters, static fn (Group $group): bool => $group->constrains($field));
+    }
 
-        return false;
+    /**
+     * Make a hit of this search — what an engine returns for each document it found.
+     *
+     * @param  array<string, mixed>  $document  The document as indexed.
+     * @param  array<string, mixed>  $formatted  The document with matches highlighted, if the engine highlights.
+     */
+    public function hit(int|string $key, array $document = [], array $formatted = [], ?float $score = null): Hit
+    {
+        return new Hit($key, $this->index->entityType, $document, $formatted, $score, $this);
     }
 
     /**
@@ -556,25 +579,33 @@ class Builder
 
     private function condition(string $field, string $operator, mixed $value): static
     {
-        $this->filters[] = new ParsedFilters([$field => [$operator => $value]], [], [], [], []);
+        $this->filters[] = $this->normalize(new ParsedFilters([$field => [$operator => $value]], [], [], [], []));
 
         return $this;
     }
 
     /**
-     * Parse request filters, handing keys the index does not hold to the filter resolvers.
+     * Parse request filters into checked conditions, handing keys the index does not hold to the filter resolvers.
      *
      * @param  array<string, mixed>  $filter
      */
-    private function parse(array $filter): ParsedFilters
+    private function parse(array $filter): Group
     {
         $parsed = (new FilterParser)->parse($filter, []);
 
-        return $parsed->withSanitized(
+        return $this->normalize($parsed->withSanitized(
             filters: $this->substitute($parsed->filters),
             orGroups: array_map($this->substitute(...), $parsed->orGroups),
             andGroups: array_map($this->substitute(...), $parsed->andGroups),
-        );
+        ));
+    }
+
+    /**
+     * Check conditions against the index and cast their values, so every engine gets them alike.
+     */
+    private function normalize(ParsedFilters $parsed): Group
+    {
+        return (new Normalizer($this->index))->normalize($parsed);
     }
 
     /**
