@@ -121,6 +121,11 @@ class Builder
 
         $alias = self::OPERATORS[(string) $operator] ?? throw InvalidSearchQueryException::unsupportedOperator($field, (string) $operator);
 
+        // As in Eloquent, comparing with null asks whether the field holds a value at all.
+        if ($value === null && in_array($alias, ['eq', 'ne'], true)) {
+            return $alias === 'eq' ? $this->whereNull($field) : $this->whereNotNull($field);
+        }
+
         return $this->condition($field, $alias, $value);
     }
 
@@ -221,7 +226,10 @@ class Builder
      */
     public function partition(array $condition, bool $first = true): static
     {
-        $this->partition = $this->parse($condition);
+        $partition = $this->parse($condition);
+
+        // Nothing to split on leaves the results in one piece.
+        $this->partition = $partition->isEmpty() ? null : $partition;
         $this->partitionFirst = $first;
 
         return $this;
@@ -517,6 +525,14 @@ class Builder
     public function hit(int|string $key, array $document = [], array $formatted = [], ?float $score = null): Hit
     {
         return new Hit($key, $this->index->entityType, $document, $formatted, $score, $this);
+    }
+
+    /**
+     * Whether the hit was made by this search.
+     */
+    public function made(Hit $hit): bool
+    {
+        return $hit->search === $this;
     }
 
     /**

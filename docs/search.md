@@ -271,7 +271,7 @@ foreach ($results->hits() as $hit) {
 
 Each search keeps its own filters, locale, and facets. Facets are keyed by entity type, then by name. The total is an estimate.
 
-With Meilisearch, federated searches must agree on sorting: sort all of them by the same fields, or none.
+Meilisearch rejects federated searches whose sort rules conflict, such as two searches over one index sorted differently. Give the searches the same sorting, or none.
 
 ## Index settings
 

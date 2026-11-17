@@ -33,9 +33,11 @@ class FederatedBuilder
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
         $offset = ($page - 1) * $perPage;
 
-        $found = $this->engine instanceof FederatesSearches
-            ? $this->engine->federated($this->searches, $perPage, $offset)
-            : $this->merge($perPage, $offset);
+        $found = match (true) {
+            $this->searches === [] => new Response,
+            $this->engine instanceof FederatesSearches => $this->engine->federated($this->searches, $perPage, $offset),
+            default => $this->merge($perPage, $offset),
+        };
 
         $facets = [];
 
@@ -91,7 +93,7 @@ class FederatedBuilder
     }
 
     /**
-     * Load the models of each entity type with that type's own search builder.
+     * Load the models of each search's hits with that search's own relations and load query.
      *
      * @param  list<Hit>  $hits
      * @return list<Hit>
@@ -99,10 +101,7 @@ class FederatedBuilder
     private function load(array $hits): array
     {
         foreach ($this->searches as $search) {
-            $search->load(array_values(array_filter(
-                $hits,
-                static fn (Hit $hit): bool => $hit->model === null && $hit->entityType === $search->index->entityType,
-            )));
+            $search->load(array_values(array_filter($hits, $search->made(...))));
         }
 
         return $hits;

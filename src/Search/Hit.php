@@ -27,7 +27,7 @@ class Hit
         public readonly array $document,
         public readonly array $formatted = [],
         public readonly ?float $score = null,
-        private readonly ?Builder $search = null,
+        public readonly ?Builder $search = null,
     ) {}
 
     /**

@@ -267,4 +267,27 @@ class MeilisearchTest extends SearchTestCase
         $this->assertNotContains('attributes.title.ru', $index->getSearchableAttributes());
         $this->assertSame([], $this->names(Search::for(SearchableProduct::class)->query('кроссовки')->get()));
     }
+
+    public function test_the_remaining_conditions_run_against_the_server(): void
+    {
+        $search = fn () => Search::for(SearchableProduct::class);
+
+        $this->assertEqualsCanonicalizing(['Shoes', 'Boots'], $this->names($search()->whereNotIn('color', ['blue'])->get()));
+        $this->assertEqualsCanonicalizing(['Shoes', 'Boots'], $this->names($search()->whereNot('color', 'blue')->get()));
+        $this->assertSame(4, $search()->whereNull('parent')->count());
+        $this->assertSame(0, $search()->whereNotNull('parent')->count());
+        $this->assertSame(0, $search()->whereIn('sku', [])->count());
+        $this->assertEqualsCanonicalizing(['Jacket', 'Boots', 'Cap'], $this->names($search()->whereNotBetween('price', [50, 200])->get()));
+        $this->assertSame(['Cap'], $this->names($search()->filter(['or' => [['price' => ['lt' => 50]], ['sku' => 'nope']]])->get()));
+    }
+
+    public function test_ranking_options_run_against_the_server(): void
+    {
+        $search = fn () => Search::for(SearchableProduct::class);
+
+        $this->assertSame([], $this->names($search()->query('red jacket')->matching('all')->get()));
+        $this->assertNotSame([], $this->names($search()->query('red jacket')->get()));
+        $this->assertSame([], $this->names($search()->query('shoes')->threshold(1.0)->searchOn('sku')->get()));
+        $this->assertCount(2, $search()->distinct('color')->get());
+    }
 }

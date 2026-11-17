@@ -161,6 +161,43 @@ class SearchManagerTest extends SearchTestCase
         $this->assertSame(['Footwear', 'Shoes', 'Boots'], $federated()->get()->pluck('name')->all());
     }
 
+    public function test_each_federated_search_loads_its_own_hits(): void
+    {
+        $engine = $this->useCustomEngine();
+        $child = $this->product('Child', $this->product('Parent')->id);
+        $engine->respond('searchable_product', [['id' => $child->id, '_score' => 0.5]]);
+
+        // Two searches over one entity type: each loads its hits its own way.
+        $results = Search::federated([
+            Search::for(SearchableProduct::class)->query('a')->with('parent'),
+            Search::for(SearchableProduct::class)->query('b')->loadUsing(fn ($query) => $query->whereKey(0)),
+        ])->paginate();
+
+        [$first, $second] = $results->hits()->all();
+
+        $this->assertTrue($first->model->relationLoaded('parent'));
+        $this->assertNull($second->model);
+    }
+
+    public function test_federating_nothing_finds_nothing(): void
+    {
+        $this->assertCount(0, Search::federated([])->paginate());
+        $this->assertSame([], $this->engine->searches);
+    }
+
+    public function test_comparing_with_null_asks_whether_a_value_is_held(): void
+    {
+        $engine = $this->useCustomEngine();
+
+        Search::for(SearchableProduct::class)->where('parent', null)->where('parent', '!=', null)->partition([])->paginate();
+
+        $search = $engine->searches[0];
+
+        $this->assertSame(Comparison::Missing, $search->filters[0]->members[0]->comparison);
+        $this->assertSame(Comparison::Exists, $search->filters[1]->members[0]->comparison);
+        $this->assertNull($search->partition);
+    }
+
     public function test_an_engine_that_cannot_search_facets_has_their_values_matched(): void
     {
         $engine = $this->useCustomEngine();
