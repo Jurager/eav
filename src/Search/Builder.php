@@ -7,8 +7,11 @@ namespace Jurager\Eav\Search;
 use Illuminate\Contracts\Support\Arrayable;
 use InvalidArgumentException;
 use Jurager\Eav\Contracts\Search\FilterResolver;
+use Jurager\Eav\Contracts\Search\SupportsExtendedSearch;
+use Jurager\Eav\Enums\Comparison;
+use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Dialects\Dialect;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Search\Filters\Group;
 use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
@@ -18,6 +21,7 @@ use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 use Laravel\Scout\Builder as ScoutBuilder;
+use Laravel\Scout\Engines\Engine;
 use Laravel\Scout\Exceptions\NotSupportedException;
 use LogicException;
 
@@ -25,7 +29,7 @@ use LogicException;
  * Scout's search builder for an entity with attributes: `Product::search('phone')`.
  *
  * Fields are named as the index definition names them and checked against it, and the builder adds what
- * Scout's query API lacks — request filters, facets, locales, boosts — through the dialect of the engine.
+ * Scout's query API lacks — request filters, facets, locales, boosts — on an engine that supports them.
  *
  * @template TModel of \Illuminate\Database\Eloquent\Model
  *
@@ -71,35 +75,18 @@ class Builder extends ScoutBuilder
      */
     public bool $partitionFirst = true;
 
-    /**
-     * How query words must match, in the engine's terms; its default when null.
-     */
-    public ?string $matching = null;
-
-    /**
-     * Relevance, between 0 and 1, below which hits are dropped.
-     */
-    public ?float $threshold = null;
-
     /** @var list<array{0: Group, 1: float}> Conditions whose matches rank higher, with the weight of each. */
     private array $boosts = [];
 
     /** @var list<string> Locale codes the search runs in. */
     private array $locales;
 
-    private readonly Dialect $dialect;
-
-    /**
-     * Whether the search is run by the dialect, rather than by a callback the caller gave.
-     */
-    private readonly bool $native;
-
-    /** @var iterable<FilterResolver> */
-    private readonly iterable $resolvers;
+    /** @var list<FilterResolver> Resolvers for filter keys the index does not hold. */
+    private readonly array $resolvers;
 
     public function __construct(
         IndexFactory $indexes,
-        SearchManager $search,
+        LocaleRegistry $locales,
         private readonly Indexer $indexer,
         private readonly FacetFormatter $formatter,
         $model,
@@ -110,26 +97,16 @@ class Builder extends ScoutBuilder
         parent::__construct($model, $query, $callback, $softDelete);
 
         $this->definition = $indexes->for($model);
-        $this->dialect = $search->dialect($this->engine());
-        $this->locales = $search->currentLocales();
-        $this->resolvers = $search->resolvers();
+        $this->resolvers = array_map(app(...), (array) config('eav.search.resolvers', []));
 
-        // A callback given to search() is the caller taking the request into their own hands.
-        $this->native = $this->callback === null;
-
-        if ($this->native) {
-            $this->callback = $this->dialect->callback($this);
+        try {
+            $current = $locales->code($locales->current());
+        } catch (InvalidConfigurationException) {
+            // No locales are set up: nothing is localized either.
+            $current = null;
         }
-    }
 
-    /**
-     * The dialect's callback runs the search it was made for: a copy needs one of its own.
-     */
-    public function __clone()
-    {
-        if ($this->native) {
-            $this->callback = $this->dialect->callback($this);
-        }
+        $this->locales = $current === null ? [] : [$current];
     }
 
     /**
@@ -223,8 +200,7 @@ class Builder extends ScoutBuilder
     public function filter(?array $filter): static
     {
         if ($filter !== null && $filter !== [] && ! ($group = $this->parse($filter))->isEmpty()) {
-            $this->conditions[] = $group;
-            $this->dialect->where($this, $group);
+            $this->add($group);
         }
 
         return $this;
@@ -257,7 +233,11 @@ class Builder extends ScoutBuilder
         $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
 
         $this->sorts[] = [$field, $direction];
-        $this->dialect->orderBy($this, $field, $direction);
+
+        // An engine that only knows Scout's query API reads the order off Scout's own list.
+        if (! $this->extended()) {
+            $this->orders[] = ['column' => $this->path($field), 'direction' => $direction];
+        }
 
         return $this;
     }
@@ -270,7 +250,7 @@ class Builder extends ScoutBuilder
      */
     public function partition(array $condition, bool $first = true): static
     {
-        $this->extended('partition results');
+        $this->requireExtended('partition results');
 
         if ($this->boosts !== []) {
             throw new LogicException('A search cannot be both partitioned and boosted.');
@@ -295,7 +275,7 @@ class Builder extends ScoutBuilder
      */
     public function boost(array $condition, float $weight = 2.0): static
     {
-        $this->extended('boost matches');
+        $this->requireExtended('boost matches');
 
         if ($weight <= 0) {
             throw new InvalidArgumentException('The weight of a boost must be greater than zero.');
@@ -329,7 +309,7 @@ class Builder extends ScoutBuilder
      */
     public function facets(array|string $facets): static
     {
-        $this->extended('compute facets');
+        $this->requireExtended('compute facets');
 
         array_map($this->filterable(...), (array) $facets);
 
@@ -357,7 +337,7 @@ class Builder extends ScoutBuilder
      */
     public function searchOn(string ...$fields): static
     {
-        $this->extended('search chosen fields');
+        $this->requireExtended('search chosen fields');
 
         foreach ($fields as $name) {
             if (! $this->field($name)->searchable) {
@@ -375,7 +355,7 @@ class Builder extends ScoutBuilder
      */
     public function highlight(string ...$fields): static
     {
-        $this->extended('highlight matches');
+        $this->requireExtended('highlight matches');
 
         array_map($this->field(...), $fields);
 
@@ -385,35 +365,11 @@ class Builder extends ScoutBuilder
     }
 
     /**
-     * How query words must match, as the engine names it — `last`, `all` or `frequency` with Meilisearch.
-     */
-    public function matching(string $strategy): static
-    {
-        $this->extended('choose a matching strategy');
-
-        $this->matching = $strategy;
-
-        return $this;
-    }
-
-    /**
-     * Drop hits whose relevance is below the threshold, between 0 and 1.
-     */
-    public function threshold(float $score): static
-    {
-        $this->extended('drop hits by relevance');
-
-        $this->threshold = $score;
-
-        return $this;
-    }
-
-    /**
      * Keep one hit per value of the field, for this search only.
      */
     public function distinct(string $field): static
     {
-        $this->extended('keep one hit per value');
+        $this->requireExtended('keep one hit per value');
 
         $this->filterable($field);
 
@@ -433,7 +389,7 @@ class Builder extends ScoutBuilder
     }
 
     /**
-     * Run the search and get a page of models, with hits and facets.
+     * Run the search and get a page of models, with the facets asked for.
      *
      * @param  int|null  $perPage
      * @param  string  $pageName
@@ -443,34 +399,19 @@ class Builder extends ScoutBuilder
     {
         [$paginator, $raw] = $this->capturing(fn () => parent::paginate($perPage, $pageName, $page));
 
-        $hits = $this->dialect->hits($this, $raw);
+        $engine = $this->engine();
 
-        if ($hits === []) {
-            // The engine's raw results are not understood: the models are all there is to tell.
-            $hits = $paginator->getCollection()->map(fn ($model): Hit => $this->hit($model->getScoutKey()))->all();
+        // A document without a model may be left behind by a deleted entity: clean those up.
+        if ($raw !== null && config('eav.search.prune', true)) {
+            $this->indexer->prune($this->model::class, array_values(array_diff(
+                $engine->mapIds($raw)->all(),
+                $paginator->getCollection()->map->getScoutKey()->all(),
+            )));
         }
 
-        $models = $paginator->getCollection()->keyBy(static fn ($model): string => (string) $model->getScoutKey());
-        $missing = [];
-
-        foreach ($hits as $hit) {
-            if (($hit->model = $models->get((string) $hit->key)) === null) {
-                $missing[] = $hit->key;
-            }
-        }
-
-        // A hit without a model may be a document left behind by a deleted entity: clean those up.
-        if (config('eav.search.prune', true)) {
-            $this->indexer->prune($this->model::class, $missing);
-        }
-
-        return Results::make(
-            $hits,
-            $this->formatter->format($this, $this->dialect->facets($this, $raw)),
-            $paginator->total(),
-            $paginator->perPage(),
-            $paginator->currentPage(),
-            ['path' => $paginator->path(), 'pageName' => $pageName],
+        return Results::of(
+            $paginator,
+            $engine instanceof SupportsExtendedSearch ? $this->formatter->format($this, $engine->facets($this, $raw)) : [],
         )->appends('query', $this->query);
     }
 
@@ -491,9 +432,11 @@ class Builder extends ScoutBuilder
      */
     public function facetValues(string $facet, ?string $query = null): array
     {
+        $this->requireExtended('search facet values');
+
         $field = $this->filterable($facet);
 
-        return $this->formatter->terms($this, $field, $this->dialect->facetValues($this, $facet, $field, $query));
+        return $this->formatter->terms($this, $field, $this->engine()->facetValues($this, $facet, $field, $query));
     }
 
     /**
@@ -523,11 +466,13 @@ class Builder extends ScoutBuilder
     }
 
     /**
-     * The dialect of the engine the search runs on.
+     * The Scout engine the search runs on.
+     *
+     * @return Engine
      */
-    public function dialect(): Dialect
+    public function engine()
     {
-        return $this->dialect;
+        return parent::engine();
     }
 
     /**
@@ -569,17 +514,6 @@ class Builder extends ScoutBuilder
     }
 
     /**
-     * Make a hit of this search — what a dialect returns for each document found.
-     *
-     * @param  array<string, mixed>  $document  The document as indexed.
-     * @param  array<string, mixed>  $formatted  The document with matches highlighted, if the engine highlights.
-     */
-    public function hit(int|string $key, array $document = [], array $formatted = [], ?float $score = null): Hit
-    {
-        return new Hit($key, $this->definition->entityType, $document, $formatted, $score, $this);
-    }
-
-    /**
      * The same search with no facets to compute.
      */
     public function withoutFacets(): static
@@ -617,21 +551,76 @@ class Builder extends ScoutBuilder
     }
 
     /**
-     * Refuse what Scout's query API cannot express on an engine that has no dialect of its own.
+     * Whether the engine answers more than Scout's query API can ask.
      */
-    private function extended(string $ability): void
+    private function extended(): bool
     {
-        if (! $this->dialect->extended()) {
+        return $this->engine() instanceof SupportsExtendedSearch;
+    }
+
+    /**
+     * Refuse what Scout's query API cannot express on an engine that knows nothing more.
+     */
+    private function requireExtended(string $ability): void
+    {
+        if (! $this->extended()) {
             throw new NotSupportedException("The search engine in use cannot {$ability}.");
+        }
+    }
+
+    /**
+     * Take checked conditions; an engine that only knows Scout's query API gets them as Scout's own wheres.
+     */
+    private function add(Group $group): void
+    {
+        $this->conditions[] = $group;
+
+        if (! $this->extended()) {
+            $this->native($group);
+        }
+    }
+
+    /**
+     * Express conditions with Scout's own wheres.
+     *
+     * @throws NotSupportedException When Scout's query API cannot express them.
+     */
+    private function native(Group $group): void
+    {
+        if ($group->any && count($group->members) > 1) {
+            throw new NotSupportedException('The search engine in use cannot match any of several conditions.');
+        }
+
+        foreach ($group->members as $member) {
+            if ($member instanceof Group) {
+                $this->native($member);
+
+                continue;
+            }
+
+            $path = $this->path($member->field);
+            $where = static fn (string $operator, mixed $value): array => ['field' => $path, 'operator' => $operator, 'value' => $value];
+
+            match ($member->comparison) {
+                Comparison::Equal => $this->wheres[] = $where('=', $member->value),
+                Comparison::NotEqual => $this->wheres[] = $where('!=', $member->value),
+                Comparison::Greater => $this->wheres[] = $where('>', $member->value),
+                Comparison::GreaterOrEqual => $this->wheres[] = $where('>=', $member->value),
+                Comparison::Less => $this->wheres[] = $where('<', $member->value),
+                Comparison::LessOrEqual => $this->wheres[] = $where('<=', $member->value),
+                Comparison::In => $this->whereIns[$path] = $member->value,
+                Comparison::NotIn => $this->whereNotIns[$path] = $member->value,
+                Comparison::Between => array_push($this->wheres, $where('>=', $member->value[0]), $where('<=', $member->value[1])),
+                Comparison::Missing => $this->wheres[] = $where('=', null),
+                Comparison::Exists => $this->wheres[] = $where('!=', null),
+                default => throw new NotSupportedException("The search engine in use cannot compare with [{$member->comparison->value}]."),
+            };
         }
     }
 
     private function condition(string $field, string $operator, mixed $value): static
     {
-        $group = $this->normalize(new ParsedFilters([$field => [$operator => $value]], [], [], [], []));
-
-        $this->conditions[] = $group;
-        $this->dialect->where($this, $group);
+        $this->add($this->normalize(new ParsedFilters([$field => [$operator => $value]], [], [], [], [])));
 
         return $this;
     }

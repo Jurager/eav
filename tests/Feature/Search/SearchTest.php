@@ -10,12 +10,15 @@ use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Builder;
-use Jurager\Eav\Search\Dialects\Dialect;
-use Jurager\Eav\Search\Dialects\MeilisearchDialect;
+use Jurager\Eav\Contracts\Search\SupportsExtendedSearch;
+use Jurager\Eav\Search\Engines\MeilisearchEngine;
 use Jurager\Eav\Search\Results;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
+use Laravel\Scout\EngineManager;
+use Laravel\Scout\Engines\MeilisearchEngine as ScoutMeilisearchEngine;
 use Laravel\Scout\Exceptions\NotSupportedException;
+use Meilisearch\Client;
 
 /**
  * Search as it is used: through Scout's own entry point, on whichever engine Scout is configured with.
@@ -29,7 +32,7 @@ class SearchTest extends SearchTestCase
         $this->assertInstanceOf(Builder::class, $search);
         $this->assertInstanceOf(\Laravel\Scout\Builder::class, $search);
         $this->assertSame('searchable_product', $search->definition->entityType);
-        $this->assertInstanceOf(MeilisearchDialect::class, $search->dialect());
+        $this->assertInstanceOf(MeilisearchEngine::class, $search->engine());
     }
 
     public function test_text_given_to_query_points_to_search(): void
@@ -89,7 +92,7 @@ class SearchTest extends SearchTestCase
         $this->assertSame([], $this->engine->searches);
     }
 
-    public function test_an_engine_without_a_dialect_gets_conditions_through_scouts_own_wheres(): void
+    public function test_an_engine_that_only_knows_scout_gets_conditions_through_scouts_own_wheres(): void
     {
         config(['scout.driver' => 'collection']);
         $this->attribute('number', 'price', ['filterable' => true, 'sortable' => true]);
@@ -101,8 +104,7 @@ class SearchTest extends SearchTestCase
             ->whereNull('parent')
             ->orderBy('price', 'desc');
 
-        $this->assertSame(Dialect::class, $search->dialect()::class);
-        $this->assertNull($search->callback);
+        $this->assertNotInstanceOf(SupportsExtendedSearch::class, $search->engine());
         $this->assertSame([
             ['field' => 'attributes.price', 'operator' => '>=', 'value' => 10],
             ['field' => 'attributes.price', 'operator' => '>=', 'value' => 1],
@@ -113,7 +115,7 @@ class SearchTest extends SearchTestCase
         $this->assertSame([['column' => 'attributes.price', 'direction' => 'desc']], $search->orders);
     }
 
-    public function test_an_engine_without_a_dialect_refuses_what_scout_cannot_express(): void
+    public function test_an_engine_that_only_knows_scout_refuses_what_scout_cannot_express(): void
     {
         config(['scout.driver' => 'collection']);
         $this->attribute('number', 'price', ['filterable' => true]);
@@ -139,20 +141,15 @@ class SearchTest extends SearchTestCase
         }
     }
 
-    public function test_a_dialect_can_be_registered_for_an_engine(): void
+    public function test_scouts_meilisearch_engine_is_used_in_its_extended_form(): void
     {
-        $dialect = new class extends Dialect
-        {
-            public function extended(): bool
-            {
-                return true;
-            }
-        };
+        $this->app->make(EngineManager::class)->forgetDrivers();
+        $this->app->make(EngineManager::class)->extend('meilisearch', fn () => new ScoutMeilisearchEngine(new Client('http://127.0.0.1:1')));
 
-        Search::extend(\Laravel\Scout\Engines\CollectionEngine::class, fn () => $dialect);
-        config(['scout.driver' => 'collection']);
+        $engine = (new SearchableProduct)->searchableUsing();
 
-        $this->assertSame($dialect, SearchableProduct::search()->dialect());
+        $this->assertSame(MeilisearchEngine::class, $engine::class);
+        $this->assertSame($engine, SearchableProduct::search()->engine(), 'One engine indexes and searches.');
     }
 
     public function test_fake_answers_searches_and_records_them(): void
@@ -161,14 +158,14 @@ class SearchTest extends SearchTestCase
         $product = $this->product('Shoes');
 
         $fake->assertNothingSearched();
-        $fake->respond('searchable_product', [['id' => $product->id, 'name' => 'Shoes', '_score' => 0.8]], total: 9);
+        $fake->respond('searchable_product', [['id' => $product->id, 'name' => 'Shoes', '_rankingScore' => 0.8]], total: 9);
 
         $results = SearchableProduct::search('shoes')->where('parent', null)->locale('ru')->paginate(5);
 
         $this->assertInstanceOf(Results::class, $results);
         $this->assertTrue($results->first()->is($product));
         $this->assertSame(9, $results->total());
-        $this->assertSame(0.8, $results->hits()->first()->score);
+        $this->assertSame(0.8, $results->first()->scoutMetadata()['_rankingScore']);
         $this->assertTrue(SearchableProduct::search('shoes')->first()->is($product));
         $this->assertSame([], $this->engine->searches, 'Meilisearch is not asked.');
 
@@ -208,10 +205,10 @@ class SearchTest extends SearchTestCase
         $footwear = SearchableCategory::create(['name' => 'Footwear']);
 
         $fake->respond('searchable_product', [
-            ['id' => $shoes->id, '_score' => 0.9],
-            ['id' => $boots->id, '_score' => 0.4],
+            ['id' => $shoes->id, '_rankingScore' => 0.9],
+            ['id' => $boots->id, '_rankingScore' => 0.4],
         ], facets: ['color' => ['red' => 1]]);
-        $fake->respond('searchable_category', [['id' => $footwear->id, '_score' => 0.5]]);
+        $fake->respond('searchable_category', [['id' => $footwear->id, '_rankingScore' => 0.5]]);
 
         $federated = fn () => Search::federated([
             SearchableProduct::search('x')->facets('color'),
@@ -222,7 +219,7 @@ class SearchTest extends SearchTestCase
         $results = $federated()->paginate(2);
 
         $this->assertSame(['Footwear', 'Shoes'], $results->getCollection()->pluck('name')->all());
-        $this->assertSame(['searchable_category', 'searchable_product'], $results->hits()->pluck('entityType')->all());
+        $this->assertSame(['searchable_category', 'searchable_product'], $results->getCollection()->map->getEntityType()->all());
         $this->assertSame(3, $results->total());
         $this->assertSame('red', $results->facets()['searchable_product']['color']['values'][0]['value']);
 
@@ -230,21 +227,12 @@ class SearchTest extends SearchTestCase
         $this->assertSame(['Footwear', 'Shoes', 'Boots'], $federated()->get()->pluck('name')->all());
     }
 
-    public function test_a_federated_search_takes_one_search_per_entity_type_on_one_engine(): void
+    public function test_a_federated_search_takes_one_search_per_entity_type(): void
     {
-        try {
-            Search::federated([SearchableProduct::search('a'), SearchableProduct::search('b')]);
-            $this->fail('Two searches over one entity type should be refused.');
-        } catch (InvalidArgumentException $e) {
-            $this->assertStringContainsString('one search per entity type', $e->getMessage());
-        }
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('one search per entity type');
 
-        $products = SearchableProduct::search('a');
-        config(['scout.driver' => 'collection']);
-
-        $this->expectExceptionMessage('same search engine');
-
-        Search::federated([$products, SearchableCategory::search('a')]);
+        Search::federated([SearchableProduct::search('a'), SearchableProduct::search('b')]);
     }
 
     public function test_federating_nothing_finds_nothing(): void

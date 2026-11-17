@@ -9,12 +9,11 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Contracts\Console\Kernel;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Search\Index\Configurator;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\ReindexEntities;
-use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Results;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
@@ -202,11 +201,11 @@ class MeilisearchTest extends SearchTestCase
 
     public function test_highlighting_marks_the_matched_words(): void
     {
-        $hit = SearchableProduct::search('leather')->highlight('title')->paginate()->hits()->first();
+        $boots = SearchableProduct::search('leather')->highlight('title')->paginate()->first();
 
-        $this->assertSame('Red <em>leather</em> boots', $hit->highlight('title'));
-        $this->assertSame('Red leather boots', $hit->get('title'));
-        $this->assertGreaterThan(0, $hit->score);
+        $this->assertSame('Red <em>leather</em> boots', $boots->highlighted('title'));
+        $this->assertSame('Красные кожаные ботинки', $boots->highlighted('title', 'ru'));
+        $this->assertGreaterThan(0, $boots->scoutMetadata()['_rankingScore']);
     }
 
     public function test_partition_leads_with_matches_across_pages(): void
@@ -226,7 +225,7 @@ class MeilisearchTest extends SearchTestCase
         ])->paginate(10);
 
         $this->assertSame(['Shoes and boots', 'Boots'], $this->names($results));
-        $this->assertSame(['searchable_category', 'searchable_product'], $results->hits()->pluck('entityType')->all());
+        $this->assertSame(['searchable_category', 'searchable_product'], $results->getCollection()->map->getEntityType()->all());
         $this->assertSame('red', $results->facets()['searchable_product']['color']['values'][0]['value']);
     }
 
@@ -286,9 +285,9 @@ class MeilisearchTest extends SearchTestCase
 
     public function test_ranking_options_run_against_the_server(): void
     {
-        $this->assertSame([], $this->names(SearchableProduct::search('red jacket')->matching('all')->get()));
+        $this->assertSame([], $this->names(SearchableProduct::search('red jacket')->options(['matchingStrategy' => 'all'])->get()));
         $this->assertNotSame([], $this->names(SearchableProduct::search('red jacket')->get()));
-        $this->assertSame([], $this->names(SearchableProduct::search('shoes')->threshold(1.0)->searchOn('sku')->get()));
+        $this->assertSame([], $this->names(SearchableProduct::search('shoes')->options(['rankingScoreThreshold' => 1.0])->searchOn('sku')->get()));
         $this->assertCount(2, SearchableProduct::search()->distinct('color')->get());
     }
 
@@ -323,7 +322,7 @@ class MeilisearchTest extends SearchTestCase
 
         $results = SearchableProduct::search()->where('price', '<', 50)->paginate();
 
-        $this->assertSame([$cap->id], $results->keys());
+        $this->assertSame(1, $results->total());
         $this->assertCount(0, $results->items());
 
         $this->settle();
@@ -334,7 +333,7 @@ class MeilisearchTest extends SearchTestCase
     public function test_a_variant_follows_the_values_it_inherits(): void
     {
         $this->attribute('text', 'material', ['searchable' => true, 'filterable' => true, 'inherit_from_parent' => true]);
-        app(Configurator::class)->configure('searchable_product');
+        $this->app->call([new SyncIndexSettings('searchable_product'), 'handle']);
 
         $parent = SearchableProduct::query()->firstWhere('name', 'Boots');
         $this->product('Boots 42', $parent->id);
@@ -398,7 +397,7 @@ class MeilisearchTest extends SearchTestCase
         // The red boots match the products search and its boosted part, yet appear once.
         $this->assertSame(['Shoes and boots', 'Boots'], $this->names($federated(1.0)));
         $this->assertSame(['Boots', 'Shoes and boots'], $this->names($federated(4.0)));
-        $this->assertCount(2, $federated(4.0)->hits());
+        $this->assertCount(2, $federated(4.0)->items());
     }
 
     public function test_a_filtered_facet_of_a_federated_search_keeps_its_other_values(): void

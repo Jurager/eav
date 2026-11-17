@@ -6,13 +6,13 @@ namespace Jurager\Eav\Tests\Unit\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Dialects\Meilisearch\FilterCompiler;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
 use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Tests\TestCase;
 use Jurager\Filterable\Parsing\FilterParser;
 
-class MeilisearchFilterCompilerTest extends TestCase
+class MeilisearchGrammarTest extends TestCase
 {
     private Index $index;
 
@@ -40,7 +40,7 @@ class MeilisearchFilterCompilerTest extends TestCase
     {
         $group = (new Normalizer($this->index))->normalize((new FilterParser)->parse($filter, []));
 
-        return app(FilterCompiler::class)->compile($group->except($except), $locale);
+        return app(MeilisearchGrammar::class)->compileFilter($group->except($except), $locale);
     }
 
     public function test_a_scalar_is_an_equality_cast_to_the_field_type(): void

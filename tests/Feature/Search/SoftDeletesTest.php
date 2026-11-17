@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Index\Configurator;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Tests\Fixtures\TrashableProduct;
 
 class SoftDeletesTest extends SearchTestCase
@@ -42,7 +42,7 @@ class SoftDeletesTest extends SearchTestCase
     {
         $this->assertNull($this->filter(fn ($search) => $search));
 
-        app(Configurator::class)->configure('trashable_product');
+        $this->app->call([new SyncIndexSettings('trashable_product'), 'handle']);
 
         $this->assertNotContains('__soft_deleted', $this->engine->settings['eav_test_products']['filterableAttributes']);
     }
@@ -61,7 +61,7 @@ class SoftDeletesTest extends SearchTestCase
     {
         config(['scout.soft_delete' => true]);
 
-        app(Configurator::class)->configure('trashable_product');
+        $this->app->call([new SyncIndexSettings('trashable_product'), 'handle']);
 
         $this->assertContains('__soft_deleted', $this->engine->settings['eav_test_products']['filterableAttributes']);
     }

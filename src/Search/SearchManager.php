@@ -4,37 +4,26 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
-use Closure;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
-use Jurager\Eav\Contracts\Search\FilterResolver;
-use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
-use Jurager\Eav\Registries\LocaleRegistry;
-use Jurager\Eav\Search\Dialects\Dialect;
-use Jurager\Eav\Search\Dialects\MeilisearchDialect;
+use Jurager\Eav\Search\Engines\FakeEngine;
+use Jurager\Eav\Search\Engines\MeilisearchEngine;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
-use Jurager\Eav\Search\Testing\FakeDialect;
-use Jurager\Eav\Search\Testing\FakeEngine;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\Engine;
-use Laravel\Scout\Engines\MeilisearchEngine;
+use Laravel\Scout\Engines\MeilisearchEngine as ScoutMeilisearchEngine;
+use Meilisearch\Client;
 
 /**
- * What search needs beside Scout's builder: federated searches, index definitions, and the dialects that
- * tell each Scout engine what Scout's query API cannot.
+ * What search needs beside Scout's builder: federated searches, index definitions, and the engine
+ * entities are searched with.
  */
 class SearchManager
 {
-    /** @var array<class-string<Engine>, class-string<Dialect>|Closure(Container): Dialect> Dialects by Scout engine. */
-    private array $dialects = [
-        MeilisearchEngine::class => MeilisearchDialect::class,
-        FakeEngine::class => FakeDialect::class,
-    ];
-
-    /** @var array<class-string<Engine>, Dialect> */
-    private array $resolved = [];
+    private ?MeilisearchEngine $meilisearch = null;
 
     public function __construct(private readonly Container $container) {}
 
@@ -61,31 +50,23 @@ class SearchManager
     }
 
     /**
-     * Teach a Scout engine what Scout's query API cannot ask of it.
-     *
-     * @param  class-string<Engine>  $engine
-     * @param  class-string<Dialect>|Closure(Container): Dialect  $dialect
+     * The engine entities are indexed and searched with: the one Scout is configured with, in its extended
+     * form where the package has one.
      */
-    public function extend(string $engine, string|Closure $dialect): static
+    public function engine(): Engine
     {
-        $this->dialects[$engine] = $dialect;
-        unset($this->resolved[$engine]);
+        $engine = $this->container->make(EngineManager::class)->engine();
 
-        return $this;
-    }
-
-    /**
-     * The dialect of a Scout engine: its own, or plain Scout for an engine that has none.
-     */
-    public function dialect(Engine $engine): Dialect
-    {
-        foreach ($this->dialects as $class => $dialect) {
-            if ($engine instanceof $class) {
-                return $this->resolved[$class] ??= $dialect instanceof Closure ? $dialect($this->container) : $this->container->make($dialect);
-            }
+        // Scout's Meilisearch engine exactly: an engine extending it already is what it means to be.
+        if ($engine::class !== ScoutMeilisearchEngine::class) {
+            return $engine;
         }
 
-        return $this->resolved[Engine::class] ??= new Dialect;
+        return $this->meilisearch ??= new MeilisearchEngine(
+            $this->container->make(Client::class),
+            (bool) $this->container->make('config')->get('scout.soft_delete', false),
+            $this->container->make(MeilisearchGrammar::class),
+        );
     }
 
     /**
@@ -99,34 +80,5 @@ class SearchManager
         $this->container->make('config')->set('scout.driver', 'eav-fake');
 
         return $fake;
-    }
-
-    /**
-     * The current locale, as the one a search runs in by default.
-     *
-     * @return list<string>
-     */
-    public function currentLocales(): array
-    {
-        $locales = $this->container->make(LocaleRegistry::class);
-
-        try {
-            $code = $locales->code($locales->current());
-        } catch (InvalidConfigurationException) {
-            // No locales are set up: nothing is localized either.
-            $code = null;
-        }
-
-        return $code === null ? [] : [$code];
-    }
-
-    /**
-     * Resolvers for filter keys the index does not hold.
-     *
-     * @return list<FilterResolver>
-     */
-    public function resolvers(): array
-    {
-        return array_map($this->container->make(...), (array) $this->container->make('config')->get('eav.search.resolvers', []));
     }
 }

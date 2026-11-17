@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search;
+namespace Jurager\Eav\Search\Filters;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -20,7 +20,7 @@ use Jurager\Filterable\Support\FilterOperator;
  * Opt in through `eav.search.resolvers`. The index must declare the relation's key filterable:
  * the foreign key itself for a belongs-to (`category_id`), `{relation}.{key}` otherwise (`categories.category_id`).
  */
-class AttributeRelationFilterResolver implements FilterResolver
+class RelationFilterResolver implements FilterResolver
 {
     /**
      * Resolve filter key.

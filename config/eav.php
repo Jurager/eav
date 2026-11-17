@@ -114,11 +114,11 @@ return [
 
         /*
          * Resolvers for filter keys the index does not hold. Add
-         * AttributeRelationFilterResolver to filter by an attribute of a
+         * RelationFilterResolver to filter by an attribute of a
          * related entity, e.g. "category.color".
          */
         'resolvers' => [
-            // \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
+            // \Jurager\Eav\Search\Filters\RelationFilterResolver::class,
         ],
 
         /*

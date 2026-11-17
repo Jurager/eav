@@ -11,9 +11,7 @@ use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Search\Dialects\Meilisearch\Gateway;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
-use Jurager\Eav\Tests\Fixtures\RecordingGateway;
 use Jurager\Eav\Tests\Fixtures\RecordingMeilisearchEngine;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
@@ -23,9 +21,9 @@ use Laravel\Scout\ScoutServiceProvider;
 abstract class SearchTestCase extends FeatureTestCase
 {
     /**
-     * Meilisearch as the engine sees it: what was sent to it, and what it answers.
+     * The Meilisearch engine with a recording in place of the server: what it would send, and what it answers.
      */
-    protected RecordingGateway $engine;
+    protected RecordingMeilisearchEngine $engine;
 
     protected Locale $en;
 
@@ -57,13 +55,10 @@ abstract class SearchTestCase extends FeatureTestCase
      */
     protected function useRecordingEngine(): void
     {
-        $this->app->instance(Gateway::class, $gateway = $this->engine = new RecordingGateway);
+        $engine = $this->engine = new RecordingMeilisearchEngine((bool) config('scout.soft_delete', false));
 
-        // The manager binds the closure to itself, so the gateway is passed in rather than read off the test.
-        $this->app->make(EngineManager::class)->extend('meilisearch', static fn () => new RecordingMeilisearchEngine(
-            $gateway,
-            (bool) config('scout.soft_delete', false),
-        ));
+        // The manager binds the closure to itself, so the engine is passed in rather than read off the test.
+        $this->app->make(EngineManager::class)->extend('meilisearch', static fn () => $engine);
 
         config(['scout.driver' => 'meilisearch']);
     }

@@ -116,14 +116,15 @@ $results = Product::search('красн кросовки')
 
 Refer to a field by its path, an alias, or the attribute code. The labels of a select are the field `labels.{code}`.
 
-`paginate()` returns a `LengthAwarePaginator` of models in ranking order, with the hits and facets alongside:
+`paginate()` returns a `LengthAwarePaginator` of models in ranking order, with the facets alongside:
 
 ```php
 $results->items();   // models
 $results->total();
 $results->facets();
-$results->hits();    // documents, highlights, ranking scores
 ```
+
+As in Scout, what the engine tells about a hit is on the model: `$product->scoutMetadata()['_rankingScore']`.
 
 With Meilisearch the total is exact up to `pagination.maxTotalHits`, which is 1000 by default. Raise it in the [index settings](#index-settings) to page deeper.
 
@@ -228,26 +229,25 @@ Product::search()->where('category', 5)->facetValues('brand', 'ni');
 ```php
 $results = Product::search('leather')
     ->highlight('title')
-    ->matching('all')
-    ->threshold(0.3)
+    ->options(['matchingStrategy' => 'all', 'rankingScoreThreshold' => 0.3])
     ->paginate();
 
-$hit = $results->hits()->first();
+$product = $results->first();
 
-$hit->highlight('title'); // 'Red <em>leather</em> boots'
-$hit->get('title');       // 'Red leather boots'
-$hit->score;              // 0.87
-$hit->model;
+$product->highlighted('title');                  // 'Red <em>leather</em> boots'
+$product->scoutMetadata()['_rankingScore'];      // 0.87
 ```
+
+`highlighted()` reads a field by the name the index definition gives it, in the current locale or the one you pass.
 
 | Method        | Purpose                                                        |
 |---------------|----------------------------------------------------------------|
 | `searchOn()`  | Match the text against the given fields only                   |
 | `highlight()` | Highlight matches in the given fields, or in all searched ones |
-| `matching()`  | How query words must match: `last`, `all`, or `frequency`      |
-| `threshold()` | Drop hits below a ranking score                                |
 | `distinct()`  | Keep one hit per value of a field, for this search             |
-| `options()`   | Scout's own: pass any other engine parameter                   |
+| `options()`   | Scout's own: any other engine parameter, such as `matchingStrategy` |
+
+As in Scout, a second call to `options()` replaces the first.
 
 ## Federated search
 
@@ -261,9 +261,8 @@ $results = Search::federated([
     Service::search($term),
 ])->paginate(20);
 
-foreach ($results->hits() as $hit) {
-    $hit->entityType; // 'product' or 'service'
-    $hit->model;
+foreach ($results as $model) {
+    $model->getEntityType(); // 'product' or 'service'
 }
 ```
 
@@ -321,7 +320,7 @@ To filter by an attribute of a related entity, such as `category.color`, add the
 ```php
 'search' => [
     'resolvers' => [
-        \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
+        \Jurager\Eav\Search\Filters\RelationFilterResolver::class,
     ],
 ],
 ```
@@ -364,28 +363,23 @@ Override `facetLabels()` to label facet values.
 
 ## Other Scout drivers
 
-Entities are searched with the Scout driver they are indexed with. On a driver the package has no dialect for, a search uses Scout's own query API: text, `where()` with comparisons, `whereIn()`, `whereNotIn()`, `whereBetween()`, sorting, and pagination. Fields are still checked against the index definition.
+Entities are searched with the Scout driver they are indexed with. With Scout's Meilisearch driver the package uses its own engine, an extension of Scout's, for every model with attributes.
 
-What Scout cannot express there throws Scout's `NotSupportedException`: `or` groups, facets, `searchOn()`, `highlight()`, `boost()`, `partition()`, and facet search. Federated search still works: each search runs alone, and the hits are ranked by weight and position.
+On any other driver a search uses Scout's own query API: text, `where()` with comparisons, `whereIn()`, `whereNotIn()`, `whereBetween()`, sorting, and pagination. Fields are still checked against the index definition.
+
+What Scout cannot express there throws Scout's `NotSupportedException`: `or` groups, facets, `searchOn()`, `highlight()`, `boost()`, `partition()`, and facet search. Federated search still works: each search runs alone, and the hits are ranked by weight and rank.
 
 Keep in mind that Scout's `database` and `collection` drivers search the model's columns, not the indexed document, so they do not see attribute values.
 
-To teach another engine these features, write a dialect and register it for the engine's class:
+To add these features to another engine, extend it as you extend any Scout engine and implement the package's contracts:
 
-```php
-use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Dialects\Dialect;
-use Laravel\Scout\Engines\TypesenseEngine;
+| Contract                 | The engine can                                                    |
+|--------------------------|-------------------------------------------------------------------|
+| `SupportsExtendedSearch` | Answer groups of conditions, facets, locales, boosts, partitions  |
+| `FederatesSearches`      | Merge several searches into one ranked list by itself             |
+| `DerivesIndexSettings`   | Derive its index settings from the index definition               |
 
-class TypesenseDialect extends Dialect
-{
-    // callback(), hits(), facets(), federated(), settings() ...
-}
-
-Search::extend(TypesenseEngine::class, TypesenseDialect::class);
-```
-
-A dialect receives searches already checked against the index definition: `$search->conditions` are filterable fields with a `Comparison` and a value of the field's type, `$search->sorts` are sortable fields. `MeilisearchDialect` is the reference.
+An engine receives searches already checked against the index definition: `$search->conditions` are filterable fields with a `Comparison` and a value of the field's type, `$search->sorts` are sortable fields. `Search\Engines\MeilisearchEngine` is the reference.
 
 ## Testing
 

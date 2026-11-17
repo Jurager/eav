@@ -131,7 +131,7 @@ $facets = $products->facets();
 |-------------------------------------|----------------------------------------------------|
 | `->for('product')->query($term)`    | `Product::search($term)`                           |
 | `->search($perPage, $page)`         | `->paginate($perPage, 'page', $page)`, as in Scout |
-| `$result->ids`                      | `$results->keys()`, or `->keys()` on the builder   |
+| `$result->ids`                      | `->keys()` on the builder, or `$results->modelKeys()` |
 | `$result->total`                    | `$results->total()`                                |
 | `$result->facets`                   | `$results->facets()`                               |
 | `$result->paginate($model, ...)`    | `paginate()` already returns the models            |
@@ -199,7 +199,7 @@ Filtering by an attribute of a related entity, such as `category.color`, is off 
 ```php
 'search' => [
     'resolvers' => [
-        \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
+        \Jurager\Eav\Search\Filters\RelationFilterResolver::class,
     ],
 ],
 ```
@@ -253,7 +253,7 @@ Classes outside search were moved to follow Laravel's layout. Update your import
 | `Jurager\Eav\Attributes\Validation\AttributeValidator`  | `Jurager\Eav\Attributes\AttributeValidator`         |
 | `Jurager\Eav\Commands\ClearCommand`                     | `Jurager\Eav\Console\ClearCommand`                  |
 | `Jurager\Eav\Search\Contracts\FilterResolver`           | `Jurager\Eav\Contracts\Search\FilterResolver`       |
-| `Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver` | `Jurager\Eav\Search\AttributeRelationFilterResolver` |
+| `Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver` | `Jurager\Eav\Search\Filters\RelationFilterResolver` |
 
 The `eav:clear` command keeps its name.
 
@@ -302,10 +302,14 @@ Product::search($term)->where('brand', 'nike')->paginate(15, 'page', 2);
 | `->get($limit)`                          | `->take($limit)->get()`                                  |
 | `->keys($limit)`, an array               | `->take($limit)->keys()`, a collection                   |
 | `->with('media')`, `->loadUsing($callback)` | `->query(fn ($query) => $query->with('media'))`       |
+| `->matching('all')`, `->threshold(0.3)`  | `->options(['matchingStrategy' => 'all', 'rankingScoreThreshold' => 0.3])` |
+| `$results->hits()`, `$hit->score`        | `$model->scoutMetadata()['_rankingScore']`               |
+| `$hit->highlight('title')`               | `$model->highlighted('title')`                           |
+| `$hit->entityType` in a federated search | `$model->getEntityType()`                                |
 | `->whereNot('color', 'red')`             | `->where('color', '!=', 'red')`                          |
 | `Search::federated([...])->paginate(20, 2)` | `Search::federated([...])->paginate(20, 'page', 2)`   |
 
-`query()` now means what it means in Scout: a callback for the Eloquent query that loads the models. Passing it text throws.
+`query()` now means what it means in Scout: a callback for the Eloquent query that loads the models. Passing it text throws. `options()` is Scout's too: a second call replaces the first instead of adding to it.
 
 `Search::federated()` takes one search per entity type and throws for two searches over one type. To rank some hits of a type higher, use `boost()` on its search.
 
@@ -338,9 +342,13 @@ $search->assertSearched(fn (Builder $search) => $search->query === 'shoes');
 
 | Removed                                                        | Replacement                                    |
 |----------------------------------------------------------------|------------------------------------------------|
-| `Search\Engine`, `Search\Engines\*`, `Contracts\Search\Engine` and the capability contracts | Scout's engine, with `Search\Dialects\Dialect` for what Scout cannot ask |
-| `Search::extend($driver, ...)`, `Search::driver()`              | `Search::extend($scoutEngineClass, $dialect)`   |
-| `Search\RequestFactory`, `Search\FilterCompiler`, `Search\Index\Settings` | `Search\Dialects\Meilisearch\*`     |
+| `Search\Engine`, `Search\Engines\MeilisearchEngine` as a driver of the package | `Search\Engines\MeilisearchEngine`, an extension of Scout's engine |
+| `Contracts\Search\Engine`, `BoostsMatches`, `SearchesFacetValues`, `UpdatesIndexSettings` | `Contracts\Search\SupportsExtendedSearch`, `FederatesSearches`, `DerivesIndexSettings` |
+| `Search::extend($driver, ...)`, `Search::driver()`              | Scout's own `EngineManager::extend()`          |
+| `Search\RequestFactory`, `Search\FilterCompiler`, `Search\Index\Settings` | `Search\Grammars\MeilisearchGrammar` |
+| `Search\Hit`, `Results::hits()`, `Results::keys()`              | Scout metadata on the models                   |
+| `Search\AttributeRelationFilterResolver`                        | `Search\Filters\RelationFilterResolver`        |
+| `Search\Testing\FakeEngine`                                    | `Search\Engines\FakeEngine`                    |
 | `Contracts\Search\Transport`, `Search\Transport\*`            | Removed                                        |
 | `Console\SyncIndexSettingsCommand`, `Console\ReindexCommand`   | Scout's commands                               |
 

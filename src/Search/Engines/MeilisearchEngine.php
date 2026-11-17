@@ -2,71 +2,54 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Dialects;
+namespace Jurager\Eav\Search\Engines;
 
-use Closure;
+use Jurager\Eav\Contracts\Search\DerivesIndexSettings;
+use Jurager\Eav\Contracts\Search\FederatesSearches;
+use Jurager\Eav\Contracts\Search\SupportsExtendedSearch;
+use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Builder;
-use Jurager\Eav\Search\Dialects\Meilisearch\Gateway;
-use Jurager\Eav\Search\Dialects\Meilisearch\RequestFactory;
-use Jurager\Eav\Search\Dialects\Meilisearch\Settings;
 use Jurager\Eav\Search\Filters\Group;
-use Jurager\Eav\Search\Hit;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
-use Jurager\Eav\Search\Response;
+use Laravel\Scout\Builder as ScoutBuilder;
+use Laravel\Scout\Engines\MeilisearchEngine as ScoutMeilisearchEngine;
+use Meilisearch\Client;
+use Meilisearch\Contracts\FacetSearchQuery;
+use Meilisearch\Contracts\MultiSearchFederation;
+use Meilisearch\Contracts\SearchQuery;
+use Meilisearch\Exceptions\ApiException;
 
 /**
- * What Scout's Meilisearch engine is asked beyond Scout's own query API: groups of conditions, facets,
+ * Scout's Meilisearch engine, taught what Scout's query API cannot ask: groups of conditions, facets,
  * per-locale search, boosting, partitioning, native federation, facet search and derived index settings.
+ *
+ * Indexing, and searches of models without attributes, are left to Scout's engine as they are.
  */
-class MeilisearchDialect extends Dialect
+class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSettings, FederatesSearches, SupportsExtendedSearch
 {
     public function __construct(
-        private readonly Gateway $meilisearch,
-        private readonly RequestFactory $requests,
-        private readonly Settings $settings,
-    ) {}
-
-    public function extended(): bool
-    {
-        return true;
+        Client $meilisearch,
+        bool $softDelete,
+        private readonly MeilisearchGrammar $grammar,
+    ) {
+        parent::__construct($meilisearch, $softDelete);
     }
 
-    /**
-     * Conditions are kept on the search and written as one filter expression when it runs.
-     */
-    public function where(Builder $search, Group $group): void {}
-
-    /**
-     * Sorts are kept on the search too: the path of a localized field depends on the locale searched.
-     */
-    public function orderBy(Builder $search, IndexField $field, string $direction): void {}
-
-    public function callback(Builder $search): Closure
+    public function search(ScoutBuilder $builder)
     {
-        // Scout hands over its own parameters: paging, and whatever was set through options().
-        return function (mixed $index, ?string $query, array $parameters) use ($search): array {
-            // Anything else Scout adds, such as semantic search parameters, travels as options of this run.
-            $extra = array_diff_key($parameters, $search->options, array_flip(['filter', 'sort', 'limit', 'hitsPerPage', 'page']));
-
-            if ($extra !== []) {
-                $search = clone $search;
-                $search->options = [...$search->options, ...$extra];
-            }
-
-            // Scout leaves a limit of zero out: asking for no hits, as when counting, is read off the search.
-            return $this->search($search, (int) ($parameters['hitsPerPage'] ?? $search->limit ?? 20), (int) ($parameters['page'] ?? 1));
-        };
+        // A callback given to search() is the caller taking the request into their own hands.
+        return $builder instanceof Builder && $builder->callback === null
+            ? $this->run($builder, (int) ($builder->limit ?? 20), 1)
+            : parent::search($builder);
     }
 
-    public function hits(Builder $search, mixed $results): array
+    public function paginate(ScoutBuilder $builder, $perPage, $page)
     {
-        return array_map(static fn (array $hit): Hit => $search->hit(
-            $hit['id'],
-            array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
-            $hit['_formatted'] ?? [],
-            isset($hit['_rankingScore']) ? (float) $hit['_rankingScore'] : null,
-        ), array_values($results['hits'] ?? []));
+        return $builder instanceof Builder && $builder->callback === null
+            ? $this->run($builder, (int) $perPage, (int) $page)
+            : parent::paginate($builder, $perPage, $page);
     }
 
     public function facets(Builder $search, mixed $results): array
@@ -79,7 +62,7 @@ class MeilisearchDialect extends Dialect
      *
      * @return array{hits: list<array<string, mixed>>, totalHits: int, facets: array<string, mixed>}
      */
-    private function search(Builder $search, int $perPage, int $page): array
+    private function run(Builder $search, int $perPage, int $page): array
     {
         // Nothing to order when no hits are asked for.
         $partitioned = $search->partition !== null && $perPage > 0;
@@ -88,25 +71,25 @@ class MeilisearchDialect extends Dialect
 
         // Partitioned and boosted hits are fetched on their own; the main request then only counts and facets.
         $requests = ['main' => [
-            ...$this->requests->make($search),
+            ...$this->request($search),
             'hitsPerPage' => $partitioned || $boosted ? 0 : $perPage,
             'page' => $partitioned || $boosted ? 1 : $page,
             ...($facets === [] ? [] : ['facets' => array_values($facets)]),
         ]];
 
         if ($partitioned) {
-            $requests['leading'] = [...$this->requests->make($search, side: $search->partitionFirst), 'hitsPerPage' => $perPage, 'page' => $page];
+            $requests['leading'] = [...$this->request($search, side: $search->partitionFirst), 'hitsPerPage' => $perPage, 'page' => $page];
         }
 
         $requests += $this->scopedFacetRequests($search, $facets);
 
-        $responses = array_combine(array_keys($requests), $this->meilisearch->multiSearch(array_values($requests))['results']);
+        $responses = array_combine(array_keys($requests), $this->multiSearch(array_values($requests))['results']);
         $main = $responses['main'];
 
         return [
             'hits' => match (true) {
                 $partitioned => $this->partition($search, $responses['leading'], $perPage, $page),
-                $boosted => $this->meilisearch->multiSearch($this->queries($search), ['limit' => $perPage, 'offset' => ($page - 1) * $perPage])['hits'] ?? [],
+                $boosted => $this->multiSearch($this->queries($search), ['limit' => $perPage, 'offset' => ($page - 1) * $perPage])['hits'] ?? [],
                 default => $main['hits'],
             },
             'totalHits' => (int) ($main['totalHits'] ?? $main['estimatedTotalHits'] ?? 0),
@@ -114,7 +97,7 @@ class MeilisearchDialect extends Dialect
         ];
     }
 
-    public function federated(array $searches, int $limit, int $offset): Response
+    public function federated(array $searches, int $limit, int $offset): array
     {
         $queries = [];
         $owners = [];
@@ -132,23 +115,27 @@ class MeilisearchDialect extends Dialect
             }
         }
 
-        $response = $this->meilisearch->multiSearch($queries, $federation);
+        $response = $this->multiSearch($queries, $federation);
         $hits = [];
 
         foreach ($response['hits'] ?? [] as $hit) {
             if (($search = $owners[$hit['_federation']['queriesPosition'] ?? -1] ?? null) !== null) {
-                array_push($hits, ...$this->hits($search, ['hits' => [$hit]]));
+                $hits[] = [$search, $hit];
             }
         }
 
-        return new Response($hits, (int) ($response['estimatedTotalHits'] ?? count($hits)), $this->federatedFacets($searches, $response));
+        return [
+            'hits' => $hits,
+            'total' => (int) ($response['estimatedTotalHits'] ?? count($hits)),
+            'facets' => $this->federatedFacets($searches, $response),
+        ];
     }
 
     public function facetValues(Builder $search, string $name, IndexField $field, ?string $query): array
     {
-        $request = $this->requests->make($search, except: [$field->path]);
+        $request = $this->request($search, except: [$field->path]);
 
-        $response = $this->meilisearch->facetSearch($search->uid(), array_filter([
+        $response = $this->facetSearch($search->uid(), array_filter([
             'facetName' => $search->path($field),
             'facetQuery' => $query,
             'q' => $request['q'] ?? null,
@@ -160,9 +147,25 @@ class MeilisearchDialect extends Dialect
         return array_column($response['facetHits'] ?? [], 'count', 'value');
     }
 
-    public function settings(Index $index): array
+    public function indexSettings(Index $index): array
     {
-        return $this->settings->for($index);
+        return $this->grammar->compileSettings($index);
+    }
+
+    /**
+     * The request of a search: as the grammar writes it, with Scout's semantic search parameters.
+     *
+     * @param  list<string>  $except  Paths of fields whose top-level conditions are left out.
+     * @param  bool|null  $side  Which side of the partition to take: its matches, or the rest; null for both.
+     * @param  Group|null  $boosted  A boosted condition to narrow the search to.
+     * @return array<string, mixed>
+     */
+    private function request(Builder $search, array $except = [], ?bool $side = null, ?Group $boosted = null): array
+    {
+        return [
+            ...$this->grammar->compileSearch($search, $except, $side, $boosted),
+            ...$this->semanticSearchParameters($search),
+        ];
     }
 
     /**
@@ -180,8 +183,8 @@ class MeilisearchDialect extends Dialect
             return $hits;
         }
 
-        $trailing = $this->meilisearch->multiSearch([[
-            ...$this->requests->make($search, side: ! $search->partitionFirst),
+        $trailing = $this->multiSearch([[
+            ...$this->request($search, side: ! $search->partitionFirst),
             'limit' => $missing,
             'offset' => max(0, ($page - 1) * $perPage - (int) ($leading['totalHits'] ?? 0)),
         ]])['results'][0];
@@ -214,12 +217,12 @@ class MeilisearchDialect extends Dialect
     {
         $weight = $search->weight ?? 1.0;
         $queries = [[
-            ...$this->requests->make($search),
+            ...$this->request($search),
             ...($search->weight === null ? [] : ['federationOptions' => ['weight' => $weight]]),
         ]];
 
         foreach ($search->boosts() as [$condition, $boost]) {
-            $queries[] = [...$this->requests->make($search, boosted: $condition), 'federationOptions' => ['weight' => $weight * $boost]];
+            $queries[] = [...$this->request($search, boosted: $condition), 'federationOptions' => ['weight' => $weight * $boost]];
         }
 
         return $queries;
@@ -240,7 +243,7 @@ class MeilisearchDialect extends Dialect
             $field = $search->filterable($name);
 
             if ($search->constrains($field)) {
-                $requests["facet:{$name}"] = [...$this->requests->make($search, except: [$field->path]), 'limit' => 0, 'facets' => [$path]];
+                $requests["facet:{$name}"] = [...$this->request($search, except: [$field->path]), 'limit' => 0, 'facets' => [$path]];
             }
         }
 
@@ -286,7 +289,7 @@ class MeilisearchDialect extends Dialect
 
         $scoped = $requests === []
             ? []
-            : array_combine(array_keys($requests), $this->meilisearch->multiSearch(array_values($requests))['results']);
+            : array_combine(array_keys($requests), $this->multiSearch(array_values($requests))['results']);
 
         $found = [];
 
@@ -329,5 +332,81 @@ class MeilisearchDialect extends Dialect
         $stats = $response['facetStats'][$path] ?? null;
 
         return $stats === null ? [] : ['min' => $stats['min'] ?? null, 'max' => $stats['max'] ?? null];
+    }
+
+    /**
+     * Run several searches in one round trip, merged into one result list when a federation is given.
+     *
+     * @param  list<array<string, mixed>>  $queries
+     * @param  array<string, mixed>|null  $federation
+     * @return array<string, mixed>
+     *
+     * @throws InvalidSearchQueryException When Meilisearch rejects a request.
+     */
+    protected function multiSearch(array $queries, ?array $federation = null): array
+    {
+        $queries = array_map(static fn (array $payload): SearchQuery => new class($payload) extends SearchQuery
+        {
+            public function __construct(private readonly array $payload) {}
+
+            public function toArray(): array
+            {
+                return $this->payload;
+            }
+        }, $queries);
+
+        $federation = $federation === null ? null : new class($federation) extends MultiSearchFederation
+        {
+            public function __construct(private readonly array $payload) {}
+
+            public function toArray(): array
+            {
+                return $this->payload;
+            }
+        };
+
+        return $this->send(fn (): array => $this->meilisearch->multiSearch($queries, $federation));
+    }
+
+    /**
+     * Search the values of one facet.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     *
+     * @throws InvalidSearchQueryException When Meilisearch rejects the request.
+     */
+    protected function facetSearch(string $index, array $query): array
+    {
+        $query = new class($query) extends FacetSearchQuery
+        {
+            public function __construct(private readonly array $payload) {}
+
+            public function toArray(): array
+            {
+                return $this->payload;
+            }
+        };
+
+        return $this->send(fn (): array => $this->meilisearch->index($index)->facetSearch($query)->toArray());
+    }
+
+    /**
+     * Report a request the engine rejected as a client error, without echoing the raw request back.
+     *
+     * @param  callable(): array<string, mixed>  $request
+     * @return array<string, mixed>
+     */
+    private function send(callable $request): array
+    {
+        try {
+            return $request();
+        } catch (ApiException $e) {
+            if ($e->errorType !== 'invalid_request') {
+                throw $e;
+            }
+
+            throw InvalidSearchQueryException::rejected(explode("\n", (string) $e->getMessage(), 2)[0], $e);
+        }
     }
 }

@@ -2,9 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Testing;
+namespace Jurager\Eav\Search\Engines;
 
+use Jurager\Eav\Contracts\Search\SupportsExtendedSearch;
 use Jurager\Eav\Search\Builder;
+use Jurager\Eav\Search\Index\IndexField;
 use Laravel\Scout\Builder as ScoutBuilder;
 use Laravel\Scout\Engines\NullEngine;
 use PHPUnit\Framework\Assert;
@@ -12,7 +14,7 @@ use PHPUnit\Framework\Assert;
 /**
  * A Scout engine that answers searches with prepared hits and records them. Indexing does nothing.
  */
-class FakeEngine extends NullEngine
+class FakeEngine extends NullEngine implements SupportsExtendedSearch
 {
     /** @var list<Builder> The searches run so far. */
     public array $searches = [];
@@ -24,7 +26,8 @@ class FakeEngine extends NullEngine
      * Answer searches over an entity type with the given hits.
      *
      * @param  string  $entityType  The entity type as the search index names it.
-     * @param  list<int|string|array<string, mixed>>  $hits  Keys, or documents with an `id` and an optional `_score`.
+     * @param  list<int|string|array<string, mixed>>  $hits  Keys, or documents with an `id`; keys starting with `_`,
+     *                                                        such as `_rankingScore`, become Scout metadata of the model.
      * @param  array<string, mixed>  $facets  A map of value to count, or `min` and `max`, per facet name.
      */
     public function respond(string $entityType, array $hits, ?int $total = null, array $facets = []): static
@@ -56,6 +59,23 @@ class FakeEngine extends NullEngine
         ];
     }
 
+    public function facets(Builder $search, mixed $results): array
+    {
+        return $results['facets'] ?? [];
+    }
+
+    /**
+     * The values prepared for the facet, matched by substring.
+     */
+    public function facetValues(Builder $search, string $name, IndexField $field, ?string $query): array
+    {
+        $values = $this->responses[$search->definition->entityType]['facets'][$name] ?? [];
+
+        return $query === null || $query === ''
+            ? $values
+            : array_filter($values, static fn (int|string $value): bool => mb_stripos((string) $value, $query) !== false, ARRAY_FILTER_USE_KEY);
+    }
+
     public function mapIds($results)
     {
         return collect($results['hits'])->pluck('id')->values();
@@ -68,6 +88,14 @@ class FakeEngine extends NullEngine
 
         return $model->getScoutModelsByIds($builder, $keys)
             ->filter(static fn ($model): bool => isset($positions[(string) $model->getScoutKey()]))
+            ->each(function ($model) use ($results, $positions): void {
+                // As Scout's engines do: what the engine tells about a hit travels on the model.
+                foreach ($results['hits'][$positions[(string) $model->getScoutKey()]] as $key => $value) {
+                    if (str_starts_with((string) $key, '_')) {
+                        $model->withScoutMetadata($key, $value);
+                    }
+                }
+            })
             ->sortBy(static fn ($model): int => $positions[(string) $model->getScoutKey()])
             ->values();
     }

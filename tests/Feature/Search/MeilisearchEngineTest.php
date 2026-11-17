@@ -8,8 +8,7 @@ use Illuminate\Support\Facades\Queue;
 use InvalidArgumentException;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\AttributeRelationFilterResolver;
-use Jurager\Eav\Search\Hit;
+use Jurager\Eav\Search\Filters\RelationFilterResolver;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\RemoveFromSearch;
@@ -134,10 +133,8 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         SearchableProduct::search('x')
             ->highlight('title')
-            ->matching('all')
-            ->threshold(0.5)
             ->distinct('parent')
-            ->options(['showMatchesPosition' => true])
+            ->options(['matchingStrategy' => 'all', 'rankingScoreThreshold' => 0.5])
             ->paginate();
 
         $request = $this->request();
@@ -146,10 +143,9 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->assertSame('all', $request['matchingStrategy']);
         $this->assertSame(0.5, $request['rankingScoreThreshold']);
         $this->assertSame('parent_id', $request['distinct']);
-        $this->assertTrue($request['showMatchesPosition']);
     }
 
-    public function test_results_are_models_in_ranking_order_with_their_hits(): void
+    public function test_results_are_models_in_ranking_order_carrying_what_the_engine_told(): void
     {
         $first = $this->product('First');
         $second = $this->product('Second');
@@ -157,7 +153,7 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->engine->respond(self::PRODUCTS, [
             ['id' => $second->id, 'name' => 'Second', '_rankingScore' => 0.9, '_formatted' => ['name' => '<em>Second</em>']],
             ['id' => 999, 'name' => 'Gone'],
-            ['id' => $first->id, 'name' => 'First', 'attributes' => ['title' => ['en' => 'One']]],
+            ['id' => $first->id, 'name' => 'First'],
         ], total: 40);
 
         $results = SearchableProduct::search('x')->paginate(3);
@@ -165,16 +161,12 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->assertSame([$second->id, $first->id], $results->modelKeys());
         $this->assertSame(40, $results->total());
         $this->assertSame(14, $results->lastPage());
-        $this->assertSame([$second->id, 999, $first->id], $results->keys());
+        $this->assertStringContainsString('query=x', $results->url(2));
 
-        /** @var Hit $hit */
-        $hit = $results->hits()->first();
-
-        $this->assertTrue($hit->model->is($second));
-        $this->assertSame(0.9, $hit->score);
-        $this->assertSame('<em>Second</em>', $hit->highlight('name'));
-        $this->assertSame('One', $results->hits()->last()->get('title'));
-        $this->assertNull($results->hits()[1]->model);
+        // Scout keeps the engine's own keys on the model; highlights are read through the index definition.
+        $this->assertSame(0.9, $results->first()->scoutMetadata()['_rankingScore']);
+        $this->assertSame('<em>Second</em>', $results->first()->highlighted('name'));
+        $this->assertSame('First', $results->last()->highlighted('name'));
     }
 
     public function test_documents_of_entities_that_are_gone_are_removed_from_the_index(): void
@@ -230,8 +222,9 @@ class MeilisearchEngineTest extends SearchTestCase
             ->query(fn ($query) => $query->where('name', 'Other'))
             ->paginate();
 
+        // As in Scout, a query callback that narrows the models narrows the total with them.
         $this->assertCount(0, $results->items());
-        $this->assertCount(1, $results->hits());
+        $this->assertSame(0, $results->total());
     }
 
     public function test_facets_are_keyed_by_name_with_labels_and_ranges(): void
@@ -396,7 +389,10 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->assertSame('(attributes.color = "red")', $queries[1]['filter']);
 
         // Hits of either products query belong to the products search.
-        $this->assertSame(['searchable_product', 'searchable_product', 'searchable_category'], $results->hits()->pluck('entityType')->all());
+        $this->assertSame(
+            ['searchable_product', 'searchable_product', 'searchable_category'],
+            $results->getCollection()->map->getEntityType()->all(),
+        );
     }
 
     public function test_a_filtered_facet_of_a_federated_search_is_counted_without_its_own_filter(): void
@@ -440,7 +436,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
         $this->assertTrue($results->items()[0]->is($product));
         $this->assertTrue($results->items()[1]->is($category));
-        $this->assertSame(['searchable_product', 'searchable_category'], $results->hits()->pluck('entityType')->all());
+        $this->assertSame(['searchable_product', 'searchable_category'], $results->getCollection()->map->getEntityType()->all());
         $this->assertSame('Red', $results->facets()['searchable_product']['color']['values'][0]['label']);
         $this->assertSame(2, $results->total());
     }
@@ -454,7 +450,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_the_relation_resolver_turns_a_related_attribute_into_ids(): void
     {
-        config(['eav.search.resolvers' => [AttributeRelationFilterResolver::class]]);
+        config(['eav.search.resolvers' => [RelationFilterResolver::class]]);
 
         $parent = $this->product('Model');
         $parent->eav()->set('sku', 'AB')->save();
@@ -466,7 +462,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_a_relation_filter_matching_nothing_matches_no_entity(): void
     {
-        config(['eav.search.resolvers' => [AttributeRelationFilterResolver::class]]);
+        config(['eav.search.resolvers' => [RelationFilterResolver::class]]);
 
         SearchableProduct::search()->filter(['parent' => ['sku' => 'none']])->paginate();
 
@@ -475,7 +471,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_the_relation_resolver_refuses_too_many_matches(): void
     {
-        config(['eav.search.resolvers' => [AttributeRelationFilterResolver::class], 'eav.search.relation_limit' => 1]);
+        config(['eav.search.resolvers' => [RelationFilterResolver::class], 'eav.search.relation_limit' => 1]);
 
         foreach (['A', 'B'] as $name) {
             $this->product($name)->eav()->set('sku', 'AB')->save();

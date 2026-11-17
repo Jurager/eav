@@ -8,8 +8,8 @@ use Illuminate\Contracts\Console\Kernel;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Dialects\Meilisearch\Settings;
-use Jurager\Eav\Search\Index\Configurator;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 
@@ -100,7 +100,7 @@ class IndexTest extends SearchTestCase
         $this->attribute('number', 'price', ['filterable' => true, 'sortable' => true]);
         $this->attribute('select', 'color', ['filterable' => true, 'searchable' => true]);
 
-        $settings = app(Settings::class)->for(Search::index(SearchableProduct::class));
+        $settings = app(MeilisearchGrammar::class)->compileSettings(Search::index(SearchableProduct::class));
 
         $this->assertSame([
             'name',
@@ -125,7 +125,7 @@ class IndexTest extends SearchTestCase
     {
         $this->attribute('number', 'article', ['searchable' => true]);
 
-        $settings = app(Settings::class)->for(Search::index(SearchableProduct::class));
+        $settings = app(MeilisearchGrammar::class)->compileSettings(Search::index(SearchableProduct::class));
 
         $this->assertSame(['attributes.article'], $settings['typoTolerance']['disableOnAttributes']);
     }
@@ -143,7 +143,7 @@ class IndexTest extends SearchTestCase
             ]],
         ]);
 
-        $settings = app(Settings::class)->for(Search::index(SearchableProduct::class));
+        $settings = app(MeilisearchGrammar::class)->compileSettings(Search::index(SearchableProduct::class));
 
         $this->assertSame(['id', 'parent_id', 'attributes.price', 'legacy'], $settings['filterableAttributes']);
         $this->assertSame(['oneTypo' => 4], $settings['typoTolerance']['minWordSizeForTypos']);
@@ -157,7 +157,7 @@ class IndexTest extends SearchTestCase
         $this->createLocale('xx');
         $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
 
-        $settings = app(Settings::class)->for(Search::index(SearchableProduct::class));
+        $settings = app(MeilisearchGrammar::class)->compileSettings(Search::index(SearchableProduct::class));
 
         $this->assertContains('attributes.title.xx', $settings['searchableAttributes']);
         $this->assertSame(['en', 'ru'], array_merge(...array_column($settings['localizedAttributes'], 'locales')));
@@ -167,15 +167,15 @@ class IndexTest extends SearchTestCase
     {
         config(['scout.meilisearch.index-settings' => ['eav_test_products' => ['stopWords' => ['the']]]]);
 
-        $this->assertSame(['the'], app(Settings::class)->for(Search::index(SearchableProduct::class))['stopWords']);
+        $this->assertSame(['the'], app(MeilisearchGrammar::class)->compileSettings(Search::index(SearchableProduct::class))['stopWords']);
     }
 
     public function test_derived_settings_reach_the_engine_through_scout(): void
     {
         $this->attribute('number', 'price', ['filterable' => true]);
 
-        $this->assertTrue(app(Configurator::class)->configure('searchable_product'));
-        $this->assertFalse(app(Configurator::class)->configure('product'));
+        $this->app->call([new SyncIndexSettings('searchable_product'), 'handle']);
+        $this->app->call([new SyncIndexSettings('product'), 'handle']);
 
         $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
         $this->assertArrayNotHasKey('eav_test_categories', $this->engine->settings);
