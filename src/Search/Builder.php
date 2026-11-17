@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search;
 
 use Closure;
+use InvalidArgumentException;
+use LogicException;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
+use Jurager\Eav\Contracts\Search\BoostsMatches;
+use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Contracts\Search\FilterResolver;
+use Jurager\Eav\Contracts\Search\SearchesFacetValues;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Jurager\Eav\Search\Filters\Group;
+use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\Indexer;
 use Jurager\Eav\Search\Index\IndexField;
@@ -31,19 +38,19 @@ class Builder
 
     public ?string $query = null;
 
-    /** @var list<ParsedFilters> Conditions that must all hold. */
+    /** @var list<Group> Checked conditions that must all hold. */
     public array $filters = [];
 
-    /** @var list<array{0: string, 1: string}> Sort fields and directions. */
+    /** @var list<array{0: IndexField, 1: string}> Sortable fields and their directions. */
     public array $orders = [];
 
-    /** @var list<string> */
+    /** @var list<string> Names of the filterable fields facets are asked for. */
     public array $facets = [];
 
     /** @var list<string> Locale codes the search runs in. */
     private array $locales;
 
-    /** @var list<string>|null Fields the text is matched against; every searchable field when null. */
+    /** @var list<string>|null Names of the searchable fields the text is matched against; all of them when null. */
     public ?array $searchOn = null;
 
     /** @var list<string>|null Fields to highlight matches in; empty for every searched field. */
@@ -53,7 +60,10 @@ class Builder
 
     public ?float $weight = null;
 
-    public ?ParsedFilters $partition = null;
+    public ?Group $partition = null;
+
+    /** @var list<array{0: Group, 1: float}> Conditions whose matches rank higher, with the weight of each. */
+    private array $boosts = [];
 
     /**
      * Trashed entities to include: none (false), all alongside the rest (true), or only them (null).
@@ -61,6 +71,16 @@ class Builder
     public ?bool $trashed = false;
 
     public bool $partitionFirst = true;
+
+    /**
+     * How query words must match, in the engine's terms; its default when null.
+     */
+    public ?string $matching = null;
+
+    /**
+     * Relevance, between 0 and 1, below which hits are dropped.
+     */
+    public ?float $threshold = null;
 
     /** @var array<string, mixed> Engine parameters passed through as they are. */
     public array $options = [];
@@ -79,6 +99,7 @@ class Builder
         private readonly Engine $engine,
         public readonly Index $index,
         private readonly Indexer $indexer,
+        private readonly FacetFormatter $formatter,
         private readonly iterable $resolvers = [],
         array $locales = [],
     ) {
@@ -105,6 +126,11 @@ class Builder
         }
 
         $alias = self::OPERATORS[(string) $operator] ?? throw InvalidSearchQueryException::unsupportedOperator($field, (string) $operator);
+
+        // As in Eloquent, comparing with null asks whether the field holds a value at all.
+        if ($value === null && in_array($alias, ['eq', 'ne'], true)) {
+            return $alias === 'eq' ? $this->whereNull($field) : $this->whereNotNull($field);
+        }
 
         return $this->condition($field, $alias, $value);
     }
@@ -161,8 +187,8 @@ class Builder
      */
     public function filter(?array $filter): static
     {
-        if ($filter !== null && $filter !== []) {
-            $this->filters[] = $this->parse($filter);
+        if ($filter !== null && $filter !== [] && ! ($group = $this->parse($filter))->isEmpty()) {
+            $this->filters[] = $group;
         }
 
         return $this;
@@ -182,7 +208,13 @@ class Builder
 
     public function orderBy(string $field, string $direction = 'asc'): static
     {
-        $this->orders[] = [$field, strtolower($direction) === 'desc' ? 'desc' : 'asc'];
+        $sortable = $this->field($field);
+
+        if (! $sortable->sortable) {
+            throw InvalidSearchQueryException::notSortable($field);
+        }
+
+        $this->orders[] = [$sortable, strtolower($direction) === 'desc' ? 'desc' : 'asc'];
 
         return $this;
     }
@@ -200,10 +232,52 @@ class Builder
      */
     public function partition(array $condition, bool $first = true): static
     {
-        $this->partition = $this->parse($condition);
+        if ($this->boosts !== []) {
+            throw new LogicException('A search cannot be both partitioned and boosted.');
+        }
+
+        $partition = $this->parse($condition);
+
+        // Nothing to split on leaves the results in one piece.
+        $this->partition = $partition->isEmpty() ? null : $partition;
         $this->partitionFirst = $first;
 
         return $this;
+    }
+
+    /**
+     * Rank the hits matching a condition higher: their relevance is multiplied by the weight.
+     *
+     * A boost acts on relevance, so it has no effect without a text query or when the search is sorted;
+     * use `partition()` to lead with a group whatever the order.
+     *
+     * @param  array<string, mixed>  $condition  JSON:API filters.
+     */
+    public function boost(array $condition, float $weight = 2.0): static
+    {
+        if ($weight <= 0) {
+            throw new InvalidArgumentException('The weight of a boost must be greater than zero.');
+        }
+
+        if ($this->partition !== null) {
+            throw new LogicException('A search cannot be both partitioned and boosted.');
+        }
+
+        if (! ($group = $this->parse($condition))->isEmpty()) {
+            $this->boosts[] = [$group, $weight];
+        }
+
+        return $this;
+    }
+
+    /**
+     * The boosts in effect: none without a text query or with an explicit order, where relevance does not rank.
+     *
+     * @return list<array{0: Group, 1: float}>
+     */
+    public function boosts(): array
+    {
+        return $this->query !== null && $this->orders === [] ? $this->boosts : [];
     }
 
     /**
@@ -213,6 +287,8 @@ class Builder
      */
     public function facets(array|string $facets): static
     {
+        array_map($this->filterable(...), (array) $facets);
+
         $this->facets = array_values(array_unique([...$this->facets, ...(array) $facets]));
 
         return $this;
@@ -237,6 +313,12 @@ class Builder
      */
     public function searchOn(string ...$fields): static
     {
+        foreach ($fields as $name) {
+            if (! $this->field($name)->searchable) {
+                throw InvalidSearchQueryException::notSearchable($name);
+            }
+        }
+
         $this->searchOn = array_values($fields);
 
         return $this;
@@ -247,25 +329,31 @@ class Builder
      */
     public function highlight(string ...$fields): static
     {
+        array_map($this->field(...), $fields);
+
         $this->highlight = array_values($fields);
 
         return $this;
     }
 
     /**
-     * How query words must match: `last` (default), `all`, or `frequency`.
+     * How query words must match, as the engine names it — `last`, `all` or `frequency` with Meilisearch.
      */
     public function matching(string $strategy): static
     {
-        return $this->options(['matchingStrategy' => $strategy]);
+        $this->matching = $strategy;
+
+        return $this;
     }
 
     /**
-     * Drop hits whose ranking score is below the threshold, between 0 and 1.
+     * Drop hits whose relevance is below the threshold, between 0 and 1.
      */
     public function threshold(float $score): static
     {
-        return $this->options(['rankingScoreThreshold' => $score]);
+        $this->threshold = $score;
+
+        return $this;
     }
 
     /**
@@ -273,6 +361,8 @@ class Builder
      */
     public function distinct(string $field): static
     {
+        $this->filterable($field);
+
         $this->distinct = $field;
 
         return $this;
@@ -309,7 +399,7 @@ class Builder
     }
 
     /**
-     * Pass engine search parameters through as they are, e.g. `['hybrid' => [...]]`.
+     * Pass search parameters of the engine in use through as they are, e.g. `['hybrid' => [...]]` with Meilisearch.
      *
      * @param  array<string, mixed>  $options
      */
@@ -348,9 +438,9 @@ class Builder
     public function paginate(int $perPage = 15, ?int $page = null, string $pageName = 'page'): Results
     {
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
-        $found = $this->engine->search($this, $perPage, $page);
+        $found = $this->execute($perPage, $page);
 
-        return Results::make($this->load($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
+        return Results::make($this->load($found->hits), $this->formatter->format($this, $found->facets), $found->total, $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
             'pageName' => $pageName,
         ]);
@@ -378,7 +468,7 @@ class Builder
      */
     public function keys(int $limit = 20): array
     {
-        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this->withoutFacets(), $limit, 1)['hits']);
+        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->withoutFacets()->execute($limit, 1)->hits);
     }
 
     /**
@@ -386,7 +476,7 @@ class Builder
      */
     public function count(): int
     {
-        return $this->engine->search($this->withoutFacets(), 0, 1)['total'];
+        return $this->withoutFacets()->execute(0, 1)->total;
     }
 
     /**
@@ -396,7 +486,91 @@ class Builder
      */
     public function facetValues(string $facet, ?string $query = null): array
     {
-        return $this->engine->facetValues($this, $facet, $query);
+        $field = $this->filterable($facet);
+
+        if ($this->engine instanceof SearchesFacetValues) {
+            return $this->formatter->terms($this, $field, $this->engine->facetValues($this, $field, $query));
+        }
+
+        // The engine cannot search a facet: match the values a regular search returns for it.
+        $search = $this->withoutFacets()->facets($facet);
+        $values = $search->execute(0, 1)->facets[$facet] ?? [];
+
+        if ($query !== null && $query !== '') {
+            $values = array_filter($values, static fn (int|string $value): bool => mb_stripos((string) $value, $query) !== false, ARRAY_FILTER_USE_KEY);
+        }
+
+        return $this->formatter->terms($this, $field, $values);
+    }
+
+    /**
+     * Run the search for a federated search, which merges and loads the hits itself.
+     *
+     * @internal
+     */
+    public function run(int $limit): Response
+    {
+        return $this->execute($limit, 1);
+    }
+
+    /**
+     * Ask the engine, covering for it where it cannot rank boosted matches itself.
+     */
+    private function execute(int $perPage, int $page): Response
+    {
+        $boosts = $this->boosts();
+
+        if ($boosts === [] || $perPage <= 0 || $this->engine instanceof BoostsMatches) {
+            return $this->engine->search($this, $perPage, $page);
+        }
+
+        // Every candidate for the page: the best hits as they are, and the best of each boosted condition.
+        $size = $perPage * $page;
+        $base = $this->engine->search($this->narrowed(), $size, 1);
+        $ranked = [];
+
+        foreach ($base->hits as $rank => $hit) {
+            $ranked[(string) $hit->key] = [$hit->score ?? 0.0, $rank, $hit];
+        }
+
+        foreach ($boosts as [$condition, $weight]) {
+            foreach ($this->engine->search($this->narrowed($condition), $size, 1)->hits as $hit) {
+                $key = (string) $hit->key;
+                $score = ($hit->score ?? 0.0) * $weight;
+
+                if ($score > ($ranked[$key][0] ?? -1.0)) {
+                    $ranked[$key] = [$score, $ranked[$key][1] ?? PHP_INT_MAX, $hit];
+                }
+            }
+        }
+
+        // Best weighted score first; equal scores keep the engine's own order.
+        usort($ranked, static fn (array $a, array $b): int => [$b[0], $a[1]] <=> [$a[0], $b[1]]);
+
+        return new Response(
+            array_map(
+                fn (array $entry): Hit => $this->hit($entry[2]->key, $entry[2]->document, $entry[2]->formatted, $entry[0]),
+                array_slice($ranked, ($page - 1) * $perPage, $perPage),
+            ),
+            $base->total,
+            $base->facets,
+        );
+    }
+
+    /**
+     * The same search without boosts — as it is, or narrowed to one boosted condition, which needs no facets.
+     */
+    private function narrowed(?Group $condition = null): static
+    {
+        $search = clone $this;
+        $search->boosts = [];
+
+        if ($condition !== null) {
+            $search->filters[] = $condition;
+            $search->facets = [];
+        }
+
+        return $search;
     }
 
     /**
@@ -444,15 +618,26 @@ class Builder
      */
     public function constrains(IndexField $field): bool
     {
-        foreach ($this->filters as $parsed) {
-            foreach (array_keys($parsed->filters) as $name) {
-                if ($this->index->find((string) $name) === $field) {
-                    return true;
-                }
-            }
-        }
+        return array_any($this->filters, static fn (Group $group): bool => $group->constrains($field));
+    }
 
-        return false;
+    /**
+     * Make a hit of this search — what an engine returns for each document it found.
+     *
+     * @param  array<string, mixed>  $document  The document as indexed.
+     * @param  array<string, mixed>  $formatted  The document with matches highlighted, if the engine highlights.
+     */
+    public function hit(int|string $key, array $document = [], array $formatted = [], ?float $score = null): Hit
+    {
+        return new Hit($key, $this->index->entityType, $document, $formatted, $score, $this);
+    }
+
+    /**
+     * Whether the hit was made by this search.
+     */
+    public function made(Hit $hit): bool
+    {
+        return $hit->search === $this;
     }
 
     /**
@@ -515,25 +700,33 @@ class Builder
 
     private function condition(string $field, string $operator, mixed $value): static
     {
-        $this->filters[] = new ParsedFilters([$field => [$operator => $value]], [], [], [], []);
+        $this->filters[] = $this->normalize(new ParsedFilters([$field => [$operator => $value]], [], [], [], []));
 
         return $this;
     }
 
     /**
-     * Parse request filters, handing keys the index does not hold to the filter resolvers.
+     * Parse request filters into checked conditions, handing keys the index does not hold to the filter resolvers.
      *
      * @param  array<string, mixed>  $filter
      */
-    private function parse(array $filter): ParsedFilters
+    private function parse(array $filter): Group
     {
         $parsed = (new FilterParser)->parse($filter, []);
 
-        return $parsed->withSanitized(
+        return $this->normalize($parsed->withSanitized(
             filters: $this->substitute($parsed->filters),
             orGroups: array_map($this->substitute(...), $parsed->orGroups),
             andGroups: array_map($this->substitute(...), $parsed->andGroups),
-        );
+        ));
+    }
+
+    /**
+     * Check conditions against the index and cast their values, so every engine gets them alike.
+     */
+    private function normalize(ParsedFilters $parsed): Group
+    {
+        return (new Normalizer($this->index))->normalize($parsed);
     }
 
     /**

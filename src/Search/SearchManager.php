@@ -4,28 +4,28 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
-use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
-use Jurager\Eav\Contracts\Search\Transport;
+use Illuminate\Support\Manager;
+use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Registries\LocaleRegistry;
+use Jurager\Eav\Search\Engines\MeilisearchEngine;
 use Jurager\Eav\Search\Index\Index;
-use Jurager\Eav\Search\Index\Indexer;
 use Jurager\Eav\Search\Index\IndexFactory;
-use Jurager\Eav\Search\Transport\FakeTransport;
+use Jurager\Eav\Search\Index\Indexer;
+use Jurager\Eav\Search\Testing\FakeEngine;
+use Meilisearch\Client;
 
 /**
  * Entry point to search: builders for one entity type, or several federated into one result list.
+ *
+ * Searches run on the engine named by `eav.search.driver`; register your own with `extend()`.
+ *
+ * @method Engine driver(string|null $driver = null)
  */
-class SearchManager
+class SearchManager extends Manager
 {
-    public function __construct(
-        private readonly Container $container,
-        private readonly IndexFactory $indexes,
-        private readonly LocaleRegistry $locales,
-    ) {}
-
     /**
      * Start a search over an entity type.
      *
@@ -36,10 +36,11 @@ class SearchManager
     public function for(Model|string $entity): Builder
     {
         return new Builder(
-            $this->container->make(Engine::class),
-            $this->indexes->for($entity),
+            $this->driver(),
+            $this->container->make(IndexFactory::class)->for($entity),
             $this->container->make(Indexer::class),
-            array_map($this->container->make(...), (array) $this->container->make('config')->get('eav.search.resolvers', [])),
+            $this->container->make(FacetFormatter::class),
+            array_map($this->container->make(...), (array) $this->config->get('eav.search.resolvers', [])),
             $this->currentLocales(),
         );
     }
@@ -51,7 +52,7 @@ class SearchManager
      */
     public function federated(array $searches): FederatedBuilder
     {
-        return new FederatedBuilder($this->container->make(Engine::class), array_values($searches));
+        return new FederatedBuilder($this->driver(), $this->container->make(FacetFormatter::class), array_values($searches));
     }
 
     /**
@@ -59,7 +60,32 @@ class SearchManager
      */
     public function index(Model|string $entity): Index
     {
-        return $this->indexes->for($entity);
+        return $this->container->make(IndexFactory::class)->for($entity);
+    }
+
+    /**
+     * Answer searches with prepared hits instead of asking an engine, for tests.
+     */
+    public function fake(): FakeEngine
+    {
+        return $this->drivers[$this->getDefaultDriver()] = new FakeEngine;
+    }
+
+    public function getDefaultDriver(): string
+    {
+        return (string) $this->config->get('eav.search.driver', 'meilisearch');
+    }
+
+    /**
+     * @throws SearchNotAvailableException When Scout or the Meilisearch client is missing.
+     */
+    protected function createMeilisearchDriver(): Engine
+    {
+        if (! IndexFactory::available() || ! class_exists(Client::class)) {
+            throw SearchNotAvailableException::notInstalled();
+        }
+
+        return $this->container->make(MeilisearchEngine::class);
     }
 
     /**
@@ -69,23 +95,15 @@ class SearchManager
      */
     private function currentLocales(): array
     {
+        $locales = $this->container->make(LocaleRegistry::class);
+
         try {
-            $code = $this->locales->code($this->locales->current());
+            $code = $locales->code($locales->current());
         } catch (InvalidConfigurationException) {
             // No locales are set up: nothing is localized either.
             $code = null;
         }
 
         return $code === null ? [] : [$code];
-    }
-
-    /**
-     * Record searches instead of sending them to the engine, for tests.
-     */
-    public function fake(): FakeTransport
-    {
-        $this->container->instance(Transport::class, $fake = new FakeTransport);
-
-        return $fake;
     }
 }

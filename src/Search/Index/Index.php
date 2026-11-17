@@ -24,6 +24,11 @@ class Index
      */
     public const string LABELS = 'labels';
 
+    /**
+     * The document field Scout marks trashed entities with, when it keeps them in the index.
+     */
+    public const string SOFT_DELETED = '__soft_deleted';
+
     /** @var array<string, IndexField> Fields keyed by path. */
     private array $fields = [];
 

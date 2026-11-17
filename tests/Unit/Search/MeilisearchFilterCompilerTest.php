@@ -6,12 +6,13 @@ namespace Jurager\Eav\Tests\Unit\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\FilterCompiler;
+use Jurager\Eav\Search\Engines\Meilisearch\FilterCompiler;
+use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Tests\TestCase;
 use Jurager\Filterable\Parsing\FilterParser;
 
-class FilterCompilerTest extends TestCase
+class MeilisearchFilterCompilerTest extends TestCase
 {
     private Index $index;
 
@@ -37,7 +38,9 @@ class FilterCompilerTest extends TestCase
 
     private function compile(array $filter, ?string $locale = 'en', array $except = []): ?string
     {
-        return app(FilterCompiler::class)->compile((new FilterParser)->parse($filter, []), $this->index, $locale, $except);
+        $group = (new Normalizer($this->index))->normalize((new FilterParser)->parse($filter, []));
+
+        return app(FilterCompiler::class)->compile($group->except($except), $locale);
     }
 
     public function test_a_scalar_is_an_equality_cast_to_the_field_type(): void
@@ -96,6 +99,17 @@ class FilterCompilerTest extends TestCase
         $this->assertNull($this->compile(['brand' => 'nike'], except: ['brand']));
     }
 
+    public function test_a_field_with_several_operators_is_excepted_as_a_whole(): void
+    {
+        $this->assertSame('brand = "nike"', $this->compile(['brand' => 'nike', 'price' => ['gte' => 1, 'lte' => 5]], except: ['price']));
+    }
+
+    public function test_null_checks_can_be_negated(): void
+    {
+        $this->assertSame('brand EXISTS', $this->compile(['brand' => ['null' => 'false']]));
+        $this->assertSame('brand NOT EXISTS', $this->compile(['brand' => ['not_null' => '0']]));
+    }
+
     public function test_string_values_are_escaped(): void
     {
         $this->assertSame('brand = "a\"b\\\\c"', $this->compile(['brand' => 'a"b\\c']));
@@ -146,7 +160,7 @@ class FilterCompilerTest extends TestCase
 
     public function test_range_operators_are_rejected_on_text(): void
     {
-        $this->expectExceptionMessage('operator [>] is not supported on field [brand]');
+        $this->expectExceptionMessage('operator [gt] is not supported on field [brand]');
 
         $this->compile(['brand' => ['gt' => 'a']]);
     }
@@ -160,7 +174,7 @@ class FilterCompilerTest extends TestCase
 
     public function test_like_compiles_to_contains_when_enabled(): void
     {
-        config(['eav.search.contains' => true]);
+        config(['eav.search.engines.meilisearch.contains' => true]);
 
         $this->assertSame('brand CONTAINS "nik"', $this->compile(['brand' => ['like' => '%nik%']]));
         $this->assertSame('(brand CONTAINS "nik" OR brand CONTAINS "pum")', $this->compile(['brand' => ['like' => ['nik', 'pum']]]));

@@ -26,15 +26,17 @@ class ReindexCommand extends Command
         $types = $this->argument('type') !== null ? [(string) $this->argument('type')] : $indexes->entityTypes();
 
         foreach ($types as $type) {
-            if ($this->option('flush')) {
-                $indexer->flush($type);
-            }
-
-            if (! $configurator->configure($type)) {
+            if ($indexes->model($type) === null) {
                 $this->components->warn("[{$type}] is not searchable.");
 
                 continue;
             }
+
+            if ($this->option('flush')) {
+                $indexer->flush($type);
+            }
+
+            $configurator->configure($type);
 
             $indexer->all($type, $this->option('chunk') !== null ? (int) $this->option('chunk') : null);
 

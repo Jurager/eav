@@ -4,10 +4,14 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
-use Jurager\Eav\Contracts\Search\Transport;
+use Jurager\Eav\Models\Attribute;
+use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
+use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Results;
@@ -50,8 +54,8 @@ class MeilisearchTest extends SearchTestCase
 
         parent::setUp();
 
-        // Talk to the real engine instead of the fake the other search tests use.
-        $this->app->forgetInstance(Transport::class);
+        // Talk to the real server instead of the recording the other search tests use.
+        $this->app->forgetInstance(Gateway::class);
         $this->client = $this->app->make(Client::class);
 
         $this->dropIndexes();
@@ -266,5 +270,150 @@ class MeilisearchTest extends SearchTestCase
         $this->assertSame(['color' => ['en' => 'Red']], $document['labels']);
         $this->assertNotContains('attributes.title.ru', $index->getSearchableAttributes());
         $this->assertSame([], $this->names(Search::for(SearchableProduct::class)->query('кроссовки')->get()));
+    }
+
+    public function test_the_remaining_conditions_run_against_the_server(): void
+    {
+        $search = fn () => Search::for(SearchableProduct::class);
+
+        $this->assertEqualsCanonicalizing(['Shoes', 'Boots'], $this->names($search()->whereNotIn('color', ['blue'])->get()));
+        $this->assertEqualsCanonicalizing(['Shoes', 'Boots'], $this->names($search()->whereNot('color', 'blue')->get()));
+        $this->assertSame(4, $search()->whereNull('parent')->count());
+        $this->assertSame(0, $search()->whereNotNull('parent')->count());
+        $this->assertSame(0, $search()->whereIn('sku', [])->count());
+        $this->assertEqualsCanonicalizing(['Jacket', 'Boots', 'Cap'], $this->names($search()->whereNotBetween('price', [50, 200])->get()));
+        $this->assertSame(['Cap'], $this->names($search()->filter(['or' => [['price' => ['lt' => 50]], ['sku' => 'nope']]])->get()));
+    }
+
+    public function test_ranking_options_run_against_the_server(): void
+    {
+        $search = fn () => Search::for(SearchableProduct::class);
+
+        $this->assertSame([], $this->names($search()->query('red jacket')->matching('all')->get()));
+        $this->assertNotSame([], $this->names($search()->query('red jacket')->get()));
+        $this->assertSame([], $this->names($search()->query('shoes')->threshold(1.0)->searchOn('sku')->get()));
+        $this->assertCount(2, $search()->distinct('color')->get());
+    }
+
+    public function test_like_matches_a_substring_when_the_server_allows_it(): void
+    {
+        // CONTAINS is an experimental feature the server has to be told to allow.
+        Http::withToken((string) env('MEILISEARCH_KEY'))
+            ->patch(env('MEILISEARCH_HOST').'/experimental-features', ['containsFilter' => true])
+            ->throw();
+
+        config(['eav.search.engines.meilisearch.contains' => true]);
+
+        $this->assertSame(['Jacket'], $this->names(Search::for(SearchableProduct::class)->filter(['sku' => ['like' => '%J-2%']])->get()));
+        $this->assertEqualsCanonicalizing(
+            ['Jacket', 'Cap'],
+            $this->names(Search::for(SearchableProduct::class)->filter(['sku' => ['like' => ['BJ', 'BC']]])->get()),
+        );
+    }
+
+    public function test_a_deleted_entity_leaves_the_index(): void
+    {
+        SearchableProduct::query()->firstWhere('name', 'Cap')->delete();
+        $this->settle();
+
+        $this->assertSame(3, Search::for(SearchableProduct::class)->count());
+    }
+
+    public function test_a_document_whose_row_is_gone_is_pruned_by_the_search_that_finds_it(): void
+    {
+        $cap = SearchableProduct::query()->firstWhere('name', 'Cap');
+        DB::table('products')->where('id', $cap->id)->delete();
+
+        $results = Search::for(SearchableProduct::class)->where('price', '<', 50)->paginate();
+
+        $this->assertSame([$cap->id], $results->keys());
+        $this->assertCount(0, $results->items());
+
+        $this->settle();
+
+        $this->assertSame(0, Search::for(SearchableProduct::class)->where('price', '<', 50)->count());
+    }
+
+    public function test_a_variant_follows_the_values_it_inherits(): void
+    {
+        $this->attribute('text', 'material', ['searchable' => true, 'filterable' => true, 'inherit_from_parent' => true]);
+        $this->artisan('eav:sync-index-settings', ['type' => 'searchable_product'])->assertSuccessful();
+
+        $parent = SearchableProduct::query()->firstWhere('name', 'Boots');
+        $this->product('Boots 42', $parent->id);
+        $parent->eav()->set('material', 'leather')->save();
+        $this->settle();
+
+        $this->assertEqualsCanonicalizing(
+            ['Boots', 'Boots 42'],
+            $this->names(Search::for(SearchableProduct::class)->where('material', 'leather')->get()),
+        );
+
+        $parent->eav()->set('material', 'suede')->save();
+        $this->settle();
+
+        $this->assertSame([], $this->names(Search::for(SearchableProduct::class)->where('material', 'leather')->get()));
+        $this->assertCount(2, Search::for(SearchableProduct::class)->where('material', 'suede')->get());
+    }
+
+    public function test_flagging_an_attribute_makes_it_searchable_once_the_queued_work_ran(): void
+    {
+        $price = Attribute::query()->firstWhere('code', 'price');
+        $released = Attribute::query()->firstWhere('code', 'released');
+        Queue::fake();
+
+        $released->update(['sortable' => true]);
+        $price->update(['filterable' => false]);
+
+        foreach ([SyncIndexSettings::class, ReindexAttribute::class] as $job) {
+            Queue::pushed($job)->each(fn ($job) => $this->app->call([$job, 'handle']));
+        }
+
+        $this->settle();
+
+        $this->assertSame(['Cap', 'Shoes', 'Jacket', 'Boots'], $this->names(Search::for(SearchableProduct::class)->sort('released')->get()));
+
+        $this->expectExceptionMessage('field [price] is not filterable');
+
+        Search::for(SearchableProduct::class)->where('price', '>', 1);
+    }
+
+    public function test_a_boost_ranks_matching_hits_first_and_keeps_the_total_exact(): void
+    {
+        $search = fn () => Search::for(SearchableProduct::class)->query('red');
+
+        $expensive = $search()->boost(['price' => ['gt' => 300]], 5)->paginate();
+        $cheap = $search()->boost(['price' => ['lt' => 300]], 5)->paginate();
+
+        $this->assertSame(['Boots', 'Shoes'], $this->names($expensive));
+        $this->assertSame(['Shoes', 'Boots'], $this->names($cheap));
+        $this->assertSame(2, $expensive->total());
+        $this->assertSame(['Shoes'], $this->names($search()->boost(['price' => ['gt' => 300]], 5)->paginate(1, 2)));
+    }
+
+    public function test_a_boosted_search_federates_with_another_entity_type(): void
+    {
+        $federated = fn (float $boost) => Search::federated([
+            Search::for(SearchableProduct::class)->query('boots')->boost(['color' => 'red'], $boost),
+            Search::for(SearchableCategory::class)->query('boots')->weight(1.5),
+        ])->paginate();
+
+        // The red boots match the products search and its boosted part, yet appear once.
+        $this->assertSame(['Shoes and boots', 'Boots'], $this->names($federated(1.0)));
+        $this->assertSame(['Boots', 'Shoes and boots'], $this->names($federated(4.0)));
+        $this->assertCount(2, $federated(4.0)->hits());
+    }
+
+    public function test_a_filtered_facet_of_a_federated_search_keeps_its_other_values(): void
+    {
+        $facets = Search::federated([
+            Search::for(SearchableProduct::class)->where('color', 'red')->facets('color'),
+            Search::for(SearchableCategory::class),
+        ])->paginate()->facets();
+
+        $this->assertEqualsCanonicalizing(
+            [['value' => 'red', 'label' => 'Red', 'count' => 2], ['value' => 'blue', 'label' => 'Blue', 'count' => 2]],
+            $facets['searchable_product']['color']['values'],
+        );
     }
 }

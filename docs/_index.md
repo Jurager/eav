@@ -30,7 +30,7 @@ The package requires PHP 8.4 and Laravel 13 or higher. Start with [installation 
 - [Using media fields](media.md)
 - [Scoping and inheriting attributes](inheritance.md)
 - [Working with variants](variants.md)
-- [Searching with Meilisearch](search.md)
+- [Searching entities](search.md)
 - [Listening for events](events.md)
 - [Cache and JSON:API integration](advanced.md)
 

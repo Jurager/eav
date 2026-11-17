@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Index\Settings;
+use Jurager\Eav\Search\Engines\Meilisearch\Settings;
 use Jurager\Eav\Tests\Fixtures\TrashableProduct;
 
 class SoftDeletesTest extends SearchTestCase

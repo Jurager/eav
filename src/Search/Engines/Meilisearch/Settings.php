@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Index;
+namespace Jurager\Eav\Search\Engines\Meilisearch;
 
 use Illuminate\Contracts\Config\Repository;
+use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\Index\IndexField;
 
 /**
- * Derive the engine settings of an index from its definition and the configuration.
+ * Derive the Meilisearch settings of an index from its definition and the configuration.
  */
 class Settings
 {
@@ -15,11 +17,6 @@ class Settings
      * Settings holding lists of document paths, merged rather than replaced.
      */
     private const array PATH_LISTS = ['searchableAttributes', 'filterableAttributes', 'sortableAttributes'];
-
-    /**
-     * The document field Scout marks trashed entities with, when it keeps them in the index.
-     */
-    public const string SOFT_DELETED = '__soft_deleted';
 
     /**
      * Languages Meilisearch can be told a field is written in, as ISO 639-1 codes.
@@ -42,8 +39,8 @@ class Settings
     {
         $settings = array_replace_recursive(
             (array) $this->config->get('scout.meilisearch.index-settings.'.$index->model::class, []),
-            (array) $this->config->get('eav.search.settings', []),
-            (array) $this->config->get("eav.search.indexes.{$index->entityType}", []),
+            (array) $this->config->get('eav.search.engines.meilisearch.settings', []),
+            (array) $this->config->get("eav.search.engines.meilisearch.indexes.{$index->entityType}", []),
             $index->ownSettings(),
         );
 
@@ -58,7 +55,7 @@ class Settings
         }
 
         if ($index->softDeletes) {
-            $settings['filterableAttributes'][] = self::SOFT_DELETED;
+            $settings['filterableAttributes'][] = Index::SOFT_DELETED;
         }
 
         if (($distinct = $index->distinctField()) !== null) {
@@ -87,7 +84,7 @@ class Settings
      */
     public function language(string $locale): ?string
     {
-        $language = $this->config->get("eav.search.locales.{$locale}") ?? strtolower(substr($locale, 0, 2));
+        $language = $this->config->get("eav.search.engines.meilisearch.locales.{$locale}") ?? strtolower(substr($locale, 0, 2));
 
         return in_array($language, self::LANGUAGES, true) ? $language : null;
     }

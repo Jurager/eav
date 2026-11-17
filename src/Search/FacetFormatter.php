@@ -9,7 +9,7 @@ use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Search\Index\IndexField;
 
 /**
- * Shape the engine's facet data: by the names the facets were asked for, with display labels.
+ * Shape the facet data an engine returned: one form per kind of field, with display labels.
  */
 class FacetFormatter
 {
@@ -19,29 +19,27 @@ class FacetFormatter
     ) {}
 
     /**
-     * Facets of a response: a range for a numeric or date field, values with counts for any other.
+     * Facets of a search: a range for a numeric or date field, values with counts for any other.
      *
-     * @param  array<string, IndexField>  $fields  Facet fields keyed by the asked name.
-     * @param  array<string, mixed>  $response  The response holding the facets.
-     * @param  array<string, array<string, mixed>>  $scoped  Responses computed for one facet alone, keyed by its name.
+     * @param  array<string, mixed>  $facets  Facet data keyed by the asked name, as the engine returned it.
      * @return array<string, mixed>
      */
-    public function format(Builder $builder, array $fields, array $response, array $scoped = []): array
+    public function format(Builder $search, array $facets): array
     {
-        $facets = [];
+        $formatted = [];
 
-        foreach ($fields as $name => $field) {
-            $source = $scoped[$name] ?? $response;
-            $path = $builder->path($field);
+        foreach ($search->facets as $name) {
+            $field = $search->filterable($name);
+            $facet = $facets[$name] ?? [];
 
             if (! $field->type->isNumeric()) {
-                $facets[$name] = ['type' => 'terms', 'values' => $this->terms($builder, $field, $source['facetDistribution'][$path] ?? [])];
-            } elseif (($stats = $source['facetStats'][$path] ?? null) !== null) {
-                $facets[$name] = ['type' => 'range', 'min' => $stats['min'] ?? null, 'max' => $stats['max'] ?? null];
+                $formatted[$name] = ['type' => 'terms', 'values' => $this->terms($search, $field, $facet)];
+            } elseif (isset($facet['min'], $facet['max'])) {
+                $formatted[$name] = ['type' => 'range', 'min' => $facet['min'], 'max' => $facet['max']];
             }
         }
 
-        return $facets;
+        return $formatted;
     }
 
     /**
@@ -50,11 +48,11 @@ class FacetFormatter
      * @param  array<array-key, int>  $counts
      * @return list<array{value: string, label: string, count: int}>
      */
-    public function terms(Builder $builder, IndexField $field, array $counts): array
+    public function terms(Builder $search, IndexField $field, array $counts): array
     {
         $labels = $field->attribute === null || $counts === [] ? [] : $this->fields->make($field->attribute)->facetLabels(
             array_map(strval(...), array_keys($counts)),
-            $this->locales->find($builder->locales()[0] ?? '') ?? $this->locales->current(),
+            $this->locales->find($search->locales()[0] ?? '') ?? $this->locales->current(),
         );
 
         $terms = [];

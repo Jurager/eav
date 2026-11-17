@@ -7,19 +7,22 @@ namespace Jurager\Eav\Tests\Feature\Search;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Search\Transport\FakeTransport;
+use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
+use Jurager\Eav\Tests\Fixtures\RecordingGateway;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 
 abstract class SearchTestCase extends FeatureTestCase
 {
-    protected FakeTransport $engine;
+    /**
+     * Meilisearch as the engine sees it: what was sent to it, and what it answers.
+     */
+    protected RecordingGateway $engine;
 
     protected Locale $en;
 
@@ -43,7 +46,7 @@ abstract class SearchTestCase extends FeatureTestCase
         $this->en = $this->createLocale('en');
         $this->ru = $this->createLocale('ru');
 
-        $this->engine = Search::fake();
+        $this->app->instance(Gateway::class, $this->engine = new RecordingGateway);
     }
 
     protected function tearDown(): void

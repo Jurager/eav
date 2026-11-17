@@ -99,39 +99,60 @@ return [
     ],
 
     /*
-     * Search with Laravel Scout and Meilisearch.
+     * Search over entities indexed with Laravel Scout.
      */
     'search' => [
 
         /*
-         * Meilisearch settings applied to every index, and to the index of
-         * one entity type. Searchable, filterable and sortable fields, the
-         * distinct field and localized fields are derived from the index
-         * definition and merged on top.
-         *
-         * Run `php artisan eav:sync-index-settings` after changing these.
-         *
-         * Synonyms and stop words apply to an index as a whole, not per locale.
+         * The engine searches run on. "meilisearch" is built in; register
+         * your own with Search::extend() and name it here.
          */
-        'settings' => [
-            // 'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
-            // 'synonyms' => ['sneakers' => ['trainers']],
-            // 'stopWords' => ['the', 'a'],
-            // 'pagination' => ['maxTotalHits' => 10000],
-            // 'faceting' => ['maxValuesPerFacet' => 200],
-        ],
+        'driver' => env('EAV_SEARCH_DRIVER', 'meilisearch'),
 
-        'indexes' => [
-            // 'product' => ['rankingRules' => ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness']],
-        ],
+        'engines' => [
 
-        /*
-         * The Meilisearch language of a locale, by locale code. A locale not
-         * listed here uses the first two letters of its code, e.g. "en_US"
-         * is "en". Set this when the code is not an ISO 639-1 language.
-         */
-        'locales' => [
-            // 'ua' => 'uk',
+            'meilisearch' => [
+
+                /*
+                 * Meilisearch settings applied to every index, and to the
+                 * index of one entity type. Searchable, filterable and
+                 * sortable fields, the distinct field and localized fields
+                 * are derived from the index definition and merged on top.
+                 *
+                 * Run `php artisan eav:sync-index-settings` after changing
+                 * these. Synonyms and stop words apply to an index as a
+                 * whole, not per locale.
+                 */
+                'settings' => [
+                    // 'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
+                    // 'synonyms' => ['sneakers' => ['trainers']],
+                    // 'stopWords' => ['the', 'a'],
+                    // 'pagination' => ['maxTotalHits' => 10000],
+                    // 'faceting' => ['maxValuesPerFacet' => 200],
+                ],
+
+                'indexes' => [
+                    // 'product' => ['rankingRules' => ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness']],
+                ],
+
+                /*
+                 * The Meilisearch language of a locale, by locale code. A
+                 * locale not listed here uses the first two letters of its
+                 * code, e.g. "en_US" is "en". Set this when the code is not
+                 * an ISO 639-1 language.
+                 */
+                'locales' => [
+                    // 'ua' => 'uk',
+                ],
+
+                /*
+                 * Whether the "like" filter operator is allowed. It compiles
+                 * to the CONTAINS operator, an experimental Meilisearch
+                 * feature you must enable on the server. When off, "like"
+                 * is rejected with a 422.
+                 */
+                'contains' => false,
+            ],
         ],
 
         /*
@@ -139,13 +160,6 @@ return [
          * longer exists, e.g. after rows were deleted with a raw query.
          */
         'prune' => true,
-
-        /*
-         * Whether the "like" filter operator is allowed. It compiles to the
-         * CONTAINS operator, an experimental Meilisearch feature you must
-         * enable on the server. When off, "like" is rejected with a 422.
-         */
-        'contains' => false,
 
         /*
          * Resolvers for filter keys the index does not hold. Add

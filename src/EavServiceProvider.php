@@ -18,9 +18,7 @@ use Jurager\Eav\Attributes\Query\AttributeQueryFactory;
 use Jurager\Eav\Console\ClearCommand;
 use Jurager\Eav\Console\ReindexCommand;
 use Jurager\Eav\Console\SyncIndexSettingsCommand;
-use Jurager\Eav\Contracts\Search\Transport;
 use Jurager\Eav\Events\EntityValuesChanged;
-use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Fields\FieldTypes;
 use Jurager\Eav\Filterable\AttributeEntityTypeFilterResolver;
@@ -48,13 +46,11 @@ use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Index\Synchronizer;
 use Jurager\Eav\Search\SearchManager;
-use Jurager\Eav\Search\Transport\MeilisearchTransport;
 use Jurager\Eav\Translation\TranslationRepository;
 use Jurager\Eav\Translation\Translator;
 use Jurager\Filterable\FilterableServiceProvider;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Support\MediaCollectionResolverRegistry;
-use Meilisearch\Client;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -194,15 +190,7 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->app->scoped(IndexFactory::class);
         $this->app->scoped(Document::class);
-        $this->app->scoped(SearchManager::class);
-
-        $this->app->bind(Transport::class, function ($app): Transport {
-            if (! IndexFactory::available() || ! class_exists(Client::class)) {
-                throw SearchNotAvailableException::notInstalled();
-            }
-
-            return new MeilisearchTransport($app->make(Client::class));
-        });
+        $this->app->scoped(SearchManager::class, static fn (Application $app): SearchManager => new SearchManager($app));
     }
 
     /**

@@ -159,7 +159,7 @@ Requests that were silently relaxed now fail with a 422 (`InvalidSearchQueryExce
 - a value that does not fit the field's type
 - a sort by a field that is not sortable
 
-Check the filters and sorts your clients send. To keep `like`, set `eav.search.contains` to `true` and enable the `containsFilter` experimental feature in Meilisearch.
+Check the filters and sorts your clients send. To keep `like`, set `eav.search.engines.meilisearch.contains` to `true` and enable the `containsFilter` experimental feature in Meilisearch.
 
 Date filters now work with date strings. Dates are indexed as timestamps, and the old compiler dropped date conditions that were not numeric.
 
@@ -187,7 +187,7 @@ The `eav.search.resolvers` container tag is no longer used.
 
 Publish the configuration again, or add the `search` section from [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php).
 
-Settings in `scout.meilisearch.index-settings` are still read. You can remove `filterableAttributes`, `sortableAttributes`, and `searchableAttributes` from there: they are derived from `searchIndex()` and the attribute flags. Move typo tolerance, synonyms, stop words, and ranking rules to `eav.search.settings` or `eav.search.indexes.{entity type}`.
+Settings in `scout.meilisearch.index-settings` are still read. You can remove `filterableAttributes`, `sortableAttributes`, and `searchableAttributes` from there: they are derived from `searchIndex()` and the attribute flags. Move typo tolerance, synonyms, stop words, and ranking rules to `eav.search.engines.meilisearch.settings` or `eav.search.engines.meilisearch.indexes.{entity type}`.
 
 ### 8. Update custom fields
 

@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature\Search;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Index\Settings;
+use Jurager\Eav\Search\Engines\Meilisearch\Settings;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 
@@ -134,9 +134,9 @@ class IndexTest extends SearchTestCase
 
         config([
             'scout.meilisearch.index-settings' => [SearchableProduct::class => ['filterableAttributes' => ['legacy']]],
-            'eav.search.settings' => ['typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4]], 'stopWords' => ['the']],
-            'eav.search.indexes.searchable_product' => ['stopWords' => ['a'], 'synonyms' => ['tv' => ['television']]],
-            'eav.search.locales' => ['ru' => 'uk'],
+            'eav.search.engines.meilisearch.settings' => ['typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4]], 'stopWords' => ['the']],
+            'eav.search.engines.meilisearch.indexes.searchable_product' => ['stopWords' => ['a'], 'synonyms' => ['tv' => ['television']]],
+            'eav.search.engines.meilisearch.locales' => ['ru' => 'uk'],
         ]);
 
         $settings = app(Settings::class)->for(Search::index(SearchableProduct::class));
