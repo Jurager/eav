@@ -135,8 +135,8 @@ class AttributeRepository extends Repository
         });
 
         if ($entityTypes !== null) {
-            $this->sync->forget([...$previousEntityTypes, ...$entityTypes]);
-            $this->sync->refresh($attribute);
+            // A type that stopped using the attribute drops it from its index, too.
+            $this->sync->refresh($attribute, entityTypes: [...$previousEntityTypes, ...$entityTypes]);
         }
 
         $this->events->dispatch(new AttributeUpdated($attribute->fresh()));

@@ -33,9 +33,7 @@ class Document
         $document = [];
 
         foreach ($this->indexes->for($entity)->declared() as $field) {
-            $value = $field->path === 'id'
-                ? $entity->getScoutKey()
-                : ($field->value !== null ? ($field->value)($entity) : $entity->getAttribute($field->path));
+            $value = $field->value !== null ? ($field->value)($entity) : $entity->getAttribute($field->path);
 
             if (($value = self::normalize($value, $field->type)) !== null) {
                 Arr::set($document, $field->path, $value);

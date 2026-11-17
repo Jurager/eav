@@ -37,7 +37,7 @@ Attributes are indexed according to their flags:
 | `filterable` | The value can be filtered on and used as a facet          |
 | `sortable`   | Results can be sorted by the value                        |
 
-An attribute with none of these flags is not indexed.
+An attribute with none of these flags is not indexed. The attribute's type must allow a flag before an attribute can use it.
 
 ## Declaring model fields
 
@@ -153,7 +153,9 @@ Search::for(Product::class)->query('shoes')->locale('en', 'ru')->paginate();
 
 Filters, sorts, and facets on a localizable field use the first locale.
 
-A locale's language is the first two letters of its code. Map other codes in `eav.search.locales`.
+A locale's language is the first two letters of its code. Map other codes in `eav.search.locales`. Searching in a locale that does not exist throws `InvalidSearchQueryException`.
+
+Adding a locale syncs the index settings. Removing a locale or changing its code also rebuilds the documents that hold localized values, so no value stays indexed under a locale that is gone.
 
 ### Filters
 
@@ -282,7 +284,7 @@ Set anything else in `config/eav.php`, for all indexes or for one entity type:
 
 Synonyms and stop words apply to an index as a whole, not per locale.
 
-Settings are synced when an attribute or a locale changes. Sync them yourself after changing the configuration or `searchIndex()`:
+Settings are synced when an attribute, the entity types it is shared with, or a locale changes. Sync them yourself after changing the configuration or `searchIndex()`:
 
 ```bash
 php artisan eav:search:sync

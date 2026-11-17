@@ -41,7 +41,11 @@ class Index
         public readonly string $entityType,
         private readonly array $locales = [],
     ) {
-        $key = $this->field('id')->filterable()->sortable();
+        $key = $this->field('id')
+            ->using(static fn (Model $model): mixed => $model->getScoutKey())
+            ->watch()
+            ->filterable()
+            ->sortable();
 
         in_array($model->getKeyType(), ['int', 'integer'], true) ? $key->number() : $key->keyword();
     }
@@ -212,10 +216,8 @@ class Index
     {
         $columns = [];
 
-        foreach ($this->fields as $path => $field) {
-            if ($path !== 'id') {
-                array_push($columns, ...$field->watched());
-            }
+        foreach ($this->fields as $field) {
+            array_push($columns, ...$field->watched());
         }
 
         return array_values(array_unique($columns));

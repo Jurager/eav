@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search\Index;
 
 use Illuminate\Contracts\Config\Repository;
-use Jurager\Eav\Search\Contracts\Transport;
 
 /**
  * Derive the engine settings of an index from its definition and the configuration.
@@ -27,10 +26,7 @@ class Settings
         'sr', 'sv', 'ta', 'te', 'tl', 'th', 'tk', 'tr', 'uk', 'ur', 'uz', 'vi', 'yi', 'zh', 'zu',
     ];
 
-    public function __construct(
-        private readonly IndexFactory $indexes,
-        private readonly Repository $config,
-    ) {}
+    public function __construct(private readonly Repository $config) {}
 
     /**
      * Settings of an index: what the definition requires, on top of what the configuration asks for.
@@ -75,20 +71,6 @@ class Settings
         }
 
         return $settings;
-    }
-
-    /**
-     * Push the settings of an entity type's index to the engine.
-     */
-    public function sync(string $entityType, Transport $transport): void
-    {
-        if ($this->indexes->model($entityType) === null) {
-            return;
-        }
-
-        $index = $this->indexes->for($entityType);
-
-        $transport->updateSettings($index->uid(), $this->for($index));
     }
 
     /**

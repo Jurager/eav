@@ -24,11 +24,12 @@ class SchemaSynchronizer
     /**
      * Refresh an attribute's cached schemas and the search indexes it is part of.
      *
-     * @param  bool|null  $indexed  Whether what the index depends on changed; null to decide from the attribute's flags.
+     * @param  bool|null  $indexed  Whether the indexes are affected; null when the attribute being indexed decides.
+     * @param  list<string>|null  $entityTypes  Entity types to refresh; those currently using the attribute when null.
      */
-    public function refresh(Attribute $attribute, ?bool $indexed = null): void
+    public function refresh(Attribute $attribute, ?bool $indexed = null, ?array $entityTypes = null): void
     {
-        $entityTypes = $this->entityTypes($attribute);
+        $entityTypes ??= $this->entityTypes($attribute);
 
         $this->forget($entityTypes);
         $this->indexes->attribute($attribute, $entityTypes, $indexed);

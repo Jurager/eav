@@ -7,7 +7,10 @@ namespace Jurager\Eav\Tests\Feature\Search;
 use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Support\Facades\Queue;
 use Jurager\Eav\Jobs\ReindexAttribute;
+use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Jobs\SyncIndexSettings;
+use Jurager\Eav\Models\AttributeType;
+use Jurager\Eav\Schema\Repositories\AttributeRepository;
 use Laravel\Scout\Jobs\MakeSearchable;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\NullOutput;
@@ -37,10 +40,32 @@ class SynchronizerTest extends SearchTestCase
         Queue::assertNotPushed(ReindexAttribute::class);
     }
 
-    public function test_changing_what_the_index_depends_on_syncs(): void
+    public function test_flagging_an_attribute_for_the_index_syncs(): void
     {
-        foreach (['searchable' => true, 'sortable' => true, 'code' => 'renamed', 'localizable' => true] as $column => $value) {
-            $attribute = $this->attribute('text', "attr_{$column}");
+        foreach (['searchable', 'filterable', 'sortable'] as $flag) {
+            $attribute = $this->attribute('text', "attr_{$flag}");
+            Queue::fake();
+
+            $attribute->update([$flag => true]);
+
+            $this->assertSynced($attribute->id);
+        }
+    }
+
+    public function test_taking_an_attribute_out_of_the_index_syncs(): void
+    {
+        $attribute = $this->attribute('text', 'title', ['searchable' => true]);
+        Queue::fake();
+
+        $attribute->update(['searchable' => false]);
+
+        $this->assertSynced($attribute->id);
+    }
+
+    public function test_changing_how_an_indexed_attribute_is_indexed_syncs(): void
+    {
+        foreach (['code' => 'renamed', 'localizable' => true, 'sort' => 5] as $column => $value) {
+            $attribute = $this->attribute('text', "attr_{$column}", ['searchable' => true]);
             Queue::fake();
 
             $attribute->update([$column => $value]);
@@ -49,15 +74,29 @@ class SynchronizerTest extends SearchTestCase
         }
     }
 
-    public function test_changing_anything_else_syncs_nothing(): void
+    public function test_changes_that_do_not_reach_the_index_sync_nothing(): void
     {
-        $attribute = $this->attribute('text', 'title', ['searchable' => true]);
+        $indexed = $this->attribute('text', 'title', ['searchable' => true]);
+        $plain = $this->attribute('text', 'notes');
         Queue::fake();
 
-        $attribute->update(['required' => true]);
+        $indexed->update(['required' => true]);
+        $plain->update(['code' => 'remarks', 'localizable' => true]);
 
         Queue::assertNotPushed(SyncIndexSettings::class);
         Queue::assertNotPushed(ReindexAttribute::class);
+    }
+
+    public function test_a_type_that_stops_using_an_attribute_is_synced_too(): void
+    {
+        AttributeType::create(['code' => 'number', 'filterable' => true]);
+        $attribute = $this->attribute('number', 'price', ['filterable' => true, 'entity_types' => ['searchable_product', 'searchable_category']]);
+        Queue::fake();
+
+        app(AttributeRepository::class)->update($attribute, ['entity_types' => ['searchable_product']]);
+
+        Queue::assertPushed(SyncIndexSettings::class, fn (SyncIndexSettings $job) => $job->entityType === 'searchable_category');
+        Queue::assertPushed(SyncIndexSettings::class, fn (SyncIndexSettings $job) => $job->entityType === 'searchable_product');
     }
 
     public function test_an_option_of_an_indexed_select_reindexes_its_documents(): void
@@ -70,13 +109,49 @@ class SynchronizerTest extends SearchTestCase
         Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "searchable_product:{$color->id}");
     }
 
-    public function test_a_new_locale_syncs_settings_of_every_searchable_type(): void
+    public function test_a_new_locale_syncs_settings_only(): void
     {
+        $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
         Queue::fake();
 
         $this->createLocale('de');
 
         Queue::assertPushed(SyncIndexSettings::class, 2);
+        Queue::assertNotPushed(ReindexEntities::class);
+    }
+
+    public function test_a_removed_locale_rebuilds_the_documents_holding_localized_values(): void
+    {
+        $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
+        Queue::fake();
+
+        $this->ru->delete();
+
+        Queue::assertPushed(SyncIndexSettings::class, 2);
+        Queue::assertPushed(ReindexEntities::class, 1);
+        Queue::assertPushed(ReindexEntities::class, fn (ReindexEntities $job) => $job->entityType === 'searchable_product');
+    }
+
+    public function test_a_renamed_locale_rebuilds_the_documents_too(): void
+    {
+        $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
+        Queue::fake();
+
+        $this->ru->update(['name' => 'Russian']);
+        Queue::assertNotPushed(ReindexEntities::class);
+
+        $this->ru->update(['code' => 'uk']);
+        Queue::assertPushed(ReindexEntities::class, fn (ReindexEntities $job) => $job->entityType === 'searchable_product');
+    }
+
+    public function test_a_removed_locale_rebuilds_nothing_without_localized_fields(): void
+    {
+        $this->attribute('number', 'price', ['filterable' => true]);
+        Queue::fake();
+
+        $this->ru->delete();
+
+        Queue::assertNotPushed(ReindexEntities::class);
     }
 
     public function test_scouts_settings_command_is_followed_by_the_derived_settings(): void

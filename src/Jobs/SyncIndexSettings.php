@@ -7,8 +7,7 @@ namespace Jurager\Eav\Jobs;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
-use Jurager\Eav\Search\Contracts\Transport;
-use Jurager\Eav\Search\Index\Settings;
+use Jurager\Eav\Search\Engine;
 
 /**
  * Push the settings of an entity type's search index to the engine.
@@ -26,8 +25,8 @@ class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
         return $this->entityType;
     }
 
-    public function handle(Settings $settings, Transport $transport): void
+    public function handle(Engine $engine): void
     {
-        $settings->sync($this->entityType, $transport);
+        $engine->configure($this->entityType);
     }
 }

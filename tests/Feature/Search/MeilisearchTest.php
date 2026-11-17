@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature\Search;
 
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Illuminate\Support\Facades\Queue;
 use Jurager\Eav\Facades\Search;
+use Jurager\Eav\Jobs\ReindexEntities;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Contracts\Transport;
 use Jurager\Eav\Search\Results;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
@@ -236,5 +239,29 @@ class MeilisearchTest extends SearchTestCase
         $this->settle();
 
         $this->assertSame(['Cap'], $this->names(Search::for(SearchableProduct::class)->where('price', '>', 500)->get()));
+    }
+
+    public function test_a_removed_locale_leaves_the_documents_and_the_settings(): void
+    {
+        $shoes = SearchableProduct::query()->firstWhere('name', 'Shoes');
+        Queue::fake();
+
+        $this->ru->delete();
+
+        // Run what the removal queued.
+        foreach ([SyncIndexSettings::class, ReindexEntities::class] as $job) {
+            Queue::pushed($job)->each(fn ($job) => $this->app->call([$job, 'handle']));
+        }
+
+        $this->settle();
+
+        $index = $this->client->index('eav_test_products');
+
+        $this->assertSame(
+            ['title' => ['en' => 'Red running shoes'], 'color_label' => ['en' => 'Red']],
+            array_intersect_key($index->getDocument($shoes->id)['attributes'], ['title' => 1, 'color_label' => 1]),
+        );
+        $this->assertNotContains('attributes.title.ru', $index->getSearchableAttributes());
+        $this->assertSame([], $this->names(Search::for(SearchableProduct::class)->query('кроссовки')->get()));
     }
 }

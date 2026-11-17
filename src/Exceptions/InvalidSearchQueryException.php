@@ -22,6 +22,16 @@ class InvalidSearchQueryException extends UnprocessableEntityHttpException
         return self::rejected("field [{$name}] is not part of the search index.");
     }
 
+    public static function unknownLocale(string $locale): self
+    {
+        return self::rejected("locale [{$locale}] is not available.");
+    }
+
+    public static function notSearchable(string $name): self
+    {
+        return self::rejected("field [{$name}] is not searchable.");
+    }
+
     public static function notFilterable(string $name): self
     {
         return self::rejected("field [{$name}] is not filterable.");

@@ -10,6 +10,7 @@ use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\Transport;
 use Jurager\Eav\Search\Filter\Compiler;
+use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Eav\Search\Index\Settings;
 
@@ -24,7 +25,24 @@ class Engine
         private readonly Settings $settings,
         private readonly FieldFactory $fields,
         private readonly LocaleRegistry $locales,
+        private readonly IndexFactory $indexes,
     ) {}
+
+    /**
+     * Push the settings of an entity type's index to the engine; a type that is not searchable is skipped.
+     */
+    public function configure(string $entityType): bool
+    {
+        if ($this->indexes->model($entityType) === null) {
+            return false;
+        }
+
+        $index = $this->indexes->for($entityType);
+
+        $this->transport->updateSettings($index->uid(), $this->settings->for($index));
+
+        return true;
+    }
 
     /**
      * Run a search.
@@ -35,7 +53,8 @@ class Engine
      */
     public function search(Builder $builder, int $perPage, int $page): array
     {
-        $partitioned = $builder->partition !== null;
+        // Nothing to order when no hits are asked for, as when counting.
+        $partitioned = $builder->partition !== null && $perPage > 0;
         $facets = $this->facetFields($builder);
 
         // With a partition the main request only counts and facets; the hits come from each side in turn.
@@ -376,7 +395,7 @@ class Engine
             $field = $this->field($builder, $name);
 
             if (! $field->searchable) {
-                throw InvalidSearchQueryException::rejected("field [{$name}] is not searchable.");
+                throw InvalidSearchQueryException::notSearchable($name);
             }
 
             array_push($paths, ...$field->paths($locales));
@@ -413,6 +432,10 @@ class Engine
     private function localesOf(Builder $builder): array
     {
         if ($builder->locales !== []) {
+            if (($unknown = array_diff($builder->locales, $builder->index->locales())) !== []) {
+                throw InvalidSearchQueryException::unknownLocale(implode(', ', $unknown));
+            }
+
             return $builder->locales;
         }
 

@@ -16,7 +16,7 @@ Estimated time: 30 minutes, plus the time to reindex.
 
 ### 1. Run the migration
 
-A new `sortable` flag was added to attributes:
+A new `sortable` flag was added to attributes and attribute types:
 
 ```bash
 php artisan migrate
@@ -27,6 +27,8 @@ If you published the package migrations, publish them again first:
 ```bash
 php artisan vendor:publish --tag=eav-migrations
 ```
+
+Attribute types that are `filterable` become `sortable` too. Enable the flag on other types that should allow it.
 
 Set `sortable` on the attributes you sort search results by. Attribute paths previously listed in `indexFields()` with `IndexCapability::Sort` are the ones to flag.
 
@@ -201,6 +203,7 @@ Settings in `scout.meilisearch.index-settings` are still read. You can remove `f
 |-------------------------------------------|------------------------------------------------|
 | `Schema::search()`                        | Removed. Use Scout on your own attribute model |
 | `Jobs\SyncSearchable`                     | `Jobs\ReindexAttribute`                        |
+| `SchemaSynchronizer::refresh($attribute, documents:, settings:)` | `refresh($attribute, indexed:, entityTypes:)` |
 | `Search\Indexer::refresh($type)`          | `Search\Index\Indexer::for($type)`             |
 | `Observers\SyncsIndexFilters::watch()`    | Dispatch `Jobs\SyncIndexSettings` yourself     |
 | `Search\Result`                           | `Search\Results`                               |

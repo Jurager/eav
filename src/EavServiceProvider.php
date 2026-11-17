@@ -216,7 +216,7 @@ class EavServiceProvider extends ServiceProvider
         // Scout's own command resets an index to the configured settings: put the derived ones back.
         $events->listen(CommandFinished::class, function (CommandFinished $event): void {
             if ($event->command === 'scout:sync-index-settings' && $event->exitCode === 0) {
-                $this->app->make(Synchronizer::class)->settings(now: true);
+                $this->app->make(Synchronizer::class)->settings();
             }
         });
     }

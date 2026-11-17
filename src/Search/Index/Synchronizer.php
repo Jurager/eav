@@ -7,10 +7,11 @@ namespace Jurager\Eav\Search\Index;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Jobs\ReindexAttribute;
+use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Search\Contracts\Transport;
+use Jurager\Eav\Search\Engine;
 
 /**
  * Keep search indexes in step with the schema and the values: the one place that decides what to rebuild.
@@ -18,25 +19,38 @@ use Jurager\Eav\Search\Contracts\Transport;
 class Synchronizer
 {
     /**
-     * Attribute columns that change what the index holds or how the engine treats it.
+     * Attribute columns deciding whether the attribute is indexed at all.
      */
-    public const array INDEXED_COLUMNS = ['searchable', 'filterable', 'sortable', 'localizable', 'multiple', 'code', 'attribute_type_id', 'sort'];
+    private const array FLAGS = ['searchable', 'filterable', 'sortable'];
 
     /**
-     * An attribute was created, changed, deleted or restored.
-     *
-     * @param  list<string>  $entityTypes
-     * @param  bool|null  $changed  Whether anything the index depends on changed; null to decide from the flags.
+     * Attribute columns that change what the index holds or how the engine treats it.
      */
-    public function attribute(Attribute $attribute, array $entityTypes, ?bool $changed = null): void
-    {
-        $indexed = $attribute->searchable || $attribute->filterable || $attribute->sortable;
+    private const array INDEXED_COLUMNS = [...self::FLAGS, 'localizable', 'multiple', 'code', 'attribute_type_id', 'sort'];
 
-        if (! IndexFactory::available() || ! ($changed ?? $indexed)) {
+    /**
+     * Whether the attribute's last update changed what its indexes hold.
+     */
+    public function affectedBy(Attribute $attribute): bool
+    {
+        // A flipped flag means the attribute was indexed before the update, or is now.
+        return $attribute->wasChanged(self::INDEXED_COLUMNS)
+            && (self::indexed($attribute) || $attribute->wasChanged(self::FLAGS));
+    }
+
+    /**
+     * An attribute was created, changed, deleted, restored, or shared with other entity types.
+     *
+     * @param  list<string>  $entityTypes  Entity types using the attribute, or having just stopped to.
+     * @param  bool|null  $affected  Whether the indexes are affected; null when the attribute being indexed decides.
+     */
+    public function attribute(Attribute $attribute, array $entityTypes, ?bool $affected = null): void
+    {
+        if (! IndexFactory::available() || ! ($affected ?? self::indexed($attribute))) {
             return;
         }
 
-        foreach ($entityTypes as $entityType) {
+        foreach (array_unique($entityTypes) as $entityType) {
             SyncIndexSettings::dispatch($entityType)->afterCommit();
             ReindexAttribute::dispatch($entityType, $attribute->getKey())->afterCommit();
         }
@@ -49,7 +63,7 @@ class Synchronizer
     {
         $attribute = $enum->attribute;
 
-        if (! IndexFactory::available() || $attribute === null || ! ($attribute->searchable || $attribute->filterable || $attribute->sortable)) {
+        if (! IndexFactory::available() || $attribute === null || ! self::indexed($attribute)) {
             return;
         }
 
@@ -71,26 +85,42 @@ class Synchronizer
     }
 
     /**
-     * The set of locales changed: localized fields gain or lose a slot.
+     * The set of locales changed: localized fields gained, lost or renamed a slot.
+     *
+     * @param  bool  $documents  Whether existing documents hold values under a slot that is gone.
      */
-    public function locales(): void
-    {
-        $this->settings();
-    }
-
-    /**
-     * Sync the settings of every searchable entity type, queued or right away.
-     */
-    public function settings(bool $now = false): void
+    public function locales(bool $documents = false): void
     {
         if (! IndexFactory::available()) {
             return;
         }
 
+        $indexes = app(IndexFactory::class);
+
         foreach ($this->entityTypes() as $entityType) {
-            $now
-                ? app(Settings::class)->sync($entityType, app(Transport::class))
-                : SyncIndexSettings::dispatch($entityType)->afterCommit();
+            SyncIndexSettings::dispatch($entityType)->afterCommit();
+
+            $localized = $indexes->for($entityType)->paths(static fn (IndexField $field): bool => $field->localized) !== [];
+
+            if ($documents && $localized) {
+                ReindexEntities::dispatch($entityType)->afterCommit();
+            }
+        }
+    }
+
+    /**
+     * Push the settings of every searchable entity type to the engine, right away.
+     */
+    public function settings(): void
+    {
+        if (! IndexFactory::available()) {
+            return;
+        }
+
+        $engine = app(Engine::class);
+
+        foreach ($this->entityTypes() as $entityType) {
+            $engine->configure($entityType);
         }
     }
 
@@ -112,5 +142,10 @@ class Synchronizer
             array_unique($types),
             static fn (string $type): bool => $indexes->model($type) !== null,
         ));
+    }
+
+    private static function indexed(Attribute $attribute): bool
+    {
+        return $attribute->searchable || $attribute->filterable || $attribute->sortable;
     }
 }

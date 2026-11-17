@@ -7,9 +7,8 @@ namespace Jurager\Eav\Commands;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Jurager\Eav\Search\Contracts\Transport;
+use Jurager\Eav\Search\Engine;
 use Jurager\Eav\Search\Index\Indexer;
-use Jurager\Eav\Search\Index\Settings;
 use Jurager\Eav\Search\Index\Synchronizer;
 
 /**
@@ -22,7 +21,7 @@ use Jurager\Eav\Search\Index\Synchronizer;
 #[Description('Sync search index settings and rebuild the documents of an entity type.')]
 class SearchReindexCommand extends Command
 {
-    public function handle(Settings $settings, Synchronizer $synchronizer, Transport $transport): int
+    public function handle(Engine $engine, Synchronizer $synchronizer): int
     {
         $types = $this->argument('type') !== null ? [(string) $this->argument('type')] : $synchronizer->entityTypes();
 
@@ -33,7 +32,7 @@ class SearchReindexCommand extends Command
                 $indexer->flush();
             }
 
-            $settings->sync($type, $transport);
+            $engine->configure($type);
             $indexer->all($this->option('chunk') !== null ? (int) $this->option('chunk') : null);
 
             $this->components->info("Search index rebuilt for [{$type}].");

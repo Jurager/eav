@@ -19,6 +19,7 @@ class AttributeObserver
         protected SchemaSynchronizer $sync,
         protected EnumRegistry $enums,
         protected ValuePruner $pruner,
+        protected Synchronizer $indexes,
     ) {
     }
 
@@ -29,7 +30,7 @@ class AttributeObserver
 
     public function updated(Attribute $attribute): void
     {
-        $this->sync->refresh($attribute, indexed: $attribute->wasChanged(Synchronizer::INDEXED_COLUMNS));
+        $this->sync->refresh($attribute, indexed: $this->indexes->affectedBy($attribute));
     }
 
     /**

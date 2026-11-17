@@ -9,7 +9,7 @@ use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Index\Synchronizer;
 
 /**
- * Drops cached locales whenever a locale row changes, however it was written.
+ * Drops cached locales and brings search indexes in step whenever a locale row changes, however it was written.
  */
 class LocaleObserver
 {
@@ -18,18 +18,25 @@ class LocaleObserver
         protected Synchronizer $indexes,
     ) {}
 
-    public function saved(Locale $locale): void
+    public function created(Locale $locale): void
+    {
+        $this->registry->forget();
+        $this->indexes->locales();
+    }
+
+    public function updated(Locale $locale): void
     {
         $this->registry->forget();
 
-        if ($locale->wasRecentlyCreated || $locale->wasChanged('code')) {
-            $this->indexes->locales();
+        // Documents key localized values by locale code: a renamed code leaves them under the old one.
+        if ($locale->wasChanged('code')) {
+            $this->indexes->locales(documents: true);
         }
     }
 
     public function deleted(Locale $locale): void
     {
         $this->registry->forget();
-        $this->indexes->locales();
+        $this->indexes->locales(documents: true);
     }
 }

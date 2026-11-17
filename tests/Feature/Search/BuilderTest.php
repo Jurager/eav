@@ -64,6 +64,13 @@ class BuilderTest extends SearchTestCase
         $this->assertSame(['ru', 'en'], $this->request()['locales']);
     }
 
+    public function test_a_locale_that_does_not_exist_is_a_422(): void
+    {
+        $this->expectExceptionMessage('locale [de] is not available');
+
+        Search::for(SearchableProduct::class)->query('x')->locale('de')->paginate();
+    }
+
     public function test_search_on_narrows_the_fields(): void
     {
         Search::for(SearchableProduct::class)->query('x')->searchOn('title')->paginate();
