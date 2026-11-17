@@ -11,13 +11,14 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Attributes\AttributeInheritanceResolver;
 use Jurager\Eav\Attributes\AttributesFactory;
 use Jurager\Eav\Attributes\AttributeValueSorter;
 use Jurager\Eav\Attributes\Query\AttributeQueryFactory;
-use Jurager\Eav\Attributes\Scope\AttributeInheritanceResolver;
-use Jurager\Eav\Commands\ClearCommand;
-use Jurager\Eav\Commands\SearchReindexCommand;
-use Jurager\Eav\Commands\SearchSyncCommand;
+use Jurager\Eav\Console\ClearCommand;
+use Jurager\Eav\Console\ReindexCommand;
+use Jurager\Eav\Console\SyncIndexSettingsCommand;
+use Jurager\Eav\Contracts\Search\Transport;
 use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Fields\FieldFactory;
@@ -33,21 +34,20 @@ use Jurager\Eav\Observers\AttributeGroupObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Observers\AttributeTypeObserver;
 use Jurager\Eav\Observers\LocaleObserver;
-use Jurager\Eav\Registry\AttributeGroupRegistry;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Registry\SchemaVersion;
+use Jurager\Eav\Registries\AttributeGroupRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
+use Jurager\Eav\Registries\SchemaVersion;
 use Jurager\Eav\Schema\SchemaManager;
-use Jurager\Eav\Search\Contracts\Transport;
+use Jurager\Eav\Search\AttributeRelationFilterResolver;
 use Jurager\Eav\Search\Index\Configurator;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Index\Synchronizer;
-use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
-use Jurager\Eav\Search\Search;
+use Jurager\Eav\Search\SearchManager;
 use Jurager\Eav\Search\Transport\MeilisearchTransport;
 use Jurager\Eav\Translation\TranslationRepository;
 use Jurager\Eav\Translation\Translator;
@@ -162,7 +162,7 @@ class EavServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ClearCommand::class, SearchSyncCommand::class, SearchReindexCommand::class]);
+            $this->commands([ClearCommand::class, SyncIndexSettingsCommand::class, ReindexCommand::class]);
         }
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
@@ -194,7 +194,7 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->app->scoped(IndexFactory::class);
         $this->app->scoped(Document::class);
-        $this->app->scoped(Search::class);
+        $this->app->scoped(SearchManager::class);
 
         $this->app->bind(Transport::class, function ($app): Transport {
             if (! IndexFactory::available() || ! class_exists(Client::class)) {

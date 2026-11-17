@@ -297,8 +297,8 @@ Synonyms and stop words apply to an index as a whole, not per locale.
 Settings are synced when an attribute, the entity types it is shared with, or a locale changes. Sync them yourself after changing the configuration or `searchIndex()`:
 
 ```bash
-php artisan eav:search:sync
-php artisan eav:search:sync product
+php artisan eav:sync-index-settings
+php artisan eav:sync-index-settings product
 ```
 
 Settings in `scout.meilisearch.index-settings` are still read, and the derived settings are restored after `scout:sync-index-settings`.
@@ -306,8 +306,8 @@ Settings in `scout.meilisearch.index-settings` are still read, and the derived s
 To rebuild the documents of an entity type:
 
 ```bash
-php artisan eav:search:reindex product
-php artisan eav:search:reindex product --flush
+php artisan eav:reindex product
+php artisan eav:reindex product --flush
 ```
 
 Run a queue worker for index updates.
@@ -319,7 +319,7 @@ To filter by an attribute of a related entity, such as `category.color`, add the
 ```php
 'search' => [
     'resolvers' => [
-        \Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver::class,
+        \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
     ],
 ],
 ```

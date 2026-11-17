@@ -6,7 +6,7 @@ namespace Jurager\Eav\Translation;
 
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Exceptions\FluentBuilderException;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Fluent builder for the translated labels of a single model.

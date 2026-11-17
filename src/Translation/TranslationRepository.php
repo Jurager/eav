@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use JsonException;
 use Jurager\Eav\Eav;
-use Jurager\Eav\Registry\SchemaVersion;
+use Jurager\Eav\Registries\SchemaVersion;
 
 /**
  * Reads and writes the `entity_translations` rows holding the labels of any model.

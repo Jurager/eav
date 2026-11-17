@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Facades\Attributes;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\MakeSearchable;

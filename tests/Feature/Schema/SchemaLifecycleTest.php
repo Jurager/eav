@@ -19,7 +19,7 @@ use Jurager\Eav\Jobs\PruneAttribute;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
 
 class SchemaLifecycleTest extends FeatureTestCase

@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Facade;
 use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\FederatedBuilder;
 use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\SearchManager;
 use Jurager\Eav\Search\Transport\FakeTransport;
 
 /**
@@ -17,12 +18,12 @@ use Jurager\Eav\Search\Transport\FakeTransport;
  * @method static Index index(Model|string $entity)
  * @method static FakeTransport fake()
  *
- * @see \Jurager\Eav\Search\Search
+ * @see SearchManager
  */
 class Search extends Facade
 {
     protected static function getFacadeAccessor(): string
     {
-        return \Jurager\Eav\Search\Search::class;
+        return SearchManager::class;
     }
 }

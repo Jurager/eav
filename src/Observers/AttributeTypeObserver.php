@@ -8,7 +8,7 @@ use Jurager\Eav\Events\AttributeTypeCreated;
 use Jurager\Eav\Events\AttributeTypeDeleted;
 use Jurager\Eav\Events\AttributeTypeUpdated;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
 
 class AttributeTypeObserver
 {

@@ -109,7 +109,7 @@ return [
          * distinct field and localized fields are derived from the index
          * definition and merged on top.
          *
-         * Run `php artisan eav:search:sync` after changing these.
+         * Run `php artisan eav:sync-index-settings` after changing these.
          *
          * Synonyms and stop words apply to an index as a whole, not per locale.
          */
@@ -153,7 +153,7 @@ return [
          * related entity, e.g. "category.color".
          */
         'resolvers' => [
-            // \Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver::class,
+            // \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
         ],
 
         /*

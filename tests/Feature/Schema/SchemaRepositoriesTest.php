@@ -17,7 +17,7 @@ use Jurager\Eav\Events\AttributeUpdated;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeGroup;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Schema\Repositories\AttributeRepository;
 use Jurager\Eav\Schema\Repositories\EnumRepository;
 use Jurager\Eav\Schema\Repositories\GroupRepository;

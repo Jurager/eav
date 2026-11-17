@@ -6,7 +6,7 @@ namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Attributes\Persistence\ValuePruner;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
 use Jurager\Eav\Schema\SchemaSynchronizer;
 use Jurager\Eav\Search\Index\Synchronizer;
 

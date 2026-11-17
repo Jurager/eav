@@ -174,7 +174,7 @@ Filtering by an attribute of a related entity, such as `category.color`, is off 
 ```php
 'search' => [
     'resolvers' => [
-        \Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver::class,
+        \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
     ],
 ],
 ```
@@ -214,16 +214,33 @@ Most fields only need `indexType()` and `toIndex()`. The document is built from 
 | `Enums\IndexCapability`                   | `->filterable()` and `->sortable()` on fields  |
 | `SearchNotAvailableException::scoutNotInstalled()`, `meilisearchNotInstalled()` | `notInstalled()`, `notSearchable()` |
 
-### 10. Rebuild the indexes
+### 10. Update renamed classes
+
+Classes outside search were moved to follow Laravel's layout. Update your imports:
+
+| Before                                                  | After                                              |
+|---------------------------------------------------------|----------------------------------------------------|
+| `Jurager\Eav\Enums\AttributeType`                       | `Jurager\Eav\Enums\FieldType`                      |
+| `Jurager\Eav\Registry\*`                                | `Jurager\Eav\Registries\*`                         |
+| `Jurager\Eav\Scopes\ActiveLocaleScope`                  | `Jurager\Eav\Models\Scopes\ActiveLocaleScope`      |
+| `Jurager\Eav\Attributes\Scope\AttributeInheritanceResolver` | `Jurager\Eav\Attributes\AttributeInheritanceResolver` |
+| `Jurager\Eav\Attributes\Validation\AttributeValidator`  | `Jurager\Eav\Attributes\AttributeValidator`         |
+| `Jurager\Eav\Commands\ClearCommand`                     | `Jurager\Eav\Console\ClearCommand`                  |
+| `Jurager\Eav\Search\Contracts\FilterResolver`           | `Jurager\Eav\Contracts\Search\FilterResolver`       |
+| `Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver` | `Jurager\Eav\Search\AttributeRelationFilterResolver` |
+
+The `eav:clear` command keeps its name.
+
+### 11. Rebuild the indexes
 
 The document changed: localizable values are keyed by locale code (`attributes.title.en`), and select labels moved from `attributes.{code}_label` to `labels.{code}`, stored per locale. Old documents do not match the new settings.
 
 For each searchable entity type:
 
 ```bash
-php artisan eav:search:reindex product --flush
+php artisan eav:reindex product --flush
 ```
 
 The command syncs the index settings and reindexes every entity. Run a queue worker if Scout queues indexing. Search returns partial results until the reindex finishes, so run it in a maintenance window or against a new index prefix (`SCOUT_PREFIX`).
 
-After deploying, `eav:search:sync` is enough when only the configuration or `searchIndex()` changed.
+After deploying, `eav:sync-index-settings` is enough when only the configuration or `searchIndex()` changed.

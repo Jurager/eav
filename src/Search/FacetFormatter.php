@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search;
 
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Search\Index\IndexField;
 
 /**

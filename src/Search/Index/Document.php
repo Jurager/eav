@@ -14,7 +14,7 @@ use Jurager\Eav\Attributes\EntityValues;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
 use WeakMap;
 
 /**

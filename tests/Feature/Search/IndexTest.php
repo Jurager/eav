@@ -163,14 +163,14 @@ class IndexTest extends SearchTestCase
     {
         $this->attribute('number', 'price', ['filterable' => true]);
 
-        $this->artisan('eav:search:sync', ['type' => 'searchable_product'])->assertSuccessful();
+        $this->artisan('eav:sync-index-settings', ['type' => 'searchable_product'])->assertSuccessful();
 
         $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
     }
 
     public function test_sync_command_covers_every_searchable_type(): void
     {
-        $this->artisan('eav:search:sync')->assertSuccessful();
+        $this->artisan('eav:sync-index-settings')->assertSuccessful();
 
         $this->assertEqualsCanonicalizing(['eav_test_products', 'eav_test_categories'], array_keys($this->engine->settings));
     }

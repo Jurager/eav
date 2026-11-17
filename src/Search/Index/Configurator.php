@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Index;
 
-use Jurager\Eav\Search\Contracts\Transport;
+use Jurager\Eav\Contracts\Search\Transport;
 
 /**
  * Push the derived settings of search indexes to the engine.

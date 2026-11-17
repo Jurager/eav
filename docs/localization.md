@@ -44,7 +44,7 @@ When no locale is specified, the current locale is used, for reading and writing
 Use `LocaleRegistry` to resolve locale IDs and codes:
 
 ```php
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 $registry = app(LocaleRegistry::class);
 

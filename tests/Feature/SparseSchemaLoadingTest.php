@@ -11,7 +11,7 @@ use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 
 class SparseSchemaLoadingTest extends FeatureTestCase

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Schema;
 
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
 use Jurager\Eav\Search\Index\Synchronizer;
 
 /**

@@ -26,7 +26,7 @@ class IndexerTest extends SearchTestCase
         $second = $this->product('Second');
         Queue::fake();
 
-        $this->artisan('eav:search:reindex', ['type' => 'searchable_product'])->assertSuccessful();
+        $this->artisan('eav:reindex', ['type' => 'searchable_product'])->assertSuccessful();
 
         $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
         $this->assertArrayNotHasKey('eav_test_categories', $this->engine->settings);
@@ -39,17 +39,17 @@ class IndexerTest extends SearchTestCase
         $this->product('Second');
         Queue::fake();
 
-        $this->artisan('eav:search:reindex', ['type' => 'searchable_product', '--chunk' => 1])->assertSuccessful();
+        $this->artisan('eav:reindex', ['type' => 'searchable_product', '--chunk' => 1])->assertSuccessful();
 
         Queue::assertPushed(MakeSearchable::class, 2);
     }
 
     public function test_reindex_command_covers_every_searchable_type_and_reports_others(): void
     {
-        $this->artisan('eav:search:reindex')->assertSuccessful();
+        $this->artisan('eav:reindex')->assertSuccessful();
         $this->assertEqualsCanonicalizing(['eav_test_products', 'eav_test_categories'], array_keys($this->engine->settings));
 
-        $this->artisan('eav:search:reindex', ['type' => 'product'])
+        $this->artisan('eav:reindex', ['type' => 'product'])
             ->expectsOutputToContain('[product] is not searchable')
             ->assertSuccessful();
     }

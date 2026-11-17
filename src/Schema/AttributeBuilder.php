@@ -9,8 +9,8 @@ use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Schema\Repositories\AttributeRepository;
 
 /**

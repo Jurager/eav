@@ -6,7 +6,7 @@ namespace Jurager\Eav\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Symfony\Component\HttpFoundation\Response;
 
 /**

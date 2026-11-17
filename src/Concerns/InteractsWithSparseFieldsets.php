@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Concerns;
 
 use Closure;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 
 /**
  * Load EAV values requested by JSON:API sparse fieldsets.

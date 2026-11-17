@@ -14,7 +14,7 @@ use Jurager\Eav\Fields\Number;
 use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 
 class AttributeManagerTest extends FeatureTestCase

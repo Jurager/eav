@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
 use Jurager\Eav\Search\Index\Synchronizer;
 
 /**

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search;
 
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Filter\Compiler;
 use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Eav\Search\Index\Settings;
 
@@ -15,7 +14,7 @@ use Jurager\Eav\Search\Index\Settings;
 class RequestFactory
 {
     public function __construct(
-        private readonly Compiler $compiler,
+        private readonly FilterCompiler $compiler,
         private readonly Settings $settings,
     ) {}
 

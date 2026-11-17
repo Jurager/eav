@@ -15,8 +15,8 @@ use Illuminate\Support\Carbon;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\AttributeGroupRegistry;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
+use Jurager\Eav\Registries\AttributeGroupRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
 
 /**
  * @property int $id

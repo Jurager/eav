@@ -15,7 +15,7 @@ use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Eav\Models\EntityTranslation;
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 use RuntimeException;
 

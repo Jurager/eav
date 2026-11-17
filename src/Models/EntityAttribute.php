@@ -17,7 +17,7 @@ use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Relations\BelongsToAttribute;
 use Jurager\Eav\Relations\BelongsToScoped;
 use Jurager\Eav\Relations\Concerns\HasScopedRelations;

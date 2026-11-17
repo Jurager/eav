@@ -10,8 +10,8 @@ use Illuminate\Database\Query\JoinClause;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Filterable\Contracts\SortResolver;
 
 class AttributeSortResolver implements SortResolver

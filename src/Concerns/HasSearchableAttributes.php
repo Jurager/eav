@@ -6,7 +6,7 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Database\Eloquent\Collection;
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;

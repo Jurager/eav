@@ -17,7 +17,7 @@ use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
 
 /**
  * Resolve an entity's stored and inherited attribute values.

@@ -7,7 +7,7 @@ namespace Jurager\Eav\Schema;
 use Illuminate\Support\Fluent;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Models\AttributeGroup;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Schema\Repositories\GroupRepository;
 
 /**

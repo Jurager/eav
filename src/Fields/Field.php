@@ -11,8 +11,8 @@ use Jurager\Eav\Fields\Concerns\Indexable;
 use Jurager\Eav\Fields\Concerns\ValidatesPayload;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Base attribute field.

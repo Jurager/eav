@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Exceptions\UnknownAttributeException;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
 use Jurager\Eav\Tests\Fixtures\ScopedCategory;
 use Jurager\Eav\Tests\Fixtures\ScopedProduct;

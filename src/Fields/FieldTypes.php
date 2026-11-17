@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Fields;
 
-use Jurager\Eav\Enums\AttributeType;
+use Jurager\Eav\Enums\FieldType;
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
 
 /**
@@ -24,7 +24,7 @@ class FieldTypes
     }
 
     /** @param  class-string<Field>  $class */
-    public function register(AttributeType|string $type, string $class): void
+    public function register(FieldType|string $type, string $class): void
     {
         if (! is_subclass_of($class, Field::class)) {
             throw InvalidFieldTypeException::notAField($class);
@@ -33,13 +33,13 @@ class FieldTypes
         $this->types[self::code($type)] = $class;
     }
 
-    public function has(AttributeType|string $type): bool
+    public function has(FieldType|string $type): bool
     {
         return isset($this->types[self::code($type)]);
     }
 
     /** @return class-string<Field> */
-    public function resolve(AttributeType|string $type): string
+    public function resolve(FieldType|string $type): string
     {
         return $this->types[self::code($type)] ?? throw InvalidFieldTypeException::notRegistered(self::code($type));
     }
@@ -61,8 +61,8 @@ class FieldTypes
         return array_keys(array_filter($this->types, static fn (string $class): bool => is_a($class, $fieldClass, true)));
     }
 
-    private static function code(AttributeType|string $type): string
+    private static function code(FieldType|string $type): string
     {
-        return $type instanceof AttributeType ? $type->value : $type;
+        return $type instanceof FieldType ? $type->value : $type;
     }
 }

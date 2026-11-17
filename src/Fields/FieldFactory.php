@@ -5,12 +5,12 @@ declare(strict_types=1);
 namespace Jurager\Eav\Fields;
 
 use Illuminate\Support\Collection;
-use Jurager\Eav\Enums\AttributeType;
+use Jurager\Eav\Enums\FieldType;
 use Jurager\Eav\Exceptions\InvalidFieldTypeException;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Builds Field instances for attribute definitions.
@@ -29,7 +29,7 @@ class FieldFactory
      *
      * @param  class-string<Field>  $class
      */
-    public function register(AttributeType|string $type, string $class): void
+    public function register(FieldType|string $type, string $class): void
     {
         $this->types->register($type, $class);
     }
@@ -37,7 +37,7 @@ class FieldFactory
     /**
      * Check if a field type is registered.
      */
-    public function has(AttributeType|string $type): bool
+    public function has(FieldType|string $type): bool
     {
         return $this->types->has($type);
     }
@@ -47,7 +47,7 @@ class FieldFactory
      *
      * @return class-string<Field>
      */
-    public function resolve(AttributeType|string $type): string
+    public function resolve(FieldType|string $type): string
     {
         return $this->types->resolve($type);
     }

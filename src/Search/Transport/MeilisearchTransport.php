@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Transport;
 
+use Jurager\Eav\Contracts\Search\Transport;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Contracts\Transport;
 use Meilisearch\Client;
 use Meilisearch\Contracts\FacetSearchQuery;
 use Meilisearch\Contracts\MultiSearchFederation;

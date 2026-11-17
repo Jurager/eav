@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Attributes\AttributeManager;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 
 class HasAttributesTest extends FeatureTestCase

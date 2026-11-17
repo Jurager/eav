@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Transport;
 
-use Jurager\Eav\Search\Contracts\Transport;
+use Jurager\Eav\Contracts\Search\Transport;
 use PHPUnit\Framework\Assert;
 
 /**

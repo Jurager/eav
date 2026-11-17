@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Models\AttributeGroup;
-use Jurager\Eav\Registry\AttributeGroupRegistry;
+use Jurager\Eav\Registries\AttributeGroupRegistry;
 
 /**
  * Drops cached groups whenever a group row changes. Domain events come from the Schema API.

@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Eav\Eav;
-use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 trait HasTranslations
 {

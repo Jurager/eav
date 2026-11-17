@@ -12,7 +12,7 @@ use Jurager\Eav\Attributes\Persistence\AttributePersister;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Exceptions\UnknownAttributeException;
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Read and write an entity's attribute values.

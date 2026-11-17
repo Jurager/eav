@@ -9,11 +9,11 @@ use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
+use Jurager\Eav\Contracts\Search\FilterResolver;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Index\Index;
-use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Eav\Search\Index\Indexer;
+use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 

@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 use JsonException;
 use Jurager\Eav\Attributes\AttributeManager;
 use Jurager\Eav\Attributes\AttributesFactory;
-use Jurager\Eav\Attributes\Validation\AttributeValidator;
+use Jurager\Eav\Attributes\AttributeValidator;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\AttributeStorage;

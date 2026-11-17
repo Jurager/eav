@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature\Search;
 
 use Illuminate\Support\Facades\Queue;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\MakeSearchable;
 

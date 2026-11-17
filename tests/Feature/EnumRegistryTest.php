@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
-use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
 
 class EnumRegistryTest extends FeatureTestCase
 {

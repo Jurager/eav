@@ -8,8 +8,8 @@ use Carbon\Carbon;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Date;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 use Mockery;
 

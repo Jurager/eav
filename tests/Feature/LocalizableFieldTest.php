@@ -8,8 +8,8 @@ use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Attributes\Persistence\AttributePersister;
 use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 class LocalizableFieldTest extends FeatureTestCase
 {

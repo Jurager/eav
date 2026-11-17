@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
-use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Illuminate\Support\Facades\Queue;
+use Jurager\Eav\Contracts\Search\Transport;
+use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Jobs\SyncIndexSettings;
-use Jurager\Eav\Search\Contracts\Transport;
 use Jurager\Eav\Search\Results;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
@@ -105,7 +105,7 @@ class MeilisearchTest extends SearchTestCase
         $red = $this->option($color, 'red', ['en' => 'Red', 'ru' => 'Красный']);
         $blue = $this->option($color, 'blue', ['en' => 'Blue', 'ru' => 'Синий']);
 
-        $this->artisan('eav:search:sync')->assertSuccessful();
+        $this->artisan('eav:sync-index-settings')->assertSuccessful();
 
         $rows = [
             ['Shoes', 'Red running shoes', 'Красные кроссовки', 'RS-100', 100, '2026-01-10', $red],
