@@ -202,6 +202,20 @@ To lead the results with the documents matching a condition, use `partition()`:
 Search::for(Product::class)->partition(['in_stock' => true])->sort('price');
 ```
 
+### Boosting
+
+To rank some hits higher without filtering the rest out, boost a condition. The relevance of the hits matching it is multiplied by the weight:
+
+```php
+Search::for(Product::class)
+    ->query('phone')
+    ->boost(['in_stock' => true], 3)
+    ->boost(['brand' => 'apple'], 1.5)
+    ->paginate();
+```
+
+A boost acts on relevance. It has no effect without a text query or when the search is sorted. To lead with a group whatever the order, use `partition()`; a search is either boosted or partitioned, not both.
+
 ### Facets
 
 Facets are keyed by the name you asked for. A numeric or date field gives a range; any other field gives its values with counts and labels:
@@ -255,23 +269,31 @@ $hit->model;
 
 ## Federated search
 
-Merge searches over several entity types into one list ranked across them:
+Search several entity types at once and get one list ranked across them, such as products and services for the same query:
 
 ```php
 $results = Search::federated([
     Search::for(Product::class)->query($term)->weight(2),
-    Search::for(Category::class)->query($term),
+    Search::for(Service::class)->query($term),
 ])->paginate(20);
 
 foreach ($results->hits() as $hit) {
-    $hit->entityType; // 'product'
+    $hit->entityType; // 'product' or 'service'
     $hit->model;
 }
 ```
 
-Each search keeps its own filters, locale, and facets. Facets are keyed by entity type, then by name. The total is an estimate.
+Each search runs over its own index and keeps its own filters, locale, boosts, and facets. `weight()` ranks the hits of one type above the others. The total is an estimate.
 
-Meilisearch rejects federated searches whose sort rules conflict, such as two searches over one index sorted differently. Give the searches the same sorting, or none.
+A federated search takes one search per entity type. To rank some hits of a type higher, `boost()` its search.
+
+Facets are keyed by entity type, then by name, and describe every hit of that type. As in a regular search, a facet you filter on is counted without its own filter:
+
+```php
+$results->facets()['product']['color'];
+```
+
+Meilisearch rejects federated searches whose sort rules conflict. Give the searches the same sorting, or none.
 
 ## Index settings
 
@@ -411,10 +433,11 @@ An engine may implement more contracts for what it can do natively. Without them
 | Contract               | Native                                  | Fallback                                                      |
 |------------------------|-----------------------------------------|---------------------------------------------------------------|
 | `FederatesSearches`    | One request merging several searches    | Each search runs alone; hits are ranked by score times weight |
+| `BoostsMatches`        | Ranking boosted matches higher          | Each boosted condition is searched alone; hits are ranked by score times weight |
 | `SearchesFacetValues`  | Searching the values of a facet         | The facet's values from a regular search, matched by substring |
 | `UpdatesIndexSettings` | Syncing index settings from the definition | Nothing is synced                                          |
 
-Federated search therefore works on any engine. The fallback asks each search for a whole page, so prefer a native implementation where the engine has one.
+Federated search and boosting therefore work on any engine. The fallbacks ask each search for a whole page, so prefer a native implementation where the engine has one. An engine implementing `BoostsMatches` reads the boosts in effect from `$search->boosts()`.
 
 ## Testing
 

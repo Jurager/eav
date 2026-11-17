@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Testing;
 
+use Jurager\Eav\Contracts\Search\BoostsMatches;
 use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\Hit;
@@ -13,7 +14,7 @@ use PHPUnit\Framework\Assert;
 /**
  * Answers searches with prepared hits and records them, in place of a real engine.
  */
-class FakeEngine implements Engine
+class FakeEngine implements BoostsMatches, Engine
 {
     /** @var list<Builder> The searches run so far. */
     public array $searches = [];

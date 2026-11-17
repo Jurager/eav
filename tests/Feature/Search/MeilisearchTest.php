@@ -377,4 +377,43 @@ class MeilisearchTest extends SearchTestCase
 
         Search::for(SearchableProduct::class)->where('price', '>', 1);
     }
+
+    public function test_a_boost_ranks_matching_hits_first_and_keeps_the_total_exact(): void
+    {
+        $search = fn () => Search::for(SearchableProduct::class)->query('red');
+
+        $expensive = $search()->boost(['price' => ['gt' => 300]], 5)->paginate();
+        $cheap = $search()->boost(['price' => ['lt' => 300]], 5)->paginate();
+
+        $this->assertSame(['Boots', 'Shoes'], $this->names($expensive));
+        $this->assertSame(['Shoes', 'Boots'], $this->names($cheap));
+        $this->assertSame(2, $expensive->total());
+        $this->assertSame(['Shoes'], $this->names($search()->boost(['price' => ['gt' => 300]], 5)->paginate(1, 2)));
+    }
+
+    public function test_a_boosted_search_federates_with_another_entity_type(): void
+    {
+        $federated = fn (float $boost) => Search::federated([
+            Search::for(SearchableProduct::class)->query('boots')->boost(['color' => 'red'], $boost),
+            Search::for(SearchableCategory::class)->query('boots')->weight(1.5),
+        ])->paginate();
+
+        // The red boots match the products search and its boosted part, yet appear once.
+        $this->assertSame(['Shoes and boots', 'Boots'], $this->names($federated(1.0)));
+        $this->assertSame(['Boots', 'Shoes and boots'], $this->names($federated(4.0)));
+        $this->assertCount(2, $federated(4.0)->hits());
+    }
+
+    public function test_a_filtered_facet_of_a_federated_search_keeps_its_other_values(): void
+    {
+        $facets = Search::federated([
+            Search::for(SearchableProduct::class)->where('color', 'red')->facets('color'),
+            Search::for(SearchableCategory::class),
+        ])->paginate()->facets();
+
+        $this->assertEqualsCanonicalizing(
+            [['value' => 'red', 'label' => 'Red', 'count' => 2], ['value' => 'blue', 'label' => 'Blue', 'count' => 2]],
+            $facets['searchable_product']['color']['values'],
+        );
+    }
 }

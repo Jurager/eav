@@ -6,6 +6,7 @@ namespace Jurager\Eav\Tests\Feature\Search;
 
 use Illuminate\Support\Facades\Queue;
 use InvalidArgumentException;
+use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Enums\Comparison;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
@@ -13,6 +14,7 @@ use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\Engines\MeilisearchEngine;
+use Jurager\Eav\Search\Response;
 use Jurager\Eav\Search\Testing\FakeEngine;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
@@ -161,22 +163,61 @@ class SearchManagerTest extends SearchTestCase
         $this->assertSame(['Footwear', 'Shoes', 'Boots'], $federated()->get()->pluck('name')->all());
     }
 
-    public function test_each_federated_search_loads_its_own_hits(): void
+    public function test_a_federated_search_takes_one_search_per_entity_type(): void
     {
-        $engine = $this->useCustomEngine();
-        $child = $this->product('Child', $this->product('Parent')->id);
-        $engine->respond('searchable_product', [['id' => $child->id, '_score' => 0.5]]);
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('one search per entity type');
 
-        // Two searches over one entity type: each loads its hits its own way.
-        $results = Search::federated([
-            Search::for(SearchableProduct::class)->query('a')->with('parent'),
-            Search::for(SearchableProduct::class)->query('b')->loadUsing(fn ($query) => $query->whereKey(0)),
-        ])->paginate();
+        Search::federated([
+            Search::for(SearchableProduct::class)->query('a'),
+            Search::for(SearchableProduct::class)->query('b'),
+        ]);
+    }
 
-        [$first, $second] = $results->hits()->all();
+    public function test_an_engine_that_cannot_boost_has_its_hits_ranked_by_weighted_score(): void
+    {
+        $this->attribute('select', 'color', ['filterable' => true]);
+        [$a, $b, $c] = [$this->product('A'), $this->product('B'), $this->product('C')];
 
-        $this->assertTrue($first->model->relationLoaded('parent'));
-        $this->assertNull($second->model);
+        // An engine that only searches: every product by score, or just B when narrowed to the boosted colour.
+        $engine = new class([$a->id => 0.9, $b->id => 0.5, $c->id => 0.3], $b->id) implements Engine
+        {
+            public array $sizes = [];
+
+            public function __construct(private array $scores, private int $red) {}
+
+            public function search(Builder $search, int $perPage, int $page): Response
+            {
+                $this->sizes[] = $perPage;
+                $scores = $search->filters === [] ? $this->scores : [$this->red => $this->scores[$this->red]];
+                $hits = [];
+
+                foreach (array_slice($scores, ($page - 1) * $perPage, $perPage, true) as $id => $score) {
+                    $hits[] = $search->hit($id, ['id' => $id], score: $score);
+                }
+
+                return new Response($hits, count($scores), $search->facets === [] ? [] : ['color' => ['red' => 1]]);
+            }
+        };
+
+        Search::extend('plain', fn () => $engine);
+        config(['eav.search.driver' => 'plain']);
+
+        $search = fn () => Search::for(SearchableProduct::class)->query('x')->boost(['color' => 'red'], 3)->facets('color');
+
+        // 0.5 × 3 outranks 0.9.
+        $results = $search()->paginate(2);
+
+        $this->assertSame(['B', 'A'], $results->getCollection()->pluck('name')->all());
+        $this->assertSame(1.5, $results->hits()->first()->score);
+        $this->assertSame(3, $results->total());
+        $this->assertSame('red', $results->facets()['color']['values'][0]['value']);
+        $this->assertSame(['C'], $search()->paginate(2, 2)->getCollection()->pluck('name')->all());
+
+        // Without a query there is no relevance to weigh: the engine is asked once, as it is.
+        $engine->sizes = [];
+        $this->assertSame(['A', 'B'], Search::for(SearchableProduct::class)->boost(['color' => 'red'], 3)->get(2)->pluck('name')->all());
+        $this->assertSame([2], $engine->sizes);
     }
 
     public function test_federating_nothing_finds_nothing(): void

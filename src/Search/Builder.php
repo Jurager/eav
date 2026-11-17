@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search;
 
 use Closure;
+use InvalidArgumentException;
+use LogicException;
 use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
+use Jurager\Eav\Contracts\Search\BoostsMatches;
 use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Contracts\Search\FilterResolver;
 use Jurager\Eav\Contracts\Search\SearchesFacetValues;
@@ -58,6 +61,9 @@ class Builder
     public ?float $weight = null;
 
     public ?Group $partition = null;
+
+    /** @var list<array{0: Group, 1: float}> Conditions whose matches rank higher, with the weight of each. */
+    private array $boosts = [];
 
     /**
      * Trashed entities to include: none (false), all alongside the rest (true), or only them (null).
@@ -226,6 +232,10 @@ class Builder
      */
     public function partition(array $condition, bool $first = true): static
     {
+        if ($this->boosts !== []) {
+            throw new LogicException('A search cannot be both partitioned and boosted.');
+        }
+
         $partition = $this->parse($condition);
 
         // Nothing to split on leaves the results in one piece.
@@ -233,6 +243,41 @@ class Builder
         $this->partitionFirst = $first;
 
         return $this;
+    }
+
+    /**
+     * Rank the hits matching a condition higher: their relevance is multiplied by the weight.
+     *
+     * A boost acts on relevance, so it has no effect without a text query or when the search is sorted;
+     * use `partition()` to lead with a group whatever the order.
+     *
+     * @param  array<string, mixed>  $condition  JSON:API filters.
+     */
+    public function boost(array $condition, float $weight = 2.0): static
+    {
+        if ($weight <= 0) {
+            throw new InvalidArgumentException('The weight of a boost must be greater than zero.');
+        }
+
+        if ($this->partition !== null) {
+            throw new LogicException('A search cannot be both partitioned and boosted.');
+        }
+
+        if (! ($group = $this->parse($condition))->isEmpty()) {
+            $this->boosts[] = [$group, $weight];
+        }
+
+        return $this;
+    }
+
+    /**
+     * The boosts in effect: none without a text query or with an explicit order, where relevance does not rank.
+     *
+     * @return list<array{0: Group, 1: float}>
+     */
+    public function boosts(): array
+    {
+        return $this->query !== null && $this->orders === [] ? $this->boosts : [];
     }
 
     /**
@@ -393,7 +438,7 @@ class Builder
     public function paginate(int $perPage = 15, ?int $page = null, string $pageName = 'page'): Results
     {
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
-        $found = $this->engine->search($this, $perPage, $page);
+        $found = $this->execute($perPage, $page);
 
         return Results::make($this->load($found->hits), $this->formatter->format($this, $found->facets), $found->total, $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
@@ -423,7 +468,7 @@ class Builder
      */
     public function keys(int $limit = 20): array
     {
-        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this->withoutFacets(), $limit, 1)->hits);
+        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->withoutFacets()->execute($limit, 1)->hits);
     }
 
     /**
@@ -431,7 +476,7 @@ class Builder
      */
     public function count(): int
     {
-        return $this->engine->search($this->withoutFacets(), 0, 1)->total;
+        return $this->withoutFacets()->execute(0, 1)->total;
     }
 
     /**
@@ -449,7 +494,7 @@ class Builder
 
         // The engine cannot search a facet: match the values a regular search returns for it.
         $search = $this->withoutFacets()->facets($facet);
-        $values = $this->engine->search($search, 0, 1)->facets[$facet] ?? [];
+        $values = $search->execute(0, 1)->facets[$facet] ?? [];
 
         if ($query !== null && $query !== '') {
             $values = array_filter($values, static fn (int|string $value): bool => mb_stripos((string) $value, $query) !== false, ARRAY_FILTER_USE_KEY);
@@ -465,7 +510,67 @@ class Builder
      */
     public function run(int $limit): Response
     {
-        return $this->engine->search($this, $limit, 1);
+        return $this->execute($limit, 1);
+    }
+
+    /**
+     * Ask the engine, covering for it where it cannot rank boosted matches itself.
+     */
+    private function execute(int $perPage, int $page): Response
+    {
+        $boosts = $this->boosts();
+
+        if ($boosts === [] || $perPage <= 0 || $this->engine instanceof BoostsMatches) {
+            return $this->engine->search($this, $perPage, $page);
+        }
+
+        // Every candidate for the page: the best hits as they are, and the best of each boosted condition.
+        $size = $perPage * $page;
+        $base = $this->engine->search($this->narrowed(), $size, 1);
+        $ranked = [];
+
+        foreach ($base->hits as $rank => $hit) {
+            $ranked[(string) $hit->key] = [$hit->score ?? 0.0, $rank, $hit];
+        }
+
+        foreach ($boosts as [$condition, $weight]) {
+            foreach ($this->engine->search($this->narrowed($condition), $size, 1)->hits as $hit) {
+                $key = (string) $hit->key;
+                $score = ($hit->score ?? 0.0) * $weight;
+
+                if ($score > ($ranked[$key][0] ?? -1.0)) {
+                    $ranked[$key] = [$score, $ranked[$key][1] ?? PHP_INT_MAX, $hit];
+                }
+            }
+        }
+
+        // Best weighted score first; equal scores keep the engine's own order.
+        usort($ranked, static fn (array $a, array $b): int => [$b[0], $a[1]] <=> [$a[0], $b[1]]);
+
+        return new Response(
+            array_map(
+                fn (array $entry): Hit => $this->hit($entry[2]->key, $entry[2]->document, $entry[2]->formatted, $entry[0]),
+                array_slice($ranked, ($page - 1) * $perPage, $perPage),
+            ),
+            $base->total,
+            $base->facets,
+        );
+    }
+
+    /**
+     * The same search without boosts — as it is, or narrowed to one boosted condition, which needs no facets.
+     */
+    private function narrowed(?Group $condition = null): static
+    {
+        $search = clone $this;
+        $search->boosts = [];
+
+        if ($condition !== null) {
+            $search->filters[] = $condition;
+            $search->facets = [];
+        }
+
+        return $search;
     }
 
     /**

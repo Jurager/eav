@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature\Search;
 
 use Illuminate\Support\Facades\Queue;
+use InvalidArgumentException;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Search\AttributeRelationFilterResolver;
@@ -12,6 +13,7 @@ use Jurager\Eav\Search\Hit;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\RemoveFromSearch;
+use LogicException;
 
 class MeilisearchEngineTest extends SearchTestCase
 {
@@ -311,6 +313,110 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->assertSame('(attributes.price > 0) AND (NOT (attributes.color = "red"))', $trailing['filter']);
         $this->assertSame(1, $trailing['limit']);
         $this->assertSame(0, $trailing['offset']);
+    }
+
+    public function test_a_boost_fetches_the_hits_through_a_weighted_federation(): void
+    {
+        $product = $this->product();
+        $this->engine->respond(self::PRODUCTS, [['id' => $product->id]], total: 7);
+
+        $results = Search::for(SearchableProduct::class)
+            ->query('shoes')
+            ->where('price', '>', 1)
+            ->boost(['color' => 'red'], 3)
+            ->facets('sku')
+            ->paginate(5, 2);
+
+        [$count, $hits] = $this->engine->searches;
+
+        // The total and the facets come from the plain search; the hits from the search and its boosted part.
+        $this->assertNull($count['federation']);
+        $this->assertSame(0, $count['queries'][0]['hitsPerPage']);
+        $this->assertSame(['attributes.sku'], $count['queries'][0]['facets']);
+
+        $this->assertSame(['limit' => 5, 'offset' => 5], $hits['federation']);
+        $this->assertSame('(attributes.price > 1)', $hits['queries'][0]['filter']);
+        $this->assertArrayNotHasKey('federationOptions', $hits['queries'][0]);
+        $this->assertSame('(attributes.price > 1) AND (attributes.color = "red")', $hits['queries'][1]['filter']);
+        $this->assertSame(['weight' => 3.0], $hits['queries'][1]['federationOptions']);
+        $this->assertSame('shoes', $hits['queries'][1]['q']);
+
+        $this->assertSame(7, $results->total());
+    }
+
+    public function test_a_boost_has_no_effect_where_relevance_does_not_rank(): void
+    {
+        Search::for(SearchableProduct::class)->boost(['color' => 'red'])->paginate();
+        Search::for(SearchableProduct::class)->query('x')->boost(['color' => 'red'])->sort('price')->paginate();
+        Search::for(SearchableProduct::class)->query('x')->boost(['color' => 'red'])->count();
+
+        $this->assertCount(3, $this->engine->searches);
+
+        foreach ($this->engine->searches as $search) {
+            $this->assertNull($search['federation']);
+            $this->assertCount(1, $search['queries']);
+        }
+    }
+
+    public function test_a_search_is_either_boosted_or_partitioned(): void
+    {
+        foreach ([
+            fn ($search) => $search->boost(['color' => 'red'])->partition(['color' => 'blue']),
+            fn ($search) => $search->partition(['color' => 'blue'])->boost(['color' => 'red']),
+        ] as $attempt) {
+            try {
+                $attempt(Search::for(SearchableProduct::class));
+                $this->fail('Boosting a partitioned search should be refused.');
+            } catch (LogicException $e) {
+                $this->assertStringContainsString('partitioned and boosted', $e->getMessage());
+            }
+        }
+
+        $this->expectException(InvalidArgumentException::class);
+
+        Search::for(SearchableProduct::class)->boost(['color' => 'red'], 0);
+    }
+
+    public function test_a_boosted_search_keeps_its_boosts_within_a_federation(): void
+    {
+        $product = $this->product();
+        $category = SearchableCategory::create(['name' => 'Shoes']);
+
+        $this->engine->respond(self::PRODUCTS, [['id' => $product->id]]);
+        $this->engine->respond('eav_test_categories', [['id' => $category->id]]);
+
+        $results = Search::federated([
+            Search::for(SearchableProduct::class)->query('phone')->boost(['color' => 'red'], 3)->weight(2),
+            Search::for(SearchableCategory::class)->query('phone'),
+        ])->paginate();
+
+        $queries = $this->engine->searches[0]['queries'];
+
+        $this->assertSame([self::PRODUCTS, self::PRODUCTS, 'eav_test_categories'], array_column($queries, 'indexUid'));
+        $this->assertSame(['weight' => 2.0], $queries[0]['federationOptions']);
+        $this->assertSame(['weight' => 6.0], $queries[1]['federationOptions']);
+        $this->assertSame('(attributes.color = "red")', $queries[1]['filter']);
+
+        // Hits of either products query belong to the products search.
+        $this->assertSame(['searchable_product', 'searchable_product', 'searchable_category'], $results->hits()->pluck('entityType')->all());
+    }
+
+    public function test_a_filtered_facet_of_a_federated_search_is_counted_without_its_own_filter(): void
+    {
+        $this->engine->respond(self::PRODUCTS, [], facets: ['attributes.color' => ['red' => 2, 'blue' => 5]]);
+
+        $results = Search::federated([
+            Search::for(SearchableProduct::class)->query('x')->where('color', 'red')->where('price', '>', 1)->facets(['color', 'sku']),
+            Search::for(SearchableCategory::class)->query('x'),
+        ])->paginate();
+
+        [$federated, $scoped] = $this->engine->searches;
+
+        $this->assertSame([self::PRODUCTS => ['attributes.color', 'attributes.sku']], $federated['federation']['facetsByIndex']);
+        $this->assertCount(1, $scoped['queries']);
+        $this->assertSame('(attributes.price > 1)', $scoped['queries'][0]['filter']);
+        $this->assertSame(['attributes.color'], $scoped['queries'][0]['facets']);
+        $this->assertSame(['red', 'blue'], array_column($results->facets()['searchable_product']['color']['values'], 'value'));
     }
 
     public function test_federated_search_merges_entity_types_into_one_list(): void

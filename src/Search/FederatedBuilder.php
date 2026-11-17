@@ -6,11 +6,12 @@ namespace Jurager\Eav\Search;
 
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Pagination\Paginator;
+use InvalidArgumentException;
 use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Contracts\Search\FederatesSearches;
 
 /**
- * Several searches run as one, their hits merged into a single list ranked across entity types.
+ * Searches over several entity types run as one, their hits merged into a single list ranked across the types.
  */
 class FederatedBuilder
 {
@@ -21,12 +22,20 @@ class FederatedBuilder
         private readonly Engine $engine,
         private readonly FacetFormatter $formatter,
         private readonly array $searches,
-    ) {}
+    ) {
+        $types = array_map(static fn (Builder $search): string => $search->index->entityType, $searches);
+
+        // Hits of one type form one list, with one set of facets: ranking some of them higher is a boost.
+        if (count($types) !== count(array_unique($types))) {
+            throw new InvalidArgumentException('A federated search takes one search per entity type. To rank some hits of a type higher, boost() its search.');
+        }
+    }
 
     /**
      * Run the searches and get a page of models of mixed types, with hits and facets.
      *
-     * The total is an estimate, and facets are keyed by entity type, then by facet name.
+     * The total is an estimate. Facets are keyed by entity type, then by facet name, and describe every hit
+     * of that type.
      */
     public function paginate(int $perPage = 15, ?int $page = null, string $pageName = 'page'): Results
     {

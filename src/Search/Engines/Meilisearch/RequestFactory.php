@@ -6,6 +6,7 @@ namespace Jurager\Eav\Search\Engines\Meilisearch;
 
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Builder;
+use Jurager\Eav\Search\Filters\Group;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
 
@@ -24,11 +25,12 @@ class RequestFactory
      *
      * @param  list<string>  $except  Paths of fields whose top-level conditions are left out.
      * @param  bool|null  $side  Which side of the partition to take: its matches, or the rest; null for both.
+     * @param  Group|null  $boosted  A boosted condition to narrow the search to.
      * @return array<string, mixed>
      *
      * @throws InvalidSearchQueryException
      */
-    public function make(Builder $builder, array $except = [], ?bool $side = null): array
+    public function make(Builder $builder, array $except = [], ?bool $side = null, ?Group $boosted = null): array
     {
         $request = [
             'indexUid' => $builder->index->uid(),
@@ -36,7 +38,7 @@ class RequestFactory
             ...$this->text($builder),
         ];
 
-        if (($filter = $this->filter($builder, $except, $side)) !== null) {
+        if (($filter = $this->filter($builder, $except, $side, $boosted)) !== null) {
             $request['filter'] = $filter;
         }
 
@@ -117,7 +119,7 @@ class RequestFactory
      *
      * @param  list<string>  $except
      */
-    private function filter(Builder $builder, array $except, ?bool $side): ?string
+    private function filter(Builder $builder, array $except, ?bool $side, ?Group $boosted): ?string
     {
         $locale = $builder->locales()[0] ?? null;
         $filters = [];
@@ -129,6 +131,10 @@ class RequestFactory
         if ($side !== null && $builder->partition !== null) {
             $condition = $this->compiler->compile($builder->partition, $locale);
             $filters[] = $condition === null || $side ? $condition : "NOT ({$condition})";
+        }
+
+        if ($boosted !== null) {
+            $filters[] = $this->compiler->compile($boosted, $locale);
         }
 
         if ($builder->index->softDeletes && $builder->trashed !== true) {
