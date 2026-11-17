@@ -81,6 +81,31 @@ class Indexer
     }
 
     /**
+     * Remove the documents of the given keys that no entity stands behind any more.
+     *
+     * @param  array<int, int|string>  $keys  Scout keys found in the index.
+     */
+    public function prune(string $entityType, array $keys): void
+    {
+        if ($keys === [] || ($model = $this->model($entityType)) === null) {
+            return;
+        }
+
+        $name = $model->getScoutKeyName();
+
+        // Scopes hide entities without removing them: only a key no row has at all is gone.
+        $existing = $model->newQueryWithoutScopes()->whereIn($model->qualifyColumn($name), $keys)->pluck($name)->map(strval(...))->all();
+        $gone = array_values(array_diff(array_map(strval(...), $keys), $existing));
+
+        if ($gone !== []) {
+            $model->newCollection(array_map(
+                static fn (string $key): Model => $model->newInstance()->forceFill([$name => $key]),
+                $gone,
+            ))->unsearchable();
+        }
+    }
+
+    /**
      * Reindex every entity of the type.
      */
     public function all(string $entityType, ?int $chunk = null): void

@@ -12,6 +12,7 @@ use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\Transport;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
+use Jurager\Eav\Search\Index\Indexer;
 use Jurager\Eav\Search\Transport\FakeTransport;
 
 /**
@@ -37,6 +38,7 @@ class Search
         return new Builder(
             $this->container->make(Engine::class),
             $this->indexes->for($entity),
+            $this->container->make(Indexer::class),
             array_map($this->container->make(...), (array) $this->container->make('config')->get('eav.search.resolvers', [])),
             $this->currentLocales(),
         );

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Support\Facades\Queue;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Search\Hit;
 use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
+use Laravel\Scout\Jobs\RemoveFromSearch;
 
 class BuilderTest extends SearchTestCase
 {
@@ -172,6 +174,34 @@ class BuilderTest extends SearchTestCase
         $this->assertSame('<em>Second</em>', $hit->highlight('name'));
         $this->assertSame('One', $results->hits()->last()->get('title'));
         $this->assertNull($results->hits()[1]->model);
+    }
+
+    public function test_documents_of_entities_that_are_gone_are_removed_from_the_index(): void
+    {
+        config(['scout.queue' => true]);
+
+        $kept = $this->product('Kept');
+        $hidden = $this->product('Hidden');
+        $this->engine->respond(self::PRODUCTS, [['id' => $kept->id], ['id' => $hidden->id], ['id' => 999]]);
+
+        Queue::fake();
+
+        Search::for(SearchableProduct::class)->loadUsing(fn ($query) => $query->whereKey($kept->id))->paginate();
+
+        // Left out by the load query, but still there: only the key no row has is removed.
+        Queue::assertPushed(RemoveFromSearch::class, 1);
+        Queue::assertPushed(RemoveFromSearch::class, fn (RemoveFromSearch $job) => $job->models->modelKeys() == [999]);
+    }
+
+    public function test_pruning_can_be_turned_off(): void
+    {
+        config(['scout.queue' => true, 'eav.search.prune' => false]);
+        $this->engine->respond(self::PRODUCTS, [['id' => 999]]);
+        Queue::fake();
+
+        Search::for(SearchableProduct::class)->paginate();
+
+        Queue::assertNotPushed(RemoveFromSearch::class);
     }
 
     public function test_get_first_keys_and_count(): void

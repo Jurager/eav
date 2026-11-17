@@ -15,17 +15,35 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Scopes\ActiveLocaleScope;
+use WeakMap;
 
 /**
  * Build the search document of an entity from its index definition.
  */
 class Document
 {
+    /** @var WeakMap<Model, true> Entities whose loaded values were prepared for indexing. */
+    private WeakMap $prepared;
+
     public function __construct(
         private readonly IndexFactory $indexes,
         private readonly FieldFactory $fields,
         private readonly Container $container,
-    ) {}
+    ) {
+        $this->prepared = new WeakMap;
+    }
+
+    /**
+     * Mark entities as carrying their values in every locale, loaded for indexing.
+     *
+     * @param  iterable<Model>  $entities
+     */
+    public function prepared(iterable $entities): void
+    {
+        foreach ($entities as $entity) {
+            $this->prepared[$entity] = true;
+        }
+    }
 
     /**
      * @return array<string, mixed>
@@ -63,7 +81,8 @@ class Document
     {
         $values = $this->container->make(EntityValues::class, ['entity' => $entity]);
 
-        if (($loaded = $values->loaded()) !== null) {
+        // Values loaded by anyone else may hold the active locale only: read those from the database instead.
+        if ($entity instanceof Model && isset($this->prepared[$entity]) && ($loaded = $values->loaded()) !== null) {
             return $loaded
                 ->filter(static fn (Model $value): bool => $value->attribute !== null && Synchronizer::indexed($value->attribute))
                 ->values();

@@ -135,6 +135,12 @@ return [
         ],
 
         /*
+         * Whether a search removes the documents it finds whose entity no
+         * longer exists, e.g. after rows were deleted with a raw query.
+         */
+        'prune' => true,
+
+        /*
          * Whether the "like" filter operator is allowed. It compiles to the
          * CONTAINS operator, an experimental Meilisearch feature you must
          * enable on the server. When off, "like" is rejected with a 422.

@@ -97,6 +97,21 @@ class DocumentTest extends SearchTestCase
         $this->assertSame(['en' => 'Red', 'ru' => 'Красный'], $document['labels']['color']);
     }
 
+    public function test_a_document_built_directly_ignores_values_loaded_in_the_active_locale(): void
+    {
+        $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
+
+        $product = $this->product();
+        $product->eav()->set('title', 'Shoes', $this->en->id)->set('title', 'Кеды', $this->ru->id)->save();
+
+        app(LocaleRegistry::class)->set(['ru']);
+
+        $loaded = SearchableProduct::query()->with('attribute_values.translations')->findOrFail($product->id);
+
+        $this->assertSame(['en' => 'Shoes', 'ru' => 'Кеды'], $loaded->toSearchableArray()['attributes']['title']);
+        $this->assertCount(1, $loaded->attribute_values->first()->translations, 'The values the caller loaded are left as they were.');
+    }
+
     public function test_dates_are_indexed_as_timestamps_and_booleans_as_booleans(): void
     {
         $this->attribute('date', 'released', ['filterable' => true]);

@@ -13,6 +13,7 @@ use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
+use Jurager\Eav\Search\Index\Indexer;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 
@@ -77,6 +78,7 @@ class Builder
     public function __construct(
         private readonly Engine $engine,
         public readonly Index $index,
+        private readonly Indexer $indexer,
         private readonly iterable $resolvers = [],
         array $locales = [],
     ) {
@@ -484,8 +486,17 @@ class Builder
 
         $models = $query->get()->keyBy(static fn (Model $model): string => (string) $model->getScoutKey());
 
+        $missing = [];
+
         foreach ($hits as $hit) {
-            $hit->model = $models->get((string) $hit->key);
+            if (($hit->model = $models->get((string) $hit->key)) === null) {
+                $missing[] = $hit->key;
+            }
+        }
+
+        // A hit without a model may be a document left behind by a deleted entity: clean those up.
+        if (config('eav.search.prune', true)) {
+            $this->indexer->prune($this->index->model::class, $missing);
         }
 
         return $hits;

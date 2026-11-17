@@ -133,6 +133,8 @@ $results->hits();    // documents, highlights, ranking scores
 | `keys($limit)`  | Keys of the matches, without loading models     |
 | `count()`       | Number of matches                               |
 
+A document whose entity no longer exists, for example after rows were deleted with a raw query, is removed from the index when a search finds it. Set `eav.search.prune` to `false` to turn this off.
+
 Use `with()` to eager load relations on the models, or `loadUsing()` to change the query they are loaded with:
 
 ```php

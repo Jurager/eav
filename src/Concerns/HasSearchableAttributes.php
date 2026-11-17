@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Concerns;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Scopes\ActiveLocaleScope;
@@ -77,18 +76,11 @@ trait HasSearchableAttributes
      */
     public function makeSearchableUsing(Collection $models): Collection
     {
-        return $models->load($this->indexRelations());
-    }
+        $models->load($this->indexRelations());
 
-    /**
-     * Eager load the same relations when importing the whole model.
-     *
-     * @param  Builder<static>  $query
-     * @return Builder<static>
-     */
-    protected function makeAllSearchableUsing(Builder $query): Builder
-    {
-        return $query->with($this->indexRelations());
+        app(Document::class)->prepared($models);
+
+        return $models;
     }
 
     /**
