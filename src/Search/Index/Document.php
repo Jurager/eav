@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Index;
 
+use BackedEnum;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
 use Jurager\Eav\Attributes\EntityValues;
@@ -72,7 +74,7 @@ class Document
      */
     private static function normalize(mixed $value, IndexType $type): mixed
     {
-        if ($value instanceof \Illuminate\Contracts\Support\Arrayable) {
+        if ($value instanceof Arrayable) {
             $value = $value->toArray();
         }
 
@@ -83,7 +85,7 @@ class Document
                 : $value;
         }
 
-        if ($value instanceof \BackedEnum) {
+        if ($value instanceof BackedEnum) {
             $value = $value->value;
         }
 

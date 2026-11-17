@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Search\Transport\FakeTransport;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
@@ -59,9 +60,7 @@ abstract class SearchTestCase extends FeatureTestCase
      */
     protected function attribute(string $type, string $code, array $flags = []): Attribute
     {
-        static $types = [];
-
-        $typeModel = \Jurager\Eav\Models\AttributeType::query()->firstWhere('code', $type) ?? $this->createAttributeType($type);
+        $typeModel = AttributeType::query()->firstWhere('code', $type) ?? $this->createAttributeType($type);
 
         return $this->createAttribute($typeModel, ['code' => $code, 'entity_types' => ['searchable_product'], ...$flags]);
     }

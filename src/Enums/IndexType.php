@@ -6,6 +6,7 @@ namespace Jurager\Eav\Enums;
 
 use Carbon\Carbon;
 use DateTimeInterface;
+use Stringable;
 use Throwable;
 
 /**
@@ -45,7 +46,7 @@ enum IndexType: string
         }
 
         return match ($this) {
-            self::Text, self::Keyword => is_scalar($value) || $value instanceof \Stringable ? (string) $value : null,
+            self::Text, self::Keyword => is_scalar($value) || $value instanceof Stringable ? (string) $value : null,
             self::Number => is_numeric($value) ? $value + 0 : null,
             self::Boolean => is_bool($value) ? $value : filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE),
             self::Date => self::timestamp($value),

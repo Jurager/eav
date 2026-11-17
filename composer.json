@@ -28,11 +28,11 @@
         "orchestra/testbench": "^11.0",
         "phpunit/phpunit": "^11.0|^12.0",
         "laravel/scout": "^11.0",
-        "meilisearch/meilisearch-php": "^1.0"
+        "meilisearch/meilisearch-php": "^1.16"
     },
     "suggest": {
-        "laravel/scout": "Required to index attribute values for search (HasSearchableAttributes).",
-        "meilisearch/meilisearch-php": "Required for faceted search and filterable index settings with the Meilisearch engine.",
+        "laravel/scout": "Required to index and search entities (HasSearchableAttributes, Search facade).",
+        "meilisearch/meilisearch-php": "Required for search: filters, facets, typo tolerance and federated search with Meilisearch.",
         "jurager/media": "Adds a file/image attribute type backed by a media library.",
         "jurager/microservice": "Serves attribute codes of JSON:API sparse fieldsets (InteractsWithSparseFieldsets)."
     },

@@ -104,12 +104,4 @@ class IndexFactory
             && is_subclass_of($class, Model::class)
             && in_array(Searchable::class, class_uses_recursive($class), true);
     }
-
-    /**
-     * Forget the built indexes.
-     */
-    public function flush(): void
-    {
-        $this->indexes = [];
-    }
 }

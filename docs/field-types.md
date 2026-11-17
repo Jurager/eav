@@ -31,8 +31,9 @@ Set these flags on an attribute definition:
 | `multiple`            | Allows storing multiple values for the same attribute                                                                                |
 | `required`            | Value is required on fill                                                                                                            |
 | `unique`              | Value must be unique across all entity instances                                                                                     |
-| `filterable`          | Include the value in search filters |
-| `searchable`          | Include the value in full-text search                                                       |
+| `filterable`          | The value can be filtered on and used as a facet in search                                                                           |
+| `searchable`          | The value is matched by full-text search                                                                                             |
+| `sortable`            | Search results can be sorted by the value                                                                                            |
 | `held_by`             | Who writes the value: `parent`, `variant`, or `both`                                            |
 | `inherit_from_parent` | A variant with no value of its own reads the parent's                                                                                |
 
