@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature\Search;
 
 use Illuminate\Support\Facades\Queue;
+use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\MakeSearchable;
 
@@ -73,6 +75,26 @@ class DocumentTest extends SearchTestCase
 
         $this->assertSame(['color' => 'red'], $document['attributes']);
         $this->assertSame(['color' => ['en' => 'Red', 'ru' => 'Красный']], $document['labels']);
+    }
+
+    public function test_every_locale_is_indexed_whichever_one_the_request_runs_in(): void
+    {
+        $this->attribute('text', 'title', ['searchable' => true, 'localizable' => true]);
+        $color = $this->attribute('select', 'color', ['filterable' => true, 'searchable' => true]);
+        $red = $this->option($color, 'red', ['en' => 'Red', 'ru' => 'Красный']);
+
+        $product = $this->product();
+        $product->eav()->set('title', 'Shoes', $this->en->id)->set('title', 'Кеды', $this->ru->id)->set('color', $red->id)->save();
+
+        app(LocaleRegistry::class)->set(['ru']);
+        app(EnumRegistry::class)->forget($color->id);
+
+        // As Scout indexes it, with values already loaded in the active locale only.
+        $loaded = SearchableProduct::query()->with('attribute_values.translations')->whereKey($product->id)->get();
+        $document = $loaded->first()->makeSearchableUsing($loaded)->first()->toSearchableArray();
+
+        $this->assertSame(['en' => 'Shoes', 'ru' => 'Кеды'], $document['attributes']['title']);
+        $this->assertSame(['en' => 'Red', 'ru' => 'Красный'], $document['labels']['color']);
     }
 
     public function test_dates_are_indexed_as_timestamps_and_booleans_as_booleans(): void

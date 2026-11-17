@@ -17,6 +17,11 @@ class Settings
     private const array PATH_LISTS = ['searchableAttributes', 'filterableAttributes', 'sortableAttributes'];
 
     /**
+     * The document field Scout marks trashed entities with, when it keeps them in the index.
+     */
+    public const string SOFT_DELETED = '__soft_deleted';
+
+    /**
      * Languages Meilisearch can be told a field is written in, as ISO 639-1 codes.
      */
     private const array LANGUAGES = [
@@ -50,6 +55,10 @@ class Settings
 
         foreach (self::PATH_LISTS as $key) {
             $settings[$key] = array_values(array_unique([...$derived[$key], ...array_values((array) ($settings[$key] ?? []))]));
+        }
+
+        if ($index->softDeletes) {
+            $settings['filterableAttributes'][] = self::SOFT_DELETED;
         }
 
         if (($distinct = $index->distinctField()) !== null) {

@@ -40,11 +40,13 @@ class Index
 
     /**
      * @param  list<string>  $locales  Codes of the locales localized fields are indexed in.
+     * @param  bool  $softDeletes  Whether trashed entities stay in the index, marked as such by Scout.
      */
     public function __construct(
         public readonly Model $model,
         public readonly string $entityType,
         private readonly array $locales = [],
+        public readonly bool $softDeletes = false,
     ) {
         $key = $this->field('id')
             ->using(static fn (Model $model): mixed => $model->getScoutKey())

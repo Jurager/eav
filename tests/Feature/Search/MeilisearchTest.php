@@ -60,9 +60,12 @@ class MeilisearchTest extends SearchTestCase
 
     protected function tearDown(): void
     {
-        if (isset($this->client)) {
-            $this->dropIndexes();
+        // Skipped before the application was set up: nothing to tear down.
+        if (! isset($this->client)) {
+            return;
         }
+
+        $this->dropIndexes();
 
         parent::tearDown();
     }

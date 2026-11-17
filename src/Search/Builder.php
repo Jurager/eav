@@ -54,6 +54,11 @@ class Builder
 
     public ?ParsedFilters $partition = null;
 
+    /**
+     * Trashed entities to include: none (false), all alongside the rest (true), or only them (null).
+     */
+    public ?bool $trashed = false;
+
     public bool $partitionFirst = true;
 
     /** @var array<string, mixed> Engine parameters passed through as they are. */
@@ -272,6 +277,26 @@ class Builder
     }
 
     /**
+     * Include trashed entities, where Scout keeps them in the index (`scout.soft_delete`).
+     */
+    public function withTrashed(): static
+    {
+        $this->trashed = true;
+
+        return $this;
+    }
+
+    /**
+     * Match trashed entities only, where Scout keeps them in the index (`scout.soft_delete`).
+     */
+    public function onlyTrashed(): static
+    {
+        $this->trashed = null;
+
+        return $this;
+    }
+
+    /**
      * Weight of this search's hits within a federated search; 1 by default.
      */
     public function weight(float $weight): static
@@ -444,6 +469,10 @@ class Builder
 
         $model = $this->index->model;
         $query = $model->newQuery()->whereIn($model->qualifyColumn($model->getScoutKeyName()), array_map(static fn (Hit $hit): int|string => $hit->key, $hits));
+
+        if ($this->index->softDeletes && $this->trashed !== false) {
+            $this->trashed ? $query->withTrashed() : $query->onlyTrashed();
+        }
 
         if ($this->with !== []) {
             $query->with($this->with);

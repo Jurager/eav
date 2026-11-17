@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Registry;
 
+use Jurager\Eav\Scopes\ActiveLocaleScope;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Models\AttributeEnum;
@@ -99,7 +100,8 @@ class EnumRegistry
         self::$byAttribute[$attributeId] = Eav::$attributeEnumModel::query()
             ->ordered()
             ->where('attribute_id', $attributeId)
-            ->with('translations')
+            // Held across requests, so in every locale: the active one differs from request to request.
+            ->with(['translations' => static fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class)])
             ->get();
     }
 }

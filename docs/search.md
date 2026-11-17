@@ -97,7 +97,7 @@ Attribute values are nested under `attributes`. A localizable value is keyed by 
 }
 ```
 
-Dates are indexed as Unix timestamps.
+Dates are indexed as Unix timestamps. Every locale is indexed, whichever one the request runs in.
 
 ## Searching
 
@@ -116,7 +116,7 @@ $results = Search::for(Product::class)
 
 `Search::for()` accepts a model, its class, or its morph alias. Refer to a field by its path, an alias, or the attribute code. The labels of a select are the field `labels.{code}`.
 
-`paginate()` returns a `LengthAwarePaginator` of models in ranking order, with an exact total:
+`paginate()` returns a `LengthAwarePaginator` of models in ranking order. The total is exact up to Meilisearch's `pagination.maxTotalHits`, which is 1000 by default. Raise it in `eav.search.settings` to page deeper:
 
 ```php
 $results->items();   // models
@@ -142,6 +142,10 @@ Search::for(Product::class)
     ->loadUsing(fn ($query) => $query->where('published', true))
     ->paginate();
 ```
+
+### Trashed entities
+
+When Scout keeps soft-deleted models in the index (`scout.soft_delete`), they are left out of the results. Use `withTrashed()` to include them, or `onlyTrashed()` to search them alone.
 
 ### Locales
 
@@ -264,6 +268,8 @@ foreach ($results->hits() as $hit) {
 ```
 
 Each search keeps its own filters, locale, and facets. Facets are keyed by entity type, then by name. The total is Meilisearch's estimate.
+
+Federated searches must agree on sorting: sort all of them by the same fields, or none.
 
 ## Index settings
 

@@ -132,7 +132,7 @@ $facets = $products->facets();
 
 `filter()` now adds to the conditions already set instead of replacing them.
 
-The total is exact. It was an estimate capped at 1000.
+The total is exact up to Meilisearch's `pagination.maxTotalHits` (1000 by default). It was an estimate.
 
 ### 4. Update code that reads facets
 
@@ -164,6 +164,8 @@ Check the filters and sorts your clients send. To keep `like`, set `eav.search.c
 Date filters now work with date strings. Dates are indexed as timestamps, and the old compiler dropped date conditions that were not numeric.
 
 Sort resolvers of `jurager/filterable` are no longer consulted for search. Sorting uses the index definition.
+
+Trashed entities are left out of the results when `scout.soft_delete` is on. Use `withTrashed()` to include them.
 
 ### 6. Opt in to relation filters
 

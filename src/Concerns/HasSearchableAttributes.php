@@ -7,6 +7,7 @@ namespace Jurager\Eav\Concerns;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Scopes\ActiveLocaleScope;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
@@ -67,14 +68,16 @@ trait HasSearchableAttributes
     }
 
     /**
-     * Eager load everything the index document is built from, for the whole batch at once.
+     * Load everything the index document is built from, for the whole batch at once.
+     *
+     * Loaded anew: relations already on the models may hold the active locale's translations only.
      *
      * @param  Collection<int, static>  $models
      * @return Collection<int, static>
      */
     public function makeSearchableUsing(Collection $models): Collection
     {
-        return $models->loadMissing($this->indexRelations());
+        return $models->load($this->indexRelations());
     }
 
     /**
@@ -89,21 +92,24 @@ trait HasSearchableAttributes
     }
 
     /**
-     * Attribute value relations, plus the relations declared fields are read from.
+     * Attribute values in every locale, plus the relations declared fields are read from.
      *
-     * @return list<string>
+     * @return array<int|string, mixed>
      */
     private function indexRelations(): array
     {
+        // The index holds every locale, whichever one the request runs in.
+        $everyLocale = static fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class);
+
         $relations = [
-            'attribute_values.attribute.enums.translations',
-            'attribute_values.translations',
+            'attribute_values.attribute.enums.translations' => $everyLocale,
+            'attribute_values.translations' => $everyLocale,
             ...app(IndexFactory::class)->for($this)->relations(),
         ];
 
         if (($parent = $this->attributeParentRelationName()) !== null) {
-            $relations[] = "{$parent}.attribute_values.attribute.enums.translations";
-            $relations[] = "{$parent}.attribute_values.translations";
+            $relations["{$parent}.attribute_values.attribute.enums.translations"] = $everyLocale;
+            $relations["{$parent}.attribute_values.translations"] = $everyLocale;
 
             if (($scope = $this->attributeScopeRelationName()) !== null) {
                 $relations[] = "{$parent}.{$scope}";

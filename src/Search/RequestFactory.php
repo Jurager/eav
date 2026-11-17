@@ -135,6 +135,10 @@ class RequestFactory
             $filters[] = $condition === null || $side ? $condition : "NOT ({$condition})";
         }
 
+        if ($builder->index->softDeletes && $builder->trashed !== true) {
+            $filters[] = Settings::SOFT_DELETED.' = '.($builder->trashed === null ? 1 : 0);
+        }
+
         $filters = array_filter($filters);
 
         return $filters === [] ? null : implode(' AND ', array_map(static fn (string $filter): string => "({$filter})", $filters));
