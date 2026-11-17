@@ -3,9 +3,11 @@ title: Upgrade guide
 weight: 95
 ---
 
-## Upgrading to the new search
+## Upgrading to 1.0.5 from 1.0.3 or earlier
 
 Search was rebuilt around one index definition per model. The public search API changed, and the search document has a new shape, so indexes must be rebuilt.
+
+These are breaking changes released in 1.0.4 and 1.0.5. A `^1.0` constraint installs them on `composer update`, so follow this guide before updating a project. If a project already runs 1.0.4, also read [Upgrading to 1.0.5 from 1.0.4](#upgrading-to-105-from-104).
 
 Estimated time: 30 minutes, plus the time to reindex.
 
@@ -13,6 +15,10 @@ Estimated time: 30 minutes, plus the time to reindex.
 
 - `laravel/scout` and `meilisearch/meilisearch-php` 1.16 or higher
 - Meilisearch 1.10 or higher for federated search
+
+### Before you deploy
+
+Let the queue drain, or deploy with the workers stopped. Queued jobs are stored by class name, and `Jobs\SyncSearchable` no longer exists: a job queued by the old version fails when the new one picks it up. The reindex in the last step makes up for any index update lost this way.
 
 ### 1. Run the migration
 
@@ -31,6 +37,8 @@ php artisan vendor:publish --tag=eav-migrations
 Attribute types that are `filterable` become `sortable` too. Enable the flag on other types that should allow it.
 
 Set `sortable` on the attributes you sort search results by. Attribute paths previously listed in `indexFields()` with `IndexCapability::Sort` are the ones to flag.
+
+`Field::toMetadata()` now includes a `sortable` key, so API responses built from it gain one.
 
 ### 2. Update searchable models
 
@@ -156,10 +164,11 @@ Requests that were silently relaxed now fail with a 422 (`InvalidSearchQueryExce
 
 - a filter on a field that is not in the index or not filterable
 - an operator the engine cannot answer: `like` and `tree`
+- a range operator (`gt`, `gte`, `lt`, `lte`, `between`, `not_between`) on a field that is not a number or a date, such as a select
 - a value that does not fit the field's type
-- a sort by a field that is not sortable
+- a sort by a field that is not sortable; an unknown sort field was ignored before
 
-Check the filters and sorts your clients send. To keep `like`, set `eav.search.engines.meilisearch.contains` to `true` and enable the `containsFilter` experimental feature in Meilisearch.
+The exception is thrown when the filter or sort is added to the builder, not when the search runs. Check the filters and sorts your clients send. To keep `like`, set `eav.search.engines.meilisearch.contains` to `true` and enable the `containsFilter` experimental feature in Meilisearch.
 
 Date filters now work with date strings. Dates are indexed as timestamps, and the old compiler dropped date conditions that were not numeric.
 
@@ -167,7 +176,21 @@ Sort resolvers of `jurager/filterable` are no longer consulted for search. Sorti
 
 Trashed entities are left out of the results when `scout.soft_delete` is on. Use `withTrashed()` to include them.
 
-### 6. Opt in to relation filters
+### 6. Read option labels by locale
+
+The registry of select options now holds their labels in every locale. It used to hold only the locale active when it was first loaded, which gave the wrong labels in long-running workers.
+
+Code that relied on that, such as taking the first translation of an option, must ask for a locale:
+
+```php
+// Before
+$enum->translations->first()?->pivot->label;
+
+// After
+$enum->label($localeId);
+```
+
+### 7. Opt in to relation filters
 
 Filtering by an attribute of a related entity, such as `category.color`, is off by default. To keep it, add the resolver to `config/eav.php`:
 
@@ -183,13 +206,13 @@ For a belongs-to relation the resolver now filters by the foreign key itself (`c
 
 The `eav.search.resolvers` container tag is no longer used.
 
-### 7. Move index settings
+### 8. Move index settings
 
-Publish the configuration again, or add the `search` section from [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php).
+Publish the configuration again, or add the `search` section from [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php). Searches run on the engine named by `eav.search.driver`, `meilisearch` by default.
 
 Settings in `scout.meilisearch.index-settings` are still read. You can remove `filterableAttributes`, `sortableAttributes`, and `searchableAttributes` from there: they are derived from `searchIndex()` and the attribute flags. Move typo tolerance, synonyms, stop words, and ranking rules to `eav.search.engines.meilisearch.settings` or `eav.search.engines.meilisearch.indexes.{entity type}`.
 
-### 8. Update custom fields
+### 9. Update custom fields
 
 | Removed                       | Replacement                                             |
 |-------------------------------|---------------------------------------------------------|
@@ -200,7 +223,7 @@ Settings in `scout.meilisearch.index-settings` are still read. You can remove `f
 
 Most fields only need `indexType()` and `toIndex()`. The document is built from `indexFields()`, so a field no longer returns its index data separately.
 
-### 9. Update other references
+### 10. Update other references
 
 | Removed                                   | Replacement                                    |
 |-------------------------------------------|------------------------------------------------|
@@ -214,7 +237,7 @@ Most fields only need `indexType()` and `toIndex()`. The document is built from 
 | `Enums\IndexCapability`                   | `->filterable()` and `->sortable()` on fields  |
 | `SearchNotAvailableException::scoutNotInstalled()`, `meilisearchNotInstalled()` | `notInstalled()`, `notSearchable()` |
 
-### 10. Update renamed classes
+### 11. Update renamed classes
 
 Classes outside search were moved to follow Laravel's layout. Update your imports:
 
@@ -231,7 +254,7 @@ Classes outside search were moved to follow Laravel's layout. Update your import
 
 The `eav:clear` command keeps its name.
 
-### 11. Rebuild the indexes
+### 12. Rebuild the indexes
 
 The document changed: localizable values are keyed by locale code (`attributes.title.en`), and select labels moved from `attributes.{code}_label` to `labels.{code}`, stored per locale. Old documents do not match the new settings.
 
@@ -244,3 +267,56 @@ php artisan eav:reindex product --flush
 The command syncs the index settings and reindexes every entity. Run a queue worker if Scout queues indexing. Search returns partial results until the reindex finishes, so run it in a maintenance window or against a new index prefix (`SCOUT_PREFIX`).
 
 After deploying, `eav:sync-index-settings` is enough when only the configuration or `searchIndex()` changed.
+
+Two things change how the index behaves from here on:
+
+- An entity without indexed attribute values is indexed too, so an index may hold more documents than before.
+- A search that finds a document whose entity no longer exists removes it from the index. Set `eav.search.prune` to `false` to turn this off.
+
+## Upgrading to 1.0.5 from 1.0.4
+
+1.0.5 made the search engine a driver. If a project already runs 1.0.4, apply these changes on top.
+
+### Configuration
+
+Meilisearch options moved under the engine:
+
+| 1.0.4                               | 1.0.5                                                 |
+|-------------------------------------|-------------------------------------------------------|
+| `eav.search.settings`               | `eav.search.engines.meilisearch.settings`             |
+| `eav.search.indexes.{entity type}`  | `eav.search.engines.meilisearch.indexes.{entity type}` |
+| `eav.search.locales`                | `eav.search.engines.meilisearch.locales`              |
+| `eav.search.contains`               | `eav.search.engines.meilisearch.contains`             |
+
+### Federated search
+
+`Search::federated()` takes one search per entity type and throws for two searches over one type. To rank some hits of a type higher, use `boost()` on its search.
+
+### Tests
+
+`Search::fake()` now replaces the engine instead of recording Meilisearch requests:
+
+```php
+// 1.0.4
+$engine = Search::fake();
+$engine->respond('products', [['id' => $product->id]]);
+$engine->assertSearched(fn (array $request) => $request['q'] === 'shoes');
+
+// 1.0.5
+$search = Search::fake();
+$search->respond('product', [$product->id]);
+$search->assertSearched(fn (Builder $search) => $search->query === 'shoes');
+```
+
+`respond()` takes the entity type instead of the index name.
+
+### Renamed classes
+
+| 1.0.4                                        | 1.0.5                                                    |
+|----------------------------------------------|----------------------------------------------------------|
+| `Search\Engine`                              | `Search\Engines\MeilisearchEngine`, behind `Contracts\Search\Engine` |
+| `Search\RequestFactory`, `Search\FilterCompiler` | `Search\Engines\Meilisearch\*`                      |
+| `Search\Index\Settings`                      | `Search\Engines\Meilisearch\Settings`                   |
+| `Contracts\Search\Transport`, `Search\Transport\*` | Removed                                             |
+
+`Builder::$filters` and `Builder::$orders` hold checked conditions and index fields instead of raw request data.
