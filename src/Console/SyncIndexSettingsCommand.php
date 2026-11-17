@@ -24,7 +24,7 @@ class SyncIndexSettingsCommand extends Command
         foreach ($types as $type) {
             $configurator->configure($type)
                 ? $this->components->info("Search index settings synced for [{$type}].")
-                : $this->components->warn("[{$type}] is not searchable.");
+                : $this->components->warn("Nothing to sync for [{$type}]: it is not searchable, or the engine keeps no index settings.");
         }
 
         if ($types === []) {

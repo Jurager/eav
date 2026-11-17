@@ -2,14 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search;
+namespace Jurager\Eav\Search\Engines\Meilisearch;
 
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Jurager\Eav\Search\Builder;
+use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
-use Jurager\Eav\Search\Index\Settings;
 
 /**
- * Turn a search builder into an engine request.
+ * Turn a search builder into a Meilisearch search request.
  */
 class RequestFactory
 {
@@ -57,6 +58,14 @@ class RequestFactory
             $request['attributesToHighlight'] = $builder->highlight === []
                 ? ($request['attributesToSearchOn'] ?? ['*'])
                 : array_map(static fn (string $name): string => $builder->path($builder->field($name)), $builder->highlight);
+        }
+
+        if ($builder->matching !== null) {
+            $request['matchingStrategy'] = $builder->matching;
+        }
+
+        if ($builder->threshold !== null) {
+            $request['rankingScoreThreshold'] = $builder->threshold;
         }
 
         return [...$request, ...$builder->options];
@@ -135,7 +144,7 @@ class RequestFactory
         }
 
         if ($builder->index->softDeletes && $builder->trashed !== true) {
-            $filters[] = Settings::SOFT_DELETED.' = '.($builder->trashed === null ? 1 : 0);
+            $filters[] = Index::SOFT_DELETED.' = '.($builder->trashed === null ? 1 : 0);
         }
 
         $filters = array_filter($filters);

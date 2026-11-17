@@ -113,4 +113,4 @@ $color = $product->eav()->value('color'); // "blue"
 
 Continue with [reading and writing attributes](attributes.md), or [define more attributes](schema.md).
 
-Package settings are documented in [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php). Search setup is covered in [searching with Meilisearch](search.md).
+Package settings are documented in [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php). Search setup is covered in [searching entities](search.md).

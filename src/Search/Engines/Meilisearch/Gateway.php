@@ -2,9 +2,8 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Transport;
+namespace Jurager\Eav\Search\Engines\Meilisearch;
 
-use Jurager\Eav\Contracts\Search\Transport;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Meilisearch\Client;
 use Meilisearch\Contracts\FacetSearchQuery;
@@ -13,12 +12,21 @@ use Meilisearch\Contracts\SearchQuery;
 use Meilisearch\Exceptions\ApiException;
 
 /**
- * Talks to Meilisearch through the client Scout is configured with.
+ * Talks to Meilisearch through the client Scout is configured with, in plain request and response arrays.
  */
-class MeilisearchTransport implements Transport
+class Gateway
 {
     public function __construct(private readonly Client $client) {}
 
+    /**
+     * Run several searches in one round trip, merged into one result list when a federation is given.
+     *
+     * @param  list<array<string, mixed>>  $queries
+     * @param  array<string, mixed>|null  $federation
+     * @return array<string, mixed>
+     *
+     * @throws InvalidSearchQueryException When Meilisearch rejects a request.
+     */
     public function multiSearch(array $queries, ?array $federation = null): array
     {
         $queries = array_map(static fn (array $payload): SearchQuery => new class($payload) extends SearchQuery
@@ -44,6 +52,14 @@ class MeilisearchTransport implements Transport
         return $this->send(fn (): array => $this->client->multiSearch($queries, $federation));
     }
 
+    /**
+     * Search the values of one facet.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     *
+     * @throws InvalidSearchQueryException When Meilisearch rejects the request.
+     */
     public function facetSearch(string $index, array $query): array
     {
         $query = new class($query) extends FacetSearchQuery
@@ -59,6 +75,11 @@ class MeilisearchTransport implements Transport
         return $this->send(fn (): array => $this->client->index($index)->facetSearch($query)->toArray());
     }
 
+    /**
+     * Update the settings of an index.
+     *
+     * @param  array<string, mixed>  $settings
+     */
     public function updateSettings(string $index, array $settings): void
     {
         $this->client->index($index)->updateSettings($settings);

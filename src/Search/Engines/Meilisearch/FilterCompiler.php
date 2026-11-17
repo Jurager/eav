@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search;
+namespace Jurager\Eav\Search\Engines\Meilisearch;
 
 use Illuminate\Contracts\Config\Repository;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
@@ -12,7 +12,7 @@ use Jurager\Filterable\Support\FilterOperator;
 use Jurager\Filterable\Support\ParsedFilters;
 
 /**
- * Compile parsed filters into an engine filter expression.
+ * Compile parsed filters into a Meilisearch filter expression.
  *
  * Only fields the index declares filterable may appear, and every value is cast to the field's type —
  * a condition is never dropped or passed through unchecked.
@@ -168,7 +168,7 @@ class FilterCompiler
      */
     private function contains(string $name, string $path, mixed $value): string
     {
-        if (! $this->config->get('eav.search.contains', false)) {
+        if (! $this->config->get('eav.search.engines.meilisearch.contains', false)) {
             throw InvalidSearchQueryException::unsupportedOperator($name, 'like');
         }
 

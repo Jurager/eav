@@ -9,7 +9,9 @@ use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Pagination\Paginator;
+use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Contracts\Search\FilterResolver;
+use Jurager\Eav\Contracts\Search\SearchesFacetValues;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\Indexer;
@@ -62,6 +64,16 @@ class Builder
 
     public bool $partitionFirst = true;
 
+    /**
+     * How query words must match, in the engine's terms; its default when null.
+     */
+    public ?string $matching = null;
+
+    /**
+     * Relevance, between 0 and 1, below which hits are dropped.
+     */
+    public ?float $threshold = null;
+
     /** @var array<string, mixed> Engine parameters passed through as they are. */
     public array $options = [];
 
@@ -79,6 +91,7 @@ class Builder
         private readonly Engine $engine,
         public readonly Index $index,
         private readonly Indexer $indexer,
+        private readonly FacetFormatter $formatter,
         private readonly iterable $resolvers = [],
         array $locales = [],
     ) {
@@ -253,19 +266,23 @@ class Builder
     }
 
     /**
-     * How query words must match: `last` (default), `all`, or `frequency`.
+     * How query words must match, as the engine names it — `last`, `all` or `frequency` with Meilisearch.
      */
     public function matching(string $strategy): static
     {
-        return $this->options(['matchingStrategy' => $strategy]);
+        $this->matching = $strategy;
+
+        return $this;
     }
 
     /**
-     * Drop hits whose ranking score is below the threshold, between 0 and 1.
+     * Drop hits whose relevance is below the threshold, between 0 and 1.
      */
     public function threshold(float $score): static
     {
-        return $this->options(['rankingScoreThreshold' => $score]);
+        $this->threshold = $score;
+
+        return $this;
     }
 
     /**
@@ -309,7 +326,7 @@ class Builder
     }
 
     /**
-     * Pass engine search parameters through as they are, e.g. `['hybrid' => [...]]`.
+     * Pass search parameters of the engine in use through as they are, e.g. `['hybrid' => [...]]` with Meilisearch.
      *
      * @param  array<string, mixed>  $options
      */
@@ -350,7 +367,7 @@ class Builder
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
         $found = $this->engine->search($this, $perPage, $page);
 
-        return Results::make($this->load($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
+        return Results::make($this->load($found->hits), $this->formatter->format($this, $found->facets), $found->total, $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
             'pageName' => $pageName,
         ]);
@@ -378,7 +395,7 @@ class Builder
      */
     public function keys(int $limit = 20): array
     {
-        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this->withoutFacets(), $limit, 1)['hits']);
+        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this->withoutFacets(), $limit, 1)->hits);
     }
 
     /**
@@ -386,7 +403,7 @@ class Builder
      */
     public function count(): int
     {
-        return $this->engine->search($this->withoutFacets(), 0, 1)['total'];
+        return $this->engine->search($this->withoutFacets(), 0, 1)->total;
     }
 
     /**
@@ -396,7 +413,31 @@ class Builder
      */
     public function facetValues(string $facet, ?string $query = null): array
     {
-        return $this->engine->facetValues($this, $facet, $query);
+        $field = $this->filterable($facet);
+
+        if ($this->engine instanceof SearchesFacetValues) {
+            return $this->formatter->terms($this, $field, $this->engine->facetValues($this, $field, $query));
+        }
+
+        // The engine cannot search a facet: match the values a regular search returns for it.
+        $search = $this->withoutFacets()->facets($facet);
+        $values = $this->engine->search($search, 0, 1)->facets[$facet] ?? [];
+
+        if ($query !== null && $query !== '') {
+            $values = array_filter($values, static fn (int|string $value): bool => mb_stripos((string) $value, $query) !== false, ARRAY_FILTER_USE_KEY);
+        }
+
+        return $this->formatter->terms($this, $field, $values);
+    }
+
+    /**
+     * Run the search for a federated search, which merges and loads the hits itself.
+     *
+     * @internal
+     */
+    public function run(int $limit): Response
+    {
+        return $this->engine->search($this, $limit, 1);
     }
 
     /**

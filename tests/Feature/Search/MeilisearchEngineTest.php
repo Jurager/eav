@@ -13,7 +13,7 @@ use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\RemoveFromSearch;
 
-class BuilderTest extends SearchTestCase
+class MeilisearchEngineTest extends SearchTestCase
 {
     private const string PRODUCTS = 'eav_test_products';
 

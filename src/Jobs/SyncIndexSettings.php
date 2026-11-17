@@ -10,7 +10,7 @@ use Illuminate\Foundation\Queue\Queueable;
 use Jurager\Eav\Search\Index\Configurator;
 
 /**
- * Push the settings of an entity type's search index to the engine.
+ * Bring the engine's settings of an entity type's search index in line with its definition.
  */
 class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
 {

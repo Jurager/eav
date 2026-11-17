@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature\Search;
 
 use Illuminate\Support\Facades\Queue;
-use Jurager\Eav\Contracts\Search\Transport;
+use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\ReindexEntities;
@@ -50,8 +50,8 @@ class MeilisearchTest extends SearchTestCase
 
         parent::setUp();
 
-        // Talk to the real engine instead of the fake the other search tests use.
-        $this->app->forgetInstance(Transport::class);
+        // Talk to the real server instead of the recording the other search tests use.
+        $this->app->forgetInstance(Gateway::class);
         $this->client = $this->app->make(Client::class);
 
         $this->dropIndexes();

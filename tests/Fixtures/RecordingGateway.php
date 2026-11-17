@@ -2,16 +2,18 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Transport;
+namespace Jurager\Eav\Tests\Fixtures;
 
-use Jurager\Eav\Contracts\Search\Transport;
+use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
 use PHPUnit\Framework\Assert;
 
 /**
- * Records search requests instead of sending them, and answers with prepared hits.
+ * Stands in for Meilisearch: records the requests the engine sends and answers with prepared hits.
  */
-class FakeTransport implements Transport
+class RecordingGateway extends Gateway
 {
+    public function __construct() {}
+
     /** @var list<array{queries: list<array<string, mixed>>, federation: array<string, mixed>|null}> */
     public array $searches = [];
 

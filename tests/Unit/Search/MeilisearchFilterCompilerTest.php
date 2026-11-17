@@ -6,12 +6,12 @@ namespace Jurager\Eav\Tests\Unit\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\FilterCompiler;
+use Jurager\Eav\Search\Engines\Meilisearch\FilterCompiler;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Tests\TestCase;
 use Jurager\Filterable\Parsing\FilterParser;
 
-class FilterCompilerTest extends TestCase
+class MeilisearchFilterCompilerTest extends TestCase
 {
     private Index $index;
 
@@ -160,7 +160,7 @@ class FilterCompilerTest extends TestCase
 
     public function test_like_compiles_to_contains_when_enabled(): void
     {
-        config(['eav.search.contains' => true]);
+        config(['eav.search.engines.meilisearch.contains' => true]);
 
         $this->assertSame('brand CONTAINS "nik"', $this->compile(['brand' => ['like' => '%nik%']]));
         $this->assertSame('(brand CONTAINS "nik" OR brand CONTAINS "pum")', $this->compile(['brand' => ['like' => ['nik', 'pum']]]));

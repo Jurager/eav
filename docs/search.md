@@ -1,17 +1,17 @@
 ---
-title: Searching with Meilisearch
+title: Searching entities
 weight: 83
 ---
 
-The package indexes attribute values with [Laravel Scout](https://laravel.com/docs/scout) and searches them with [Meilisearch](https://www.meilisearch.com): full-text search with typo tolerance, per-locale search, filters, facets, sorting, and federated search across entity types.
+The package indexes attribute values with [Laravel Scout](https://laravel.com/docs/scout) and searches them through a search engine: full-text search with typo tolerance, per-locale search, filters, facets, sorting, and federated search across entity types.
 
-Install Scout and the Meilisearch client, and set Scout's driver to `meilisearch`:
+[Meilisearch](https://www.meilisearch.com) is the built-in engine. Install Scout and the Meilisearch client, and set Scout's driver to `meilisearch`:
 
 ```bash
 composer require laravel/scout meilisearch/meilisearch-php
 ```
 
-Federated search requires Meilisearch 1.10 or higher.
+Native federated search requires Meilisearch 1.10 or higher. You can also [add your own engine](#search-engines).
 
 ## Making a model searchable
 
@@ -116,7 +116,7 @@ $results = Search::for(Product::class)
 
 `Search::for()` accepts a model, its class, or its morph alias. Refer to a field by its path, an alias, or the attribute code. The labels of a select are the field `labels.{code}`.
 
-`paginate()` returns a `LengthAwarePaginator` of models in ranking order. The total is exact up to Meilisearch's `pagination.maxTotalHits`, which is 1000 by default. Raise it in `eav.search.settings` to page deeper:
+`paginate()` returns a `LengthAwarePaginator` of models in ranking order. The total is exact up to Meilisearch's `pagination.maxTotalHits`, which is 1000 by default. Raise it in the [index settings](#index-settings) to page deeper:
 
 ```php
 $results->items();   // models
@@ -161,7 +161,7 @@ Search::for(Product::class)->query('shoes')->locale('en', 'ru')->paginate();
 
 Filters, sorts, and facets on a localizable field use the first locale.
 
-A locale's language is the first two letters of its code. Map other codes in `eav.search.locales`. Searching in a locale that does not exist throws `InvalidSearchQueryException`.
+A locale's language is the first two letters of its code. Map other codes in `eav.search.engines.meilisearch.locales`. Searching in a locale that does not exist throws `InvalidSearchQueryException`.
 
 Adding a locale syncs the index settings. Removing a locale or changing its code also rebuilds the documents that hold localized values, so no value stays indexed under a locale that is gone.
 
@@ -184,7 +184,7 @@ Values are cast to the field's type, so dates can be sent as date strings and bo
 
 Filters are strict. A field that is not filterable, an unsupported operator, or a value that does not fit the field's type throws `InvalidSearchQueryException`, which renders as a 422. A condition is never dropped silently.
 
-The `like` operator is rejected unless you set `eav.search.contains` to `true`. It compiles to Meilisearch's `CONTAINS` operator, an experimental feature you must enable on the server.
+The `like` operator is rejected unless you set `eav.search.engines.meilisearch.contains` to `true`. It compiles to Meilisearch's `CONTAINS` operator, an experimental feature you must enable on the server.
 
 ### Sorting
 
@@ -269,25 +269,29 @@ foreach ($results->hits() as $hit) {
 }
 ```
 
-Each search keeps its own filters, locale, and facets. Facets are keyed by entity type, then by name. The total is Meilisearch's estimate.
+Each search keeps its own filters, locale, and facets. Facets are keyed by entity type, then by name. The total is an estimate.
 
-Federated searches must agree on sorting: sort all of them by the same fields, or none.
+With Meilisearch, federated searches must agree on sorting: sort all of them by the same fields, or none.
 
 ## Index settings
 
-Searchable, filterable, and sortable fields, localized fields, and the distinct field are derived from the index definition. Typo tolerance is turned off for searchable fields that are not text, such as numbers.
+With Meilisearch, searchable, filterable, and sortable fields, localized fields, and the distinct field are derived from the index definition. Typo tolerance is turned off for searchable fields that are not text, such as numbers.
 
 Set anything else in `config/eav.php`, for all indexes or for one entity type:
 
 ```php
 'search' => [
-    'settings' => [
-        'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
-        'stopWords' => ['the', 'a'],
-        'pagination' => ['maxTotalHits' => 10000],
-    ],
-    'indexes' => [
-        'product' => ['synonyms' => ['sneakers' => ['trainers']]],
+    'engines' => [
+        'meilisearch' => [
+            'settings' => [
+                'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
+                'stopWords' => ['the', 'a'],
+                'pagination' => ['maxTotalHits' => 10000],
+            ],
+            'indexes' => [
+                'product' => ['synonyms' => ['sneakers' => ['trainers']]],
+            ],
+        ],
     ],
 ],
 ```
@@ -360,15 +364,60 @@ public function indexFields(): array
 
 Override `facetLabels()` to label facet values.
 
-## Testing
+## Search engines
 
-`Search::fake()` records requests instead of sending them, and answers with the hits you prepare:
+Searches run on the engine named by `eav.search.driver`, `meilisearch` by default. Indexing always goes through Scout, so your engine searches the index Scout's driver writes to.
+
+To add an engine, implement `Jurager\Eav\Contracts\Search\Engine` and register it, usually in a service provider:
 
 ```php
-$engine = Search::fake();
-$engine->respond('products', [['id' => $product->id]], total: 1);
+use Jurager\Eav\Contracts\Search\Engine;
+use Jurager\Eav\Facades\Search;
+use Jurager\Eav\Search\Builder;
+use Jurager\Eav\Search\Hit;
+use Jurager\Eav\Search\Response;
+
+class TypesenseEngine implements Engine
+{
+    public function search(Builder $search, int $perPage, int $page): Response
+    {
+        // Translate $search->query, $search->filters, $search->orders, $search->facets ...
+        // into a request, then return the hits, the total, and the facets.
+
+        return new Response($hits, $total, $facets);
+    }
+}
+
+Search::extend('typesense', fn ($app) => new TypesenseEngine($app->make(Client::class)));
+```
+
+Then set `EAV_SEARCH_DRIVER=typesense`.
+
+The builder gives the engine names already checked against the index definition: use `$search->field($name)` and `$search->path($field)` to turn them into document paths. Return each facet keyed by the name it was asked for, as a map of value to count, or as `min` and `max` for a numeric or date field. The package adds labels and loads the models.
+
+An engine may implement more contracts for what it can do natively. Without them the package falls back:
+
+| Contract               | Native                                  | Fallback                                                      |
+|------------------------|-----------------------------------------|---------------------------------------------------------------|
+| `FederatesSearches`    | One request merging several searches    | Each search runs alone; hits are ranked by score times weight |
+| `SearchesFacetValues`  | Searching the values of a facet         | The facet's values from a regular search, matched by substring |
+| `UpdatesIndexSettings` | Syncing index settings from the definition | Nothing is synced                                          |
+
+Federated search therefore works on any engine. The fallback asks each search for a whole page, so prefer a native implementation where the engine has one.
+
+## Testing
+
+`Search::fake()` answers searches with the hits you prepare instead of asking an engine, and records them:
+
+```php
+use Jurager\Eav\Search\Builder;
+
+$search = Search::fake();
+$search->respond('product', [$product->id], total: 1);
 
 $this->get('/products?q=shoes')->assertOk();
 
-$engine->assertSearched(fn (array $request) => $request['q'] === 'shoes');
+$search->assertSearched(fn (Builder $search) => $search->query === 'shoes');
 ```
+
+`respond()` takes the entity type, then keys or documents with an `id`. Pass `facets` to answer with facet data.

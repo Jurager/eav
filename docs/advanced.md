@@ -27,7 +27,7 @@ Choose which attributes an entity can use through a [related model](inheritance.
 
 ## Search
 
-[Search entities with Meilisearch](search.md): full-text search per locale, filters, facets, and federated search. Search documents update automatically after values are saved.
+[Search entities](search.md): full-text search per locale, filters, facets, and federated search. Search documents update automatically after values are saved.
 
 ### Deleting attributes permanently
 
