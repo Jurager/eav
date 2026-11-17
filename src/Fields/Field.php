@@ -164,7 +164,7 @@ abstract class Field
         if (! $this->isLocalizable()) {
             $value = $this->values[self::UNLOCALIZED] ?? null;
 
-            return array_map(static fn (mixed $item): array => ['value' => $item, 'translations' => []], is_array($value) ? $value : [$value]);
+            return array_map(static fn (mixed $item): array => ['value' => $item, 'translations' => []], $this->isMultiple() && is_array($value) ? $value : [$value]);
         }
 
         $lists = array_map(static fn (mixed $value): array => is_array($value) ? array_values($value) : [$value], $this->values);
