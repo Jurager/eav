@@ -7,6 +7,7 @@ namespace Jurager\Eav\Search\Index;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Jurager\Eav\Contracts\Attributable;
+use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Registry\AttributeRegistry;
@@ -54,7 +55,7 @@ class IndexFactory
 
         if ($attributes !== null) {
             foreach ($attributes->sortBy(['sort', 'id']) as $attribute) {
-                if (! $attribute->searchable && ! $attribute->filterable && ! $attribute->sortable) {
+                if (! Synchronizer::indexed($attribute)) {
                     continue;
                 }
 
@@ -82,6 +83,21 @@ class IndexFactory
         }
 
         return $entity !== null && self::searchable($entity) ? $entity : null;
+    }
+
+    /**
+     * Entity types with a search index: searchable models in the morph map, and those holding attributes.
+     *
+     * @return list<string>
+     */
+    public function entityTypes(): array
+    {
+        $types = [
+            ...array_keys(Relation::morphMap()),
+            ...Eav::$attributeEntityTypeModel::query()->distinct()->pluck('entity_type')->all(),
+        ];
+
+        return array_values(array_filter(array_unique($types), fn (string $type): bool => $this->model($type) !== null));
     }
 
     /**

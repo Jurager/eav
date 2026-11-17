@@ -40,7 +40,7 @@ class BuilderTest extends SearchTestCase
 
         $this->assertSame(self::PRODUCTS, $request['indexUid']);
         $this->assertSame('shoes', $request['q']);
-        $this->assertSame(['name', 'attributes.title.en', 'attributes.sku', 'attributes.color_label.en'], $request['attributesToSearchOn']);
+        $this->assertSame(['name', 'attributes.title.en', 'attributes.sku', 'labels.color.en'], $request['attributesToSearchOn']);
         $this->assertSame(['en'], $request['locales']);
         $this->assertSame(15, $request['hitsPerPage']);
         $this->assertSame(1, $request['page']);
@@ -184,8 +184,9 @@ class BuilderTest extends SearchTestCase
         $this->assertTrue($search->get()->first()->is($product));
         $this->assertTrue($search->first()->is($product));
         $this->assertSame([$product->id], $search->keys());
-        $this->assertSame(7, $search->count());
+        $this->assertSame(7, $search->facets('color')->count());
         $this->assertSame(0, $this->request(3)['hitsPerPage']);
+        $this->assertArrayNotHasKey('facets', $this->request(3));
     }
 
     public function test_hydration_can_be_customised(): void
@@ -195,7 +196,7 @@ class BuilderTest extends SearchTestCase
 
         $results = Search::for(SearchableProduct::class)
             ->with('parent')
-            ->hydrate(fn ($query) => $query->where('name', 'Other'))
+            ->loadUsing(fn ($query) => $query->where('name', 'Other'))
             ->paginate();
 
         $this->assertCount(0, $results->items());
@@ -327,6 +328,15 @@ class BuilderTest extends SearchTestCase
         Search::for(SearchableProduct::class)->filter(['parent' => ['sku' => 'AB']])->paginate();
 
         $this->assertSame("(parent_id IN [{$parent->id}])", $this->request()['filter']);
+    }
+
+    public function test_a_relation_filter_matching_nothing_matches_no_entity(): void
+    {
+        config(['eav.search.resolvers' => [AttributeRelationFilterResolver::class]]);
+
+        Search::for(SearchableProduct::class)->filter(['parent' => ['sku' => 'none']])->paginate();
+
+        $this->assertSame('(parent_id IN [])', $this->request()['filter']);
     }
 
     public function test_the_relation_resolver_refuses_too_many_matches(): void

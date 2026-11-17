@@ -59,8 +59,6 @@ class AttributeRelationFilterResolver implements FilterResolver
             throw InvalidSearchQueryException::tooManyMatches($name, $limit);
         }
 
-        // If no results found, return '0' to ensure an empty result set
-        $idString = empty($ids) ? '0' : implode(',', $ids);
         $foreignKey = $this->foreignKey($instance, $relation);
 
         // A belongs-to key is a column of the entity itself; other relations are indexed under the relation's name.
@@ -68,7 +66,7 @@ class AttributeRelationFilterResolver implements FilterResolver
 
         return [
             $resolvedKey,
-            [FilterOperator::In->value => $idString],
+            [FilterOperator::In->value => $ids],
         ];
     }
 

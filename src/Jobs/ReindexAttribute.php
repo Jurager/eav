@@ -26,8 +26,8 @@ class ReindexAttribute implements ShouldBeUnique, ShouldQueue
         return "{$this->entityType}:{$this->attributeId}";
     }
 
-    public function handle(): void
+    public function handle(Indexer $indexer): void
     {
-        Indexer::for($this->entityType)->attribute($this->attributeId);
+        $indexer->attribute($this->entityType, $this->attributeId);
     }
 }

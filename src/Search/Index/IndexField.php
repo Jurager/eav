@@ -32,7 +32,11 @@ class IndexField
      */
     public ?Attribute $attribute = null;
 
-    /** @var (Closure(Model): mixed)|null */
+    /**
+     * Computes the value; a localized field's is a map keyed by locale code. Null reads the column named by the path.
+     *
+     * @var (Closure(Model): mixed)|null
+     */
     public ?Closure $value = null;
 
     /** @var list<string> Names the field also answers to in filters, sorts and facets. */

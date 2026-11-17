@@ -30,7 +30,7 @@ class FederatedBuilder
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
         $found = $this->engine->federated($this->searches, $perPage, ($page - 1) * $perPage);
 
-        return Results::make($this->models($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
+        return Results::make($this->load($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
             'pageName' => $pageName,
         ]);
@@ -52,10 +52,10 @@ class FederatedBuilder
      * @param  list<Hit>  $hits
      * @return list<Hit>
      */
-    private function models(array $hits): array
+    private function load(array $hits): array
     {
         foreach ($this->searches as $search) {
-            $search->models(array_values(array_filter(
+            $search->load(array_values(array_filter(
                 $hits,
                 static fn (Hit $hit): bool => $hit->model === null && $hit->entityType === $search->index->entityType,
             )));

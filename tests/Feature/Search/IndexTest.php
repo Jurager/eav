@@ -61,7 +61,18 @@ class IndexTest extends SearchTestCase
         $this->assertSame(IndexType::Date, $index->find('released')->type);
         $this->assertSame(IndexType::Boolean, $index->find('active')->type);
         $this->assertSame(IndexType::Keyword, $index->find('color')->type);
-        $this->assertTrue($index->find('color_label')->localized);
+        $this->assertTrue($index->find('labels.color')->localized);
+    }
+
+    public function test_option_labels_do_not_collide_with_an_attribute_named_like_them(): void
+    {
+        $this->attribute('select', 'color', ['searchable' => true, 'filterable' => true]);
+        $this->attribute('text', 'color_label', ['searchable' => true]);
+
+        $index = Search::index(SearchableProduct::class);
+
+        $this->assertSame('attributes.color_label', $index->find('color_label')->path);
+        $this->assertSame('labels.color', $index->find('labels.color')->path);
     }
 
     public function test_the_index_follows_schema_changes(): void
@@ -93,7 +104,7 @@ class IndexTest extends SearchTestCase
             'name',
             'attributes.title.en', 'attributes.title.ru',
             'attributes.sku',
-            'attributes.color_label.en', 'attributes.color_label.ru',
+            'labels.color.en', 'labels.color.ru',
         ], $settings['searchableAttributes']);
 
         $this->assertSame(

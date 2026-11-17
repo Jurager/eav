@@ -224,10 +224,10 @@ class LocalizableFieldTest extends FeatureTestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData() for localizable fields
+    // indexFields() for localizable fields
     // -----------------------------------------------------------------------
 
-    public function test_index_data_keys_values_by_locale_code(): void
+    public function test_a_localizable_value_is_indexed_per_locale_code(): void
     {
         $field = $this->makeField();
 
@@ -236,6 +236,9 @@ class LocalizableFieldTest extends FeatureTestCase
             ['locale_id' => $this->frLocaleId, 'values' => 'Couleur'],
         ]);
 
-        $this->assertSame(['label' => ['en' => 'Color', 'fr' => 'Couleur']], $field->indexData());
+        [$index] = $field->indexFields();
+
+        $this->assertTrue($index->localized);
+        $this->assertSame(['en' => 'Color', 'fr' => 'Couleur'], ($index->value)($this->createStub(\Illuminate\Database\Eloquent\Model::class)));
     }
 }

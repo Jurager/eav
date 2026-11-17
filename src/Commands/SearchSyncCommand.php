@@ -7,8 +7,8 @@ namespace Jurager\Eav\Commands;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Jurager\Eav\Search\Engine;
-use Jurager\Eav\Search\Index\Synchronizer;
+use Jurager\Eav\Search\Index\Configurator;
+use Jurager\Eav\Search\Index\IndexFactory;
 
 /**
  * Push search index settings to the engine.
@@ -17,14 +17,14 @@ use Jurager\Eav\Search\Index\Synchronizer;
 #[Description('Sync search index settings — searchable, filterable and sortable fields, locales, typo tolerance.')]
 class SearchSyncCommand extends Command
 {
-    public function handle(Engine $engine, Synchronizer $synchronizer): int
+    public function handle(Configurator $configurator, IndexFactory $indexes): int
     {
-        $types = $this->argument('type') !== null ? [(string) $this->argument('type')] : $synchronizer->entityTypes();
+        $types = $this->argument('type') !== null ? [(string) $this->argument('type')] : $indexes->entityTypes();
 
         foreach ($types as $type) {
-            $engine->configure($type);
-
-            $this->components->info("Search index settings synced for [{$type}].");
+            $configurator->configure($type)
+                ? $this->components->info("Search index settings synced for [{$type}].")
+                : $this->components->warn("[{$type}] is not searchable.");
         }
 
         if ($types === []) {

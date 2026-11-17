@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Support\Facades\Queue;
+use Jurager\Eav\Tests\Fixtures\SearchableProduct;
+use Laravel\Scout\Jobs\MakeSearchable;
+
 class DocumentTest extends SearchTestCase
 {
     public function test_document_holds_the_key_and_declared_fields(): void
@@ -65,10 +69,10 @@ class DocumentTest extends SearchTestCase
         $product = $this->product();
         $product->eav()->set('color', $red->id)->save();
 
-        $this->assertSame(
-            ['color' => 'red', 'color_label' => ['en' => 'Red', 'ru' => 'Красный']],
-            $product->fresh()->toSearchableArray()['attributes'],
-        );
+        $document = $product->fresh()->toSearchableArray();
+
+        $this->assertSame(['color' => 'red'], $document['attributes']);
+        $this->assertSame(['color' => ['en' => 'Red', 'ru' => 'Красный']], $document['labels']);
     }
 
     public function test_dates_are_indexed_as_timestamps_and_booleans_as_booleans(): void
@@ -108,5 +112,41 @@ class DocumentTest extends SearchTestCase
 
         $product->update(['name' => 'Gadget']);
         $this->assertTrue($product->searchIndexShouldBeUpdated());
+    }
+
+    public function test_saving_an_entity_with_values_indexes_it_once(): void
+    {
+        config(['scout.queue' => true]);
+        $this->attribute('text', 'sku', ['searchable' => true]);
+        Queue::fake();
+
+        $product = new SearchableProduct(['name' => 'Widget']);
+        $product->eav()->set('sku', 'AB-1');
+        $product->save();
+
+        Queue::assertPushed(MakeSearchable::class, 1);
+    }
+
+    public function test_saving_an_entity_without_values_still_indexes_it(): void
+    {
+        config(['scout.queue' => true]);
+        Queue::fake();
+
+        $this->product();
+
+        Queue::assertPushed(MakeSearchable::class, 1);
+    }
+
+    public function test_clearing_a_value_that_was_never_stored_does_not_skip_indexing(): void
+    {
+        config(['scout.queue' => true]);
+        $this->attribute('text', 'sku', ['searchable' => true]);
+        Queue::fake();
+
+        $product = new SearchableProduct(['name' => 'Widget']);
+        $product->eav()->set('sku', null);
+        $product->save();
+
+        Queue::assertPushed(MakeSearchable::class, 1);
     }
 }

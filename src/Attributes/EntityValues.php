@@ -55,27 +55,6 @@ class EntityValues
     }
 
     /**
-     * Get rows of the attributes the search index holds.
-     *
-     * @return Collection<int, Model>
-     */
-    public function indexable(): Collection
-    {
-        if (($loaded = $this->loaded()) !== null) {
-            return $loaded->filter(static fn (Model $value): bool => self::indexed($value->attribute))->values();
-        }
-
-        return $this->query()
-            ->whereHas('attribute', fn ($query) => $query->whereAny(['searchable', 'filterable', 'sortable'], true))
-            ->with([
-                'attribute',
-                'attribute.enums.translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
-                'translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
-            ])
-            ->get();
-    }
-
-    /**
      * Get stored rows with their resolved field values.
      *
      * @param  list<string>|null  $codes
@@ -176,11 +155,6 @@ class EntityValues
     public function query(): Builder
     {
         return Eav::$entityAttributeModel::query()->forEntity($this->entity);
-    }
-
-    private static function indexed(?Attribute $attribute): bool
-    {
-        return (bool) ($attribute?->searchable || $attribute?->filterable || $attribute?->sortable);
     }
 
     /**

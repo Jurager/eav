@@ -183,26 +183,20 @@ class DateFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData()
+    // toIndex()
     // -----------------------------------------------------------------------
 
-    public function test_index_data_returns_empty_when_no_value(): void
+    public function test_to_index_is_null_when_no_value(): void
     {
-        $field = $this->makeField(['code' => 'released_at']);
-
-        $this->assertSame([], $field->indexData());
+        $this->assertNull($this->makeField(['code' => 'released_at'])->toIndex());
     }
 
-    public function test_index_data_returns_unix_timestamp(): void
+    public function test_to_index_is_a_unix_timestamp(): void
     {
         $field = $this->makeField(['code' => 'released_at']);
         $field->fill('2024-01-15 00:00:00');
 
-        $data = $field->indexData();
-
-        $this->assertArrayHasKey('released_at', $data);
-        $this->assertIsInt($data['released_at']);
-        $this->assertSame(Carbon::parse('2024-01-15')->timestamp, $data['released_at']);
+        $this->assertSame(Carbon::parse('2024-01-15')->timestamp, $field->toIndex());
     }
 
     // -----------------------------------------------------------------------

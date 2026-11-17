@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Fields\Concerns;
 
+use Closure;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Search\Index\Index;
@@ -35,46 +36,19 @@ trait Indexable
     }
 
     /**
-     * Index fields the attribute contributes.
+     * Index fields the attribute contributes, each computing its own value.
      *
      * @return list<IndexField>
      */
     public function indexFields(): array
     {
         return [
-            $this->indexField($this->code(), $this->indexType())
+            $this->indexField(Index::ATTRIBUTES)
                 ->localized($this->isLocalizable())
                 ->searchable($this->isSearchable())
                 ->filterable($this->isFilterable())
                 ->sortable($this->isSortable() && ! $this->isMultiple()),
         ];
-    }
-
-    /**
-     * Values for the index document, keyed by attribute code; localized values are keyed by locale code.
-     *
-     * @return array<string, mixed>
-     */
-    public function indexData(): array
-    {
-        if (! $this->isLocalizable()) {
-            $value = $this->toIndex();
-
-            return self::blank($value) ? [] : [$this->code() => $value];
-        }
-
-        $values = [];
-
-        foreach (array_keys($this->values) as $localeId) {
-            $code = $this->localeRegistry->code($localeId);
-            $value = $this->toIndex($localeId);
-
-            if ($code !== null && ! self::blank($value)) {
-                $values[$code] = $value;
-            }
-        }
-
-        return $values === [] ? [] : [$this->code() => $values];
     }
 
     /**
@@ -89,18 +63,39 @@ trait Indexable
     }
 
     /**
-     * Start an index field of this attribute, at `attributes.{name}`.
+     * Start an index field of this attribute at `{root}.{code}`, holding `toIndex()` unless given another value.
+     *
+     * @param  (Closure(): mixed)|null  $value
      */
-    protected function indexField(string $name, IndexType $type): IndexField
+    protected function indexField(string $root, ?Closure $value = null): IndexField
     {
-        $field = (new IndexField(Index::ATTRIBUTES.'.'.$name))->type($type);
+        $field = new IndexField($root.'.'.$this->code());
         $field->attribute = $this->attribute;
 
-        return $field;
+        return $field
+            ->type($this->indexType())
+            ->using($value ?? fn (): mixed => $this->isLocalizable() ? $this->perLocale($this->toIndex(...)) : $this->toIndex());
     }
 
-    private static function blank(mixed $value): bool
+    /**
+     * Collect a value for every locale that has one, keyed by locale code.
+     *
+     * @param  Closure(int): mixed  $value
+     * @return array<string, mixed>
+     */
+    protected function perLocale(Closure $value): array
     {
-        return $value === null || $value === '' || $value === [];
+        $values = [];
+
+        foreach ($this->localeRegistry->ids() as $localeId) {
+            $code = $this->localeRegistry->code($localeId);
+            $item = $value($localeId);
+
+            if ($code !== null && $item !== null && $item !== '' && $item !== []) {
+                $values[$code] = $item;
+            }
+        }
+
+        return $values;
     }
 }

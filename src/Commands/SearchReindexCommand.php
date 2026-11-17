@@ -7,9 +7,9 @@ namespace Jurager\Eav\Commands;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
-use Jurager\Eav\Search\Engine;
+use Jurager\Eav\Search\Index\Configurator;
 use Jurager\Eav\Search\Index\Indexer;
-use Jurager\Eav\Search\Index\Synchronizer;
+use Jurager\Eav\Search\Index\IndexFactory;
 
 /**
  * Rebuild search documents.
@@ -21,19 +21,22 @@ use Jurager\Eav\Search\Index\Synchronizer;
 #[Description('Sync search index settings and rebuild the documents of an entity type.')]
 class SearchReindexCommand extends Command
 {
-    public function handle(Engine $engine, Synchronizer $synchronizer): int
+    public function handle(Configurator $configurator, Indexer $indexer, IndexFactory $indexes): int
     {
-        $types = $this->argument('type') !== null ? [(string) $this->argument('type')] : $synchronizer->entityTypes();
+        $types = $this->argument('type') !== null ? [(string) $this->argument('type')] : $indexes->entityTypes();
 
         foreach ($types as $type) {
-            $indexer = Indexer::for($type);
-
             if ($this->option('flush')) {
-                $indexer->flush();
+                $indexer->flush($type);
             }
 
-            $engine->configure($type);
-            $indexer->all($this->option('chunk') !== null ? (int) $this->option('chunk') : null);
+            if (! $configurator->configure($type)) {
+                $this->components->warn("[{$type}] is not searchable.");
+
+                continue;
+            }
+
+            $indexer->all($type, $this->option('chunk') !== null ? (int) $this->option('chunk') : null);
 
             $this->components->info("Search index rebuilt for [{$type}].");
         }

@@ -8,6 +8,7 @@ use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
 
 /**
@@ -123,50 +124,33 @@ class Select extends Field
     }
 
     /**
-     * The option code, filterable and sortable, plus its labels for full-text search.
+     * The option code, filterable and sortable, plus its labels per locale for full-text search.
      *
      * @return list<IndexField>
      */
     public function indexFields(): array
     {
         return [
-            $this->indexField($this->code(), IndexType::Keyword)
+            $this->indexField(Index::ATTRIBUTES)
                 ->filterable($this->isFilterable())
                 ->sortable($this->isSortable() && ! $this->isMultiple()),
-            $this->indexField($this->code().'_label', IndexType::Text)
+            $this->indexField(Index::LABELS, fn (): array => $this->perLocale($this->indexLabel(...)))
+                ->text()
                 ->localized()
                 ->searchable($this->isSearchable()),
         ];
     }
 
     /**
-     * @return array<string, mixed>
+     * Labels of the selected options in one locale.
+     *
+     * @return string|list<string>|null
      */
-    public function indexData(): array
+    protected function indexLabel(int $localeId): string|array|null
     {
-        $codes = $this->toIndex();
+        $labels = array_values(array_filter((array) $this->label($localeId), static fn ($label): bool => $label !== null && $label !== ''));
 
-        if ($codes === null || $codes === []) {
-            return [];
-        }
-
-        $data = [$this->code() => $codes];
-        $labels = [];
-
-        foreach ($this->localeRegistry->ids() as $localeId) {
-            $label = array_values(array_filter((array) $this->label($localeId), static fn ($label): bool => $label !== null && $label !== ''));
-            $locale = $this->localeRegistry->code($localeId);
-
-            if ($label !== [] && $locale !== null) {
-                $labels[$locale] = $this->isMultiple() ? $label : $label[0];
-            }
-        }
-
-        if ($labels !== []) {
-            $data[$this->code().'_label'] = $labels;
-        }
-
-        return $data;
+        return $this->isMultiple() ? $labels : ($labels[0] ?? null);
     }
 
     /**

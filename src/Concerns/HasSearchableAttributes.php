@@ -6,6 +6,7 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
@@ -21,6 +22,22 @@ trait HasSearchableAttributes
     use Searchable;
 
     /**
+     * Whether the save in progress writes attribute values, which reindexes the entity by itself.
+     */
+    private bool $savesAttributeValues = false;
+
+    public static function bootHasSearchableAttributes(): void
+    {
+        static::saving(static function (self $model): void {
+            // Only a value being written is sure to raise the change that reindexes; clearing one may find nothing to drop.
+            $model->savesAttributeValues = array_any(
+                $model->attributeManager?->getDirty() ?? [],
+                static fn (Field $field): bool => $field->isFilled(),
+            );
+        });
+    }
+
+    /**
      * Declare the model's own index fields; indexed attributes are added on top.
      */
     public function searchIndex(Index $index): void {}
@@ -31,10 +48,15 @@ trait HasSearchableAttributes
     }
 
     /**
-     * Skip reindexing a save that cannot have changed the document.
+     * Skip reindexing a save that cannot have changed the document, or that is reindexed anyway.
      */
     public function searchIndexShouldBeUpdated(): bool
     {
+        // The values written with this save queue the reindex once they are committed: not twice.
+        if ($this->savesAttributeValues) {
+            return false;
+        }
+
         if ($this->wasRecentlyCreated) {
             return true;
         }

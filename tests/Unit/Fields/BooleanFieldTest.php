@@ -186,22 +186,23 @@ class BooleanFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData()
+    // toIndex()
     // -----------------------------------------------------------------------
 
-    public function test_index_data_returns_false_when_no_value_set(): void
+    public function test_to_index_is_null_without_a_stored_value(): void
     {
-        $field = $this->makeField(['code' => 'active']);
-
-        $this->assertSame(['active' => false], $field->indexData());
+        $this->assertNull($this->makeField(['code' => 'active'])->toIndex());
     }
 
-    public function test_index_data_returns_true_when_filled_with_true(): void
+    public function test_to_index_is_a_boolean_so_false_can_be_filtered_on(): void
     {
         $field = $this->makeField(['code' => 'active']);
-        $field->fill(true);
 
-        $this->assertSame(['active' => true], $field->indexData());
+        $field->fill(false);
+        $this->assertFalse($field->toIndex());
+
+        $field->fill(true);
+        $this->assertTrue($field->toIndex());
     }
 
     // -----------------------------------------------------------------------

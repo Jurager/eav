@@ -6,7 +6,9 @@ namespace Jurager\Eav\Search;
 
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Database\Eloquent\Model;
+use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
+use Jurager\Eav\Registry\LocaleRegistry;
 use Jurager\Eav\Search\Contracts\Transport;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
@@ -20,6 +22,7 @@ class Search
     public function __construct(
         private readonly Container $container,
         private readonly IndexFactory $indexes,
+        private readonly LocaleRegistry $locales,
     ) {}
 
     /**
@@ -35,6 +38,7 @@ class Search
             $this->container->make(Engine::class),
             $this->indexes->for($entity),
             array_map($this->container->make(...), (array) $this->container->make('config')->get('eav.search.resolvers', [])),
+            $this->currentLocales(),
         );
     }
 
@@ -54,6 +58,23 @@ class Search
     public function index(Model|string $entity): Index
     {
         return $this->indexes->for($entity);
+    }
+
+    /**
+     * The current locale, as the one a search runs in by default.
+     *
+     * @return list<string>
+     */
+    private function currentLocales(): array
+    {
+        try {
+            $code = $this->locales->code($this->locales->current());
+        } catch (InvalidConfigurationException) {
+            // No locales are set up: nothing is localized either.
+            $code = null;
+        }
+
+        return $code === null ? [] : [$code];
     }
 
     /**

@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
-use Jurager\Eav\Attributes\AttributeManager;
 use Jurager\Eav\Facades\Attributes;
-use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Tests\Fixtures\Product;
 

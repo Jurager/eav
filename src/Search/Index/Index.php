@@ -19,6 +19,11 @@ class Index
      */
     public const string ATTRIBUTES = 'attributes';
 
+    /**
+     * The document field display labels of attribute values are nested under, apart from the values themselves.
+     */
+    public const string LABELS = 'labels';
+
     /** @var array<string, IndexField> Fields keyed by path. */
     private array $fields = [];
 
@@ -127,7 +132,7 @@ class Index
     }
 
     /**
-     * Find a field by the name a filter, sort or facet refers to it: its path, an alias, or an attribute code.
+     * Find a field by the name a request refers to it: its path, an alias, or the code of an attribute.
      */
     public function find(string $name): ?IndexField
     {
@@ -137,7 +142,7 @@ class Index
             foreach ($this->fields as $path => $field) {
                 $names = [$path, ...$field->aliases];
 
-                if ($field->attribute !== null) {
+                if (str_starts_with($path, self::ATTRIBUTES.'.')) {
                     $names[] = substr($path, strlen(self::ATTRIBUTES) + 1);
                 }
 

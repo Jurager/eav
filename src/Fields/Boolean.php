@@ -42,9 +42,9 @@ class Boolean extends Field
     /**
      * A boolean with a stored row is always indexed, so `false` can be filtered on.
      */
-    public function toIndex(?int $localeId = null): bool
+    public function toIndex(?int $localeId = null): ?bool
     {
-        return $this->value($localeId) ?? false;
+        return array_key_exists($this->slot($localeId), $this->values) ? ($this->value($localeId) ?? false) : null;
     }
 
     protected function validate(mixed $value, ?Attributable $entity = null): bool

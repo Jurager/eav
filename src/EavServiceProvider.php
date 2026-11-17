@@ -42,6 +42,7 @@ use Jurager\Eav\Registry\SchemaRegistry;
 use Jurager\Eav\Registry\SchemaVersion;
 use Jurager\Eav\Schema\SchemaManager;
 use Jurager\Eav\Search\Contracts\Transport;
+use Jurager\Eav\Search\Index\Configurator;
 use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Index\Synchronizer;
 use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
@@ -216,7 +217,7 @@ class EavServiceProvider extends ServiceProvider
         // Scout's own command resets an index to the configured settings: put the derived ones back.
         $events->listen(CommandFinished::class, function (CommandFinished $event): void {
             if ($event->command === 'scout:sync-index-settings' && $event->exitCode === 0) {
-                $this->app->make(Synchronizer::class)->settings();
+                $this->app->make(Configurator::class)->all();
             }
         });
     }

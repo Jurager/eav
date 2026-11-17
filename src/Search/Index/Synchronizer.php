@@ -4,14 +4,11 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Index;
 
-use Illuminate\Database\Eloquent\Relations\Relation;
-use Jurager\Eav\Eav;
 use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Search\Engine;
 
 /**
  * Keep search indexes in step with the schema and the values: the one place that decides what to rebuild.
@@ -21,12 +18,25 @@ class Synchronizer
     /**
      * Attribute columns deciding whether the attribute is indexed at all.
      */
-    private const array FLAGS = ['searchable', 'filterable', 'sortable'];
+    public const array FLAGS = ['searchable', 'filterable', 'sortable'];
 
     /**
      * Attribute columns that change what the index holds or how the engine treats it.
      */
     private const array INDEXED_COLUMNS = [...self::FLAGS, 'localizable', 'multiple', 'code', 'attribute_type_id', 'sort'];
+
+    public function __construct(
+        private readonly IndexFactory $indexes,
+        private readonly Indexer $indexer,
+    ) {}
+
+    /**
+     * Whether the search index holds the attribute.
+     */
+    public static function indexed(Attribute $attribute): bool
+    {
+        return $attribute->searchable || $attribute->filterable || $attribute->sortable;
+    }
 
     /**
      * Whether the attribute's last update changed what its indexes hold.
@@ -80,7 +90,7 @@ class Synchronizer
     public function values(string $entityType, array $entityIds): void
     {
         if (IndexFactory::available()) {
-            Indexer::for($entityType)->withVariants($entityIds);
+            $this->indexer->withVariants($entityType, $entityIds);
         }
     }
 
@@ -95,57 +105,12 @@ class Synchronizer
             return;
         }
 
-        $indexes = app(IndexFactory::class);
-
-        foreach ($this->entityTypes() as $entityType) {
+        foreach ($this->indexes->entityTypes() as $entityType) {
             SyncIndexSettings::dispatch($entityType)->afterCommit();
 
-            $localized = $indexes->for($entityType)->paths(static fn (IndexField $field): bool => $field->localized) !== [];
-
-            if ($documents && $localized) {
+            if ($documents && $this->indexes->for($entityType)->paths(static fn (IndexField $field): bool => $field->localized) !== []) {
                 ReindexEntities::dispatch($entityType)->afterCommit();
             }
         }
-    }
-
-    /**
-     * Push the settings of every searchable entity type to the engine, right away.
-     */
-    public function settings(): void
-    {
-        if (! IndexFactory::available()) {
-            return;
-        }
-
-        $engine = app(Engine::class);
-
-        foreach ($this->entityTypes() as $entityType) {
-            $engine->configure($entityType);
-        }
-    }
-
-    /**
-     * Entity types with a search index: searchable models in the morph map, and those holding attributes.
-     *
-     * @return list<string>
-     */
-    public function entityTypes(): array
-    {
-        $types = [
-            ...array_keys(Relation::morphMap()),
-            ...Eav::$attributeEntityTypeModel::query()->distinct()->pluck('entity_type')->all(),
-        ];
-
-        $indexes = app(IndexFactory::class);
-
-        return array_values(array_filter(
-            array_unique($types),
-            static fn (string $type): bool => $indexes->model($type) !== null,
-        ));
-    }
-
-    private static function indexed(Attribute $attribute): bool
-    {
-        return $attribute->searchable || $attribute->filterable || $attribute->sortable;
     }
 }

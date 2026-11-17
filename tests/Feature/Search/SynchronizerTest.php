@@ -184,7 +184,7 @@ class SynchronizerTest extends SearchTestCase
 
         Queue::fake();
 
-        (new ReindexAttribute('searchable_product', $parent->eav()->field('title')->attribute()->id))->handle();
+        $this->app->call([new ReindexAttribute('searchable_product', $parent->eav()->field('title')->attribute()->id), 'handle']);
 
         Queue::assertPushed(MakeSearchable::class, function (MakeSearchable $job) use ($parent, $variant, $other): bool {
             return $job->models->contains('id', $parent->id)

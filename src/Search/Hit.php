@@ -6,7 +6,6 @@ namespace Jurager\Eav\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
-use Jurager\Eav\Search\Index\Index;
 
 /**
  * One search hit: the indexed document, how well it matched, and the model it stands for.
@@ -21,7 +20,6 @@ class Hit
     /**
      * @param  array<string, mixed>  $document  The document as indexed.
      * @param  array<string, mixed>  $formatted  The document with matches highlighted, when highlighting was asked for.
-     * @param  list<string>  $locales  Locales the search ran in.
      */
     public function __construct(
         public readonly int|string $key,
@@ -29,8 +27,7 @@ class Hit
         public readonly array $document,
         public readonly array $formatted = [],
         public readonly ?float $score = null,
-        private readonly ?Index $index = null,
-        private readonly array $locales = [],
+        private readonly ?Builder $search = null,
     ) {}
 
     /**
@@ -49,8 +46,13 @@ class Hit
         return Arr::get($this->formatted, $this->path($name)) ?? $this->get($name);
     }
 
+    /**
+     * The document path of a field named as in the search the hit came from.
+     */
     private function path(string $name): string
     {
-        return $this->index?->find($name)?->pathFor($this->locales[0] ?? null) ?? $name;
+        $field = $this->search?->index->find($name);
+
+        return $field !== null ? $this->search->path($field) : $name;
     }
 }

@@ -192,10 +192,11 @@ Settings in `scout.meilisearch.index-settings` are still read. You can remove `f
 | Removed                       | Replacement                                             |
 |-------------------------------|---------------------------------------------------------|
 | `filterableKeys()`            | `indexFields()`                                         |
+| `indexData()`                 | `toIndex()`, or a value closure on a field of `indexFields()` |
 | `enrichFacetDistribution()`   | `facetLabels(array $values, int $localeId)`             |
 | `$entity->eav()->indexData()` | `$entity->toSearchableArray()`                          |
 
-`indexData()` remains on fields, but most fields only need `indexType()` and `toIndex()`. A localizable field now returns its values keyed by locale code.
+Most fields only need `indexType()` and `toIndex()`. The document is built from `indexFields()`, so a field no longer returns its index data separately.
 
 ### 9. Update other references
 
@@ -204,7 +205,8 @@ Settings in `scout.meilisearch.index-settings` are still read. You can remove `f
 | `Schema::search()`                        | Removed. Use Scout on your own attribute model |
 | `Jobs\SyncSearchable`                     | `Jobs\ReindexAttribute`                        |
 | `SchemaSynchronizer::refresh($attribute, documents:, settings:)` | `refresh($attribute, indexed:, entityTypes:)` |
-| `Search\Indexer::refresh($type)`          | `Search\Index\Indexer::for($type)`             |
+| `Search\Indexer::refresh($type)->ids($ids)` | `app(Search\Index\Indexer::class)->ids($type, $ids)` |
+| `EntityValues::indexable()`               | Removed                                        |
 | `Observers\SyncsIndexFilters::watch()`    | Dispatch `Jobs\SyncIndexSettings` yourself     |
 | `Search\Result`                           | `Search\Results`                               |
 | `Enums\IndexCapability`                   | `->filterable()` and `->sortable()` on fields  |
@@ -212,7 +214,7 @@ Settings in `scout.meilisearch.index-settings` are still read. You can remove `f
 
 ### 10. Rebuild the indexes
 
-The document changed: localizable values are keyed by locale code (`attributes.title.en`), and select labels are stored per locale in `attributes.{code}_label`. Old documents do not match the new settings.
+The document changed: localizable values are keyed by locale code (`attributes.title.en`), and select labels moved from `attributes.{code}_label` to `labels.{code}`, stored per locale. Old documents do not match the new settings.
 
 For each searchable entity type:
 

@@ -75,11 +75,11 @@ A field reads the column named by its path unless you pass a closure to `using()
 
 `$index->distinct()` keeps one hit per value of a field, such as one variant per parent. `$index->settings([...])` sets Meilisearch settings for this index.
 
-A save reindexes the entity only when a declared column changed. Attribute value changes are indexed after commit, including the variants that inherit them.
+A save reindexes the entity only when a declared column changed. Attribute value changes are indexed after commit, including the variants that inherit them. Saving an entity together with its attribute values indexes it once.
 
 ## The search document
 
-Attribute values are nested under `attributes`. A localizable value is keyed by locale code, and a select is indexed by option code with its labels alongside:
+Attribute values are nested under `attributes`. A localizable value is keyed by locale code. A select is indexed by option code, and its labels are kept per locale under `labels`:
 
 ```json
 {
@@ -89,8 +89,10 @@ Attribute values are nested under `attributes`. A localizable value is keyed by 
         "price": 100,
         "title": {"en": "Red running shoes", "ru": "Красные кроссовки"},
         "color": "red",
-        "color_label": {"en": "Red", "ru": "Красный"},
         "released": 1767999600
+    },
+    "labels": {
+        "color": {"en": "Red", "ru": "Красный"}
     }
 }
 ```
@@ -112,7 +114,7 @@ $results = Search::for(Product::class)
     ->paginate(15);
 ```
 
-`Search::for()` accepts a model, its class, or its morph alias. Refer to a field by its path, an alias, or the attribute code.
+`Search::for()` accepts a model, its class, or its morph alias. Refer to a field by its path, an alias, or the attribute code. The labels of a select are the field `labels.{code}`.
 
 `paginate()` returns a `LengthAwarePaginator` of models in ranking order, with an exact total:
 
@@ -131,13 +133,13 @@ $results->hits();    // documents, highlights, ranking scores
 | `keys($limit)`  | Keys of the matches, without loading models     |
 | `count()`       | Number of matches                               |
 
-Use `with()` to eager load relations on the models, or `hydrate()` to change the query they are loaded with:
+Use `with()` to eager load relations on the models, or `loadUsing()` to change the query they are loaded with:
 
 ```php
 Search::for(Product::class)
     ->query('shoes')
     ->with('media')
-    ->hydrate(fn ($query) => $query->where('published', true))
+    ->loadUsing(fn ($query) => $query->where('published', true))
     ->paginate();
 ```
 
@@ -334,7 +336,21 @@ public function toIndex(?int $localeId = null): mixed
 }
 ```
 
-Override `indexFields()` and `indexData()` to index more than one field per attribute, and `facetLabels()` to label facet values.
+To index more than one field per attribute, override `indexFields()`. Each field computes its own value:
+
+```php
+use Jurager\Eav\Search\Index\Index;
+
+public function indexFields(): array
+{
+    return [
+        ...parent::indexFields(),
+        $this->indexField(Index::LABELS, fn () => $this->value()?->formatted())->text()->searchable(),
+    ];
+}
+```
+
+Override `facetLabels()` to label facet values.
 
 ## Testing
 

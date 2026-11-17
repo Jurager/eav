@@ -13,35 +13,22 @@ use Laravel\Scout\Jobs\MakeRangeSearchable;
 use Laravel\Scout\ModelObserver;
 
 /**
- * Queue the search documents of an entity type for rebuilding.
+ * Queue search documents for rebuilding. Entity types are given by morph key or class name.
  */
 class Indexer
 {
-    private readonly ?Model $model;
-
-    public function __construct(string $entityType)
-    {
-        $this->model = app(IndexFactory::class)->model($entityType);
-    }
-
-    /** @param string $entityType Morph key or class name of the entities. */
-    public static function for(string $entityType): self
-    {
-        return new self($entityType);
-    }
+    public function __construct(private readonly IndexFactory $indexes) {}
 
     /**
      * Reindex the given entities.
      *
      * @param  array<int, int|string>  $entityIds
      */
-    public function ids(array $entityIds): void
+    public function ids(string $entityType, array $entityIds): void
     {
-        if ($entityIds === [] || ! $this->indexable()) {
-            return;
+        if ($entityIds !== [] && ($model = $this->model($entityType)) !== null) {
+            $model->newQuery()->whereKey(array_unique($entityIds))->searchable();
         }
-
-        $this->model->newQuery()->whereKey(array_unique($entityIds))->searchable();
     }
 
     /**
@@ -49,69 +36,64 @@ class Indexer
      *
      * @param  array<int, int|string>  $entityIds
      */
-    public function withVariants(array $entityIds): void
+    public function withVariants(string $entityType, array $entityIds): void
     {
-        $this->ids([...$entityIds, ...$this->variantIds($entityIds)]);
+        $this->ids($entityType, [...$entityIds, ...$this->variantIds($entityType, $entityIds)]);
     }
 
     /**
      * Reindex every entity holding a value of the attribute, and the variants inheriting it.
      */
-    public function attribute(int|string $attributeId, int $chunk = 500): void
+    public function attribute(string $entityType, int|string $attributeId, int $chunk = 500): void
     {
-        if (! $this->indexable() || ! $this->model instanceof Attributable) {
+        $model = $this->model($entityType);
+
+        if (! $model instanceof Attributable) {
             return;
         }
 
-        $values = new (Eav::$entityAttributeModel);
-
-        $values->newQuery()
+        (new (Eav::$entityAttributeModel))->newQuery()
             ->where('attribute_id', $attributeId)
-            ->where('entity_type', $this->model->getEntityType())
+            ->where('entity_type', $model->getEntityType())
             ->select('entity_id')
             ->distinct()
             ->orderBy('entity_id')
-            ->chunk($chunk, fn ($rows) => $this->withVariants($rows->pluck('entity_id')->all()));
+            ->chunk($chunk, fn ($rows) => $this->withVariants($entityType, $rows->pluck('entity_id')->all()));
     }
 
     /**
      * Reindex everything touched since a point in time, in ranges of ids.
      */
-    public function since(DateTimeInterface $since, int $chunk = 500): void
+    public function since(string $entityType, DateTimeInterface $since, int $chunk = 500): void
     {
-        if (! $this->indexable()) {
+        if (($model = $this->model($entityType)) === null) {
             return;
         }
 
-        $class = $this->model::class;
-        $key = $this->model->getScoutKeyName();
+        $key = $model->getScoutKeyName();
 
-        $this->model->newQuery()
-            ->where($this->model->getUpdatedAtColumn(), '>=', $since)
+        $model->newQuery()
+            ->where($model->getUpdatedAtColumn(), '>=', $since)
             ->select($key)
             ->chunkById($chunk, static fn (Collection $ids) => dispatch(
-                new MakeRangeSearchable($class, $ids->min($key), $ids->max($key)),
+                new MakeRangeSearchable($model::class, $ids->min($key), $ids->max($key)),
             ), $key);
     }
 
     /**
      * Reindex every entity of the type.
      */
-    public function all(?int $chunk = null): void
+    public function all(string $entityType, ?int $chunk = null): void
     {
-        if ($this->model !== null) {
-            $this->model::makeAllSearchable($chunk);
-        }
+        $this->indexes->model($entityType)?->makeAllSearchable($chunk);
     }
 
     /**
      * Remove every document of the type from the index.
      */
-    public function flush(): void
+    public function flush(string $entityType): void
     {
-        if ($this->model !== null) {
-            $this->model::removeAllFromSearch();
-        }
+        $this->indexes->model($entityType)?->removeAllFromSearch();
     }
 
     /**
@@ -120,29 +102,28 @@ class Indexer
      * @param  array<int, int|string>  $entityIds
      * @return array<int, int|string>
      */
-    private function variantIds(array $entityIds): array
+    private function variantIds(string $entityType, array $entityIds): array
     {
-        if ($entityIds === [] || ! $this->indexable()) {
+        $model = $this->model($entityType);
+        $relation = $model instanceof Attributable ? $model->attributeParentRelation() : null;
+
+        if ($entityIds === [] || $relation === null) {
             return [];
         }
 
-        $relation = $this->model instanceof Attributable ? $this->model->attributeParentRelation() : null;
-
-        if ($relation === null) {
-            return [];
-        }
-
-        return $this->model->newQuery()
+        return $model->newQuery()
             ->whereIn($relation->getForeignKeyName(), array_unique($entityIds))
-            ->pluck($this->model->getKeyName())
+            ->pluck($model->getKeyName())
             ->all();
     }
 
     /**
-     * Bulk imports suppress indexing until they finish and reindex in one pass of their own.
+     * The model to index, unless indexing is suspended: bulk imports reindex in one pass of their own.
      */
-    private function indexable(): bool
+    private function model(string $entityType): ?Model
     {
-        return $this->model !== null && ! ModelObserver::syncingDisabledFor($this->model::class);
+        $model = $this->indexes->model($entityType);
+
+        return $model !== null && ! ModelObserver::syncingDisabledFor($model::class) ? $model : null;
     }
 }

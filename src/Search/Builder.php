@@ -12,6 +12,7 @@ use Illuminate\Pagination\Paginator;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Contracts\FilterResolver;
 use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 
@@ -38,8 +39,8 @@ class Builder
     /** @var list<string> */
     public array $facets = [];
 
-    /** @var list<string> Locale codes the search runs in; the current locale when empty. */
-    public array $locales = [];
+    /** @var list<string> Locale codes the search runs in. */
+    private array $locales;
 
     /** @var list<string>|null Fields the text is matched against; every searchable field when null. */
     public ?array $searchOn = null;
@@ -62,16 +63,20 @@ class Builder
     private array $with = [];
 
     /** @var (Closure(EloquentBuilder): mixed)|null */
-    private ?Closure $hydrate = null;
+    private ?Closure $loadUsing = null;
 
     /**
      * @param  iterable<FilterResolver>  $resolvers
+     * @param  list<string>  $locales  Locale codes the search runs in unless told otherwise.
      */
     public function __construct(
         private readonly Engine $engine,
         public readonly Index $index,
         private readonly iterable $resolvers = [],
-    ) {}
+        array $locales = [],
+    ) {
+        $this->locales = $locales;
+    }
 
     /**
      * Set the text to search for.
@@ -211,6 +216,10 @@ class Builder
      */
     public function locale(string ...$locales): static
     {
+        if (($unknown = array_diff($locales, $this->index->locales())) !== []) {
+            throw InvalidSearchQueryException::unknownLocale(implode(', ', $unknown));
+        }
+
         $this->locales = array_values($locales);
 
         return $this;
@@ -299,9 +308,9 @@ class Builder
      *
      * @param  Closure(EloquentBuilder): mixed  $callback
      */
-    public function hydrate(Closure $callback): static
+    public function loadUsing(Closure $callback): static
     {
-        $this->hydrate = $callback;
+        $this->loadUsing = $callback;
 
         return $this;
     }
@@ -314,7 +323,7 @@ class Builder
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
         $found = $this->engine->search($this, $perPage, $page);
 
-        return Results::make($this->models($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
+        return Results::make($this->load($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
             'pageName' => $pageName,
         ]);
@@ -342,7 +351,7 @@ class Builder
      */
     public function keys(int $limit = 20): array
     {
-        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this, $limit, 1)['hits']);
+        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this->withoutFacets(), $limit, 1)['hits']);
     }
 
     /**
@@ -350,7 +359,7 @@ class Builder
      */
     public function count(): int
     {
-        return $this->engine->search($this, 0, 1)['total'];
+        return $this->engine->search($this->withoutFacets(), 0, 1)['total'];
     }
 
     /**
@@ -364,12 +373,70 @@ class Builder
     }
 
     /**
-     * Attach their models to hits, dropping nothing: a hit without a model keeps `model` null.
+     * Locale codes the search runs in.
+     *
+     * @return list<string>
+     */
+    public function locales(): array
+    {
+        return $this->locales;
+    }
+
+    /**
+     * Find an index field by the name a request refers to it.
+     *
+     * @throws InvalidSearchQueryException
+     */
+    public function field(string $name): IndexField
+    {
+        return $this->index->find($name) ?? throw InvalidSearchQueryException::unknownField($name);
+    }
+
+    /**
+     * Find an index field that may be filtered on, and so used as a facet.
+     *
+     * @throws InvalidSearchQueryException
+     */
+    public function filterable(string $name): IndexField
+    {
+        $field = $this->field($name);
+
+        return $field->filterable ? $field : throw InvalidSearchQueryException::notFilterable($name);
+    }
+
+    /**
+     * The document path of a field, in the first locale searched for a localized one.
+     */
+    public function path(IndexField $field): string
+    {
+        return $field->pathFor($this->locales[0] ?? null);
+    }
+
+    /**
+     * Whether a top-level condition constrains the field.
+     */
+    public function constrains(IndexField $field): bool
+    {
+        foreach ($this->filters as $parsed) {
+            foreach (array_keys($parsed->filters) as $name) {
+                if ($this->index->find((string) $name) === $field) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Attach their models to hits. A hit whose model is gone, or left out by the load query, keeps `model` null.
+     *
+     * @internal
      *
      * @param  list<Hit>  $hits
      * @return list<Hit>
      */
-    public function models(array $hits): array
+    public function load(array $hits): array
     {
         if ($hits === []) {
             return $hits;
@@ -382,8 +449,8 @@ class Builder
             $query->with($this->with);
         }
 
-        if ($this->hydrate !== null) {
-            ($this->hydrate)($query);
+        if ($this->loadUsing !== null) {
+            ($this->loadUsing)($query);
         }
 
         $models = $query->get()->keyBy(static fn (Model $model): string => (string) $model->getScoutKey());
@@ -393,6 +460,17 @@ class Builder
         }
 
         return $hits;
+    }
+
+    /**
+     * The same search with no facets to compute.
+     */
+    private function withoutFacets(): static
+    {
+        $search = clone $this;
+        $search->facets = [];
+
+        return $search;
     }
 
     private function condition(string $field, string $operator, mixed $value): static
@@ -412,17 +490,19 @@ class Builder
         $parsed = (new FilterParser)->parse($filter, []);
 
         return $parsed->withSanitized(
-            filters: $this->resolve($parsed->filters),
-            orGroups: array_map($this->resolve(...), $parsed->orGroups),
-            andGroups: array_map($this->resolve(...), $parsed->andGroups),
+            filters: $this->substitute($parsed->filters),
+            orGroups: array_map($this->substitute(...), $parsed->orGroups),
+            andGroups: array_map($this->substitute(...), $parsed->andGroups),
         );
     }
 
     /**
+     * Swap conditions on keys the index does not hold for what a resolver makes of them.
+     *
      * @param  array<array-key, mixed>  $conditions
      * @return array<string, mixed>
      */
-    private function resolve(array $conditions): array
+    private function substitute(array $conditions): array
     {
         $resolved = [];
 

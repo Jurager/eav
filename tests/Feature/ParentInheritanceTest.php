@@ -9,7 +9,6 @@ use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Validation\ValidationException;
-use Jurager\Eav\Attributes\AttributeManager;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Facades\Attributes;
 use Jurager\Eav\Models\AttributeType;

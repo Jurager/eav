@@ -204,17 +204,15 @@ class SelectFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData()
+    // toIndex()
     // -----------------------------------------------------------------------
 
-    public function test_index_data_returns_empty_when_no_value(): void
+    public function test_to_index_is_null_when_no_value(): void
     {
-        $field = $this->makeField(['code' => 'color']);
-
-        $this->assertSame([], $field->indexData());
+        $this->assertNull($this->makeField(['code' => 'color'])->toIndex());
     }
 
-    public function test_index_data_returns_enum_code_as_value(): void
+    public function test_to_index_is_the_option_code(): void
     {
         $enum = (new AttributeEnum)->forceFill([
             'id' => 10, 'code' => 'red', 'attribute_id' => 1,
@@ -224,17 +222,11 @@ class SelectFieldTest extends TestCase
         $this->enumRegistry->shouldReceive('find')
             ->with(1, 10)
             ->andReturn($enum);
-        $this->enumRegistry->shouldReceive('all')
-            ->with(1)
-            ->andReturn(collect([$enum]));
 
         $field = $this->makeField(['code' => 'color']);
         $field->fill(10);
 
-        $data = $field->indexData();
-
-        $this->assertArrayHasKey('color', $data);
-        $this->assertSame('red', $data['color']);
+        $this->assertSame('red', $field->toIndex());
     }
 
     // -----------------------------------------------------------------------
@@ -245,7 +237,7 @@ class SelectFieldTest extends TestCase
     {
         $fields = $this->makeField(['code' => 'color', 'filterable' => true, 'searchable' => true])->indexFields();
 
-        $this->assertSame(['attributes.color', 'attributes.color_label'], array_column($fields, 'path'));
+        $this->assertSame(['attributes.color', 'labels.color'], array_column($fields, 'path'));
         $this->assertTrue($fields[0]->filterable);
         $this->assertFalse($fields[0]->searchable);
         $this->assertTrue($fields[1]->searchable);

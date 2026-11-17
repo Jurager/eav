@@ -51,20 +51,6 @@ class Compiler
     }
 
     /**
-     * Whether a top-level condition constrains the field.
-     */
-    public function constrains(ParsedFilters $parsed, Index $index, IndexField $field): bool
-    {
-        foreach (array_keys($parsed->filters) as $name) {
-            if ($index->find((string) $name) === $field) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
      * @param  array<array-key, mixed>  $conditions
      * @param  list<string>  $except
      * @return list<string>

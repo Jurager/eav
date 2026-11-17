@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
-use Jurager\Eav\Concerns\HasAttributeScope;
 
 /**
  * A product scoped by categories for testing attributeScopeMatchesTree().

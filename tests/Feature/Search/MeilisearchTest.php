@@ -145,7 +145,7 @@ class MeilisearchTest extends SearchTestCase
         $this->assertSame(['Cap'], $this->names(Search::for(SearchableProduct::class)->query('cap')->searchOn('name')->get()));
         $this->assertEqualsCanonicalizing(
             ['Jacket', 'Cap'],
-            $this->names(Search::for(SearchableProduct::class)->query('синий')->locale('ru')->searchOn('color_label')->get()),
+            $this->names(Search::for(SearchableProduct::class)->query('синий')->locale('ru')->searchOn('labels.color')->get()),
         );
     }
 
@@ -257,10 +257,10 @@ class MeilisearchTest extends SearchTestCase
 
         $index = $this->client->index('eav_test_products');
 
-        $this->assertSame(
-            ['title' => ['en' => 'Red running shoes'], 'color_label' => ['en' => 'Red']],
-            array_intersect_key($index->getDocument($shoes->id)['attributes'], ['title' => 1, 'color_label' => 1]),
-        );
+        $document = $index->getDocument($shoes->id);
+
+        $this->assertSame(['en' => 'Red running shoes'], $document['attributes']['title']);
+        $this->assertSame(['color' => ['en' => 'Red']], $document['labels']);
         $this->assertNotContains('attributes.title.ru', $index->getSearchableAttributes());
         $this->assertSame([], $this->names(Search::for(SearchableProduct::class)->query('кроссовки')->get()));
     }

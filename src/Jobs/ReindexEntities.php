@@ -25,8 +25,8 @@ class ReindexEntities implements ShouldBeUnique, ShouldQueue
         return $this->entityType;
     }
 
-    public function handle(): void
+    public function handle(Indexer $indexer): void
     {
-        Indexer::for($this->entityType)->all();
+        $indexer->all($this->entityType);
     }
 }

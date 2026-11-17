@@ -9,10 +9,12 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Collection;
 use Jurager\Eav\Attributes\EntityValues;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Scopes\ActiveLocaleScope;
 
 /**
  * Build the search document of an entity from its index definition.
@@ -35,36 +37,58 @@ class Document
         foreach ($this->indexes->for($entity)->declared() as $field) {
             $value = $field->value !== null ? ($field->value)($entity) : $entity->getAttribute($field->path);
 
-            if (($value = self::normalize($value, $field->type)) !== null) {
-                Arr::set($document, $field->path, $value);
-            }
+            self::put($document, $field->path, self::normalize($value, $field->type));
         }
 
-        if ($entity instanceof Attributable && ($attributes = $this->attributes($entity)) !== []) {
-            $document[Index::ATTRIBUTES] = $attributes;
+        if ($entity instanceof Attributable) {
+            foreach ($this->values($entity)->groupBy('attribute_id') as $rows) {
+                $attribute = $this->fields->make($rows->first()->attribute)->forEntity($entity);
+                $attribute->hydrate($rows);
+
+                foreach ($attribute->indexFields() as $field) {
+                    self::put($document, $field->path, ($field->value)($entity));
+                }
+            }
         }
 
         return $document;
     }
 
     /**
-     * Indexed attribute values of the entity, including those it inherits.
+     * Value rows of the entity's indexed attributes, including those it inherits.
      *
-     * @return array<string, mixed>
+     * @return Collection<int, Model>
      */
-    private function attributes(Attributable $entity): array
+    private function values(Attributable $entity): Collection
     {
         $values = $this->container->make(EntityValues::class, ['entity' => $entity]);
-        $attributes = [];
 
-        foreach ($values->indexable()->groupBy('attribute_id') as $rows) {
-            $field = $this->fields->make($rows->first()->attribute)->forEntity($entity);
-            $field->hydrate($rows);
-
-            $attributes += $field->indexData();
+        if (($loaded = $values->loaded()) !== null) {
+            return $loaded
+                ->filter(static fn (Model $value): bool => $value->attribute !== null && Synchronizer::indexed($value->attribute))
+                ->values();
         }
 
-        return $attributes;
+        return $values->query()
+            ->whereHas('attribute', static fn ($query) => $query->whereAny(Synchronizer::FLAGS, true))
+            ->with([
+                'attribute',
+                'attribute.enums.translations' => static fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
+                'translations' => static fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
+            ])
+            ->get();
+    }
+
+    /**
+     * Set a value in the document unless there is none.
+     *
+     * @param  array<string, mixed>  $document
+     */
+    private static function put(array &$document, string $path, mixed $value): void
+    {
+        if ($value !== null && $value !== '' && $value !== []) {
+            Arr::set($document, $path, $value);
+        }
     }
 
     /**
@@ -83,10 +107,6 @@ class Document
                 : $value;
         }
 
-        if ($value instanceof BackedEnum) {
-            $value = $value->value;
-        }
-
-        return $type->cast($value);
+        return $type->cast($value instanceof BackedEnum ? $value->value : $value);
     }
 }
