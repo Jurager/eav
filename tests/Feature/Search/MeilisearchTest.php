@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -15,6 +16,7 @@ use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Search\Results;
+use Jurager\Eav\Tests\Fixtures\PricedProduct;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Meilisearch\Client;
@@ -26,7 +28,7 @@ use PHPUnit\Framework\Attributes\Group;
 #[Group('meilisearch')]
 class MeilisearchTest extends SearchTestCase
 {
-    private const array INDEXES = ['eav_test_products', 'eav_test_categories'];
+    private const array INDEXES = ['eav_test_products', 'eav_test_categories', 'eav_test_priced'];
 
     private Client $client;
 
@@ -411,5 +413,48 @@ class MeilisearchTest extends SearchTestCase
             [['value' => 'red', 'label' => 'Red', 'count' => 2], ['value' => 'blue', 'label' => 'Blue', 'count' => 2]],
             $facets['searchable_product']['color']['values'],
         );
+    }
+
+    public function test_a_partition_leads_across_the_pages_of_a_federated_search(): void
+    {
+        $page = fn (int $perPage, int $page) => Search::federated([
+            SearchableProduct::search()->partition(['color' => 'blue']),
+            SearchableCategory::search(),
+        ])->paginate($perPage, 'page', $page);
+
+        // The blue products and the categories lead; the red products trail.
+        $this->assertEqualsCanonicalizing(['Jacket', 'Cap', 'Shoes and boots', 'Outerwear'], $this->names($page(4, 1)));
+        $this->assertEqualsCanonicalizing(['Shoes', 'Boots'], $this->names($page(4, 2)));
+        $this->assertSame(6, $page(4, 1)->total());
+
+        // A page that the leaders do not fill is topped up with the first of the rest.
+        $second = $this->names($page(3, 2));
+
+        $this->assertCount(3, $second);
+        $this->assertCount(2, array_intersect($second, ['Shoes', 'Boots']));
+        $this->assertCount(6, array_unique([...$this->names($page(3, 1)), ...$second]));
+    }
+
+    public function test_a_keyed_field_is_searched_by_its_keys(): void
+    {
+        Relation::morphMap(['priced_product' => PricedProduct::class]);
+        $this->app->call([new SyncIndexSettings('priced_product'), 'handle']);
+
+        foreach (['A', 'BBB', 'CCCCC'] as $name) {
+            PricedProduct::create(['name' => $name]);
+        }
+
+        $this->settle();
+
+        // Retail prices are 10, 30 and 50; wholesale prices 99, 97 and 95.
+        $results = PricedProduct::search()
+            ->where('prices.retail', '>=', 30)
+            ->sort('-prices.wholesale')
+            ->facets('prices.retail')
+            ->paginate();
+
+        $this->assertSame(['BBB', 'CCCCC'], $this->names($results));
+        $this->assertEquals(['type' => 'range', 'min' => 10, 'max' => 50], $results->facet('prices.retail'));
+        $this->assertSame(['A'], $this->names(PricedProduct::search()->filter(['price.wholesale' => ['gt' => 98]])->get()));
     }
 }

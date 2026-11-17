@@ -30,6 +30,9 @@ class Index
     /** @var array<string, string>|null Field paths keyed by the names they answer to. */
     private ?array $names = null;
 
+    /** @var array<string, IndexField> Fields of the keys of keyed fields asked for so far, by path. */
+    private array $keys = [];
+
     private ?string $distinct = null;
 
     /** @var array<string, mixed> */
@@ -69,6 +72,7 @@ class Index
     public function add(IndexField $field): IndexField
     {
         $this->names = null;
+        $this->keys = [];
 
         return $this->fields[$field->path] = $field;
     }
@@ -132,7 +136,8 @@ class Index
     }
 
     /**
-     * Find a field by the name a request refers to it: its path, an alias, or the code of an attribute.
+     * Find a field by the name a request refers to it: its path, an alias, the code of an attribute, or
+     * a key of a keyed field.
      */
     public function find(string $name): ?IndexField
     {
@@ -152,7 +157,21 @@ class Index
             }
         }
 
-        return isset($this->names[$name]) ? $this->fields[$this->names[$name]] : null;
+        if (isset($this->names[$name])) {
+            return $this->fields[$this->names[$name]];
+        }
+
+        // A key of a keyed field, such as `prices.retail` of `prices`. The key ends up in the engine's
+        // own expressions, so it may hold nothing but word characters and dashes.
+        if (preg_match('/^(.+)\.([\w\-]+)$/', $name, $parts) === 1 && isset($this->names[$parts[1]])) {
+            $parent = $this->fields[$this->names[$parts[1]]];
+
+            if ($parent->keyed) {
+                return $this->keys["{$parent->path}.{$parts[2]}"] ??= $parent->key($parts[2]);
+            }
+        }
+
+        return null;
     }
 
     /**

@@ -29,12 +29,18 @@ class SyncIndexSettings implements ShouldBeUnique, ShouldQueue
     }
 
     /**
-     * A type that is not searchable is skipped, as is an engine whose settings follow from nothing.
+     * Skipped for a model searched with Scout alone, whose index is not the package's to configure, and
+     * for an engine whose settings follow from nothing — Scout's null driver among them.
      */
     public function handle(IndexFactory $indexes): void
     {
         $model = $indexes->model($this->entityType);
-        $engine = $model?->searchableUsing();
+
+        if (! IndexFactory::defines($model)) {
+            return;
+        }
+
+        $engine = $model->searchableUsing();
 
         if (! $engine instanceof DerivesIndexSettings || ! $engine instanceof UpdatesIndexSettings) {
             return;

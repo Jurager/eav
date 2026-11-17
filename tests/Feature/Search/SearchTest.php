@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Contracts\Console\Kernel;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use InvalidArgumentException;
 use Jurager\Eav\Enums\Comparison;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
@@ -12,11 +14,14 @@ use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Contracts\Search\SupportsExtendedSearch;
 use Jurager\Eav\Search\Engines\MeilisearchEngine;
+use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Results;
+use Jurager\Eav\Tests\Fixtures\PlainSearchable;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\EngineManager;
 use Laravel\Scout\Engines\MeilisearchEngine as ScoutMeilisearchEngine;
+use Laravel\Scout\Engines\NullEngine;
 use Laravel\Scout\Exceptions\NotSupportedException;
 use Meilisearch\Client;
 
@@ -150,6 +155,58 @@ class SearchTest extends SearchTestCase
 
         $this->assertSame(MeilisearchEngine::class, $engine::class);
         $this->assertSame($engine, SearchableProduct::search()->engine(), 'One engine indexes and searches.');
+    }
+
+    public function test_scouts_null_driver_takes_any_search_and_finds_nothing(): void
+    {
+        config(['scout.driver' => null]);
+        $this->attribute('number', 'price', ['filterable' => true, 'sortable' => true]);
+        $this->product();
+
+        $search = fn () => SearchableProduct::search('shoes')
+            ->filter(['or' => [['price' => ['gt' => 1]], ['parent' => 2]]])
+            ->facets('price')
+            ->highlight('name')
+            ->sort('-price');
+
+        $this->assertInstanceOf(NullEngine::class, $search()->engine());
+
+        $results = $search()->partition(['price' => 1])->paginate();
+
+        $this->assertCount(0, $results);
+        $this->assertSame(0, $results->total());
+        $this->assertSame([], $results->facets());
+        $this->assertSame(0, $search()->boost(['price' => 1])->count());
+        $this->assertSame([], $search()->facetValues('price', '1'));
+        $this->assertCount(0, Search::federated([$search(), SearchableCategory::search('shoes')])->paginate());
+        $this->assertSame([], $this->engine->searches);
+    }
+
+    public function test_index_settings_are_not_synced_under_scouts_null_driver(): void
+    {
+        config(['scout.driver' => null]);
+        $this->attribute('number', 'price', ['filterable' => true]);
+
+        $this->app->call([new SyncIndexSettings('searchable_product'), 'handle']);
+
+        $this->assertSame([], $this->engine->settings);
+    }
+
+    public function test_a_model_searched_with_scout_alone_keeps_its_index_settings(): void
+    {
+        Relation::morphMap(['plain_searchable' => PlainSearchable::class]);
+
+        $this->assertNotContains('plain_searchable', app(IndexFactory::class)->entityTypes());
+
+        $this->app->call([new SyncIndexSettings('plain_searchable'), 'handle']);
+
+        // Told to follow Scout's own settings command, the package still leaves the model alone.
+        $this->app->make(Kernel::class)->rerouteSymfonyCommandEvents();
+        $this->artisan('scout:sync-index-settings')->assertSuccessful();
+
+        $this->assertArrayNotHasKey('eav_test_plain', $this->engine->settings);
+        $this->assertArrayHasKey('eav_test_products', $this->engine->settings);
+        $this->assertSame(\Laravel\Scout\Builder::class, PlainSearchable::search('x')::class);
     }
 
     public function test_fake_answers_searches_and_records_them(): void

@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Queue;
 use InvalidArgumentException;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Search\Filters\RelationFilterResolver;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
+use Jurager\Eav\Tests\Fixtures\PricedProduct;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 use Laravel\Scout\Jobs\RemoveFromSearch;
@@ -404,13 +407,86 @@ class MeilisearchEngineTest extends SearchTestCase
             SearchableCategory::search('x'),
         ])->paginate();
 
-        [$federated, $scoped] = $this->engine->searches;
+        [$federated, $facets] = $this->engine->searches;
 
-        $this->assertSame([self::PRODUCTS => ['attributes.color', 'attributes.sku']], $federated['federation']['facetsByIndex']);
-        $this->assertCount(1, $scoped['queries']);
-        $this->assertSame('(attributes.price > 1)', $scoped['queries'][0]['filter']);
-        $this->assertSame(['attributes.color'], $scoped['queries'][0]['facets']);
+        // Facets are asked apart from the hits: every facet as the search stands, and the filtered one
+        // once more without its own filter.
+        $this->assertSame(['limit' => 15, 'offset' => 0], $federated['federation']);
+        $this->assertNull($facets['federation']);
+        $this->assertCount(2, $facets['queries']);
+        $this->assertSame(['attributes.color', 'attributes.sku'], $facets['queries'][0]['facets']);
+        $this->assertSame('(attributes.color = "red") AND (attributes.price > 1)', $facets['queries'][0]['filter']);
+        $this->assertSame('(attributes.price > 1)', $facets['queries'][1]['filter']);
+        $this->assertSame(['attributes.color'], $facets['queries'][1]['facets']);
         $this->assertSame(['red', 'blue'], array_column($results->facets()['searchable_product']['color']['values'], 'value'));
+    }
+
+    public function test_a_partition_leads_within_a_federated_search(): void
+    {
+        $products = [$this->product('A'), $this->product('B'), $this->product('C')];
+        $category = SearchableCategory::create(['name' => 'Shoes']);
+
+        $this->engine->respond(self::PRODUCTS, array_map(fn ($product) => ['id' => $product->id], $products));
+        $this->engine->respond('eav_test_categories', [['id' => $category->id]]);
+
+        Search::federated([
+            SearchableProduct::search()->where('price', '>', 1)->partition(['color' => 'red']),
+            SearchableCategory::search(),
+        ])->paginate(5, 'page', 2);
+
+        [$leading, $trailing] = $this->engine->searches;
+
+        // What leads: the matching side of the partition, and the search that has none.
+        $this->assertSame(['limit' => 5, 'offset' => 5], $leading['federation']);
+        $this->assertSame([self::PRODUCTS, 'eav_test_categories'], array_column($leading['queries'], 'indexUid'));
+        $this->assertSame('(attributes.price > 1) AND (attributes.color = "red")', $leading['queries'][0]['filter']);
+
+        // What trails: the rest of the partitioned search, topping the page up from where the leaders ended.
+        $this->assertSame([self::PRODUCTS], array_column($trailing['queries'], 'indexUid'));
+        $this->assertSame('(attributes.price > 1) AND (NOT (attributes.color = "red"))', $trailing['queries'][0]['filter']);
+        $this->assertSame(['limit' => 5, 'offset' => 1], $trailing['federation']);
+    }
+
+    public function test_a_keyed_field_is_filtered_sorted_and_faceted_by_its_keys(): void
+    {
+        Relation::morphMap(['priced_product' => PricedProduct::class]);
+
+        PricedProduct::search()
+            ->where('prices.retail', '>=', '50')
+            ->filter(['price.wholesale' => ['lt' => 90]])
+            ->sort('-prices.retail')
+            ->facets('prices.retail')
+            ->paginate();
+
+        $request = $this->request();
+
+        $this->assertSame('(prices.retail >= 50) AND (prices.wholesale < 90)', $request['filter']);
+        $this->assertSame(['prices.retail:desc'], $request['sort']);
+        $this->assertSame(['prices.retail'], $request['facets']);
+
+        $index = Search::index(PricedProduct::class);
+        $settings = app(MeilisearchGrammar::class)->compileSettings($index);
+
+        // The engine is told about the field once: its keys follow from it.
+        $this->assertSame(['id', 'prices'], $settings['filterableAttributes']);
+        $this->assertSame(['id', 'prices'], $settings['sortableAttributes']);
+        $this->assertSame($index->find('prices.retail'), $index->find('price.retail'));
+        $this->assertSame(['retail' => 10, 'wholesale' => 99], PricedProduct::create(['name' => 'A'])->toSearchableArray()['prices']);
+    }
+
+    public function test_only_a_plain_key_of_a_keyed_field_is_a_field(): void
+    {
+        Relation::morphMap(['priced_product' => PricedProduct::class]);
+
+        foreach (['prices.retail OR id > 0', 'prices.', 'prices.a.b c', 'name.first', 'prices'] as $name) {
+            try {
+                PricedProduct::search()->where($name, '>', 1);
+
+                $this->assertSame('prices', $name, "[{$name}] should not be a field.");
+            } catch (InvalidSearchQueryException $e) {
+                $this->assertStringContainsString('not part of the search index', $e->getMessage());
+            }
+        }
     }
 
     public function test_federated_search_merges_entity_types_into_one_list(): void
@@ -428,7 +504,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
         $sent = $this->engine->searches[0];
 
-        $this->assertSame(['limit' => 10, 'offset' => 0, 'facetsByIndex' => [self::PRODUCTS => ['attributes.color']]], $sent['federation']);
+        $this->assertSame(['limit' => 10, 'offset' => 0], $sent['federation']);
         $this->assertSame(['weight' => 2.0], $sent['queries'][0]['federationOptions']);
         $this->assertSame('(attributes.price > 1)', $sent['queries'][0]['filter']);
         $this->assertArrayNotHasKey('hitsPerPage', $sent['queries'][0]);

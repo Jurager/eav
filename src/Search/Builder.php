@@ -22,6 +22,7 @@ use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 use Laravel\Scout\Builder as ScoutBuilder;
 use Laravel\Scout\Engines\Engine;
+use Laravel\Scout\Engines\NullEngine;
 use Laravel\Scout\Exceptions\NotSupportedException;
 use LogicException;
 
@@ -435,8 +436,11 @@ class Builder extends ScoutBuilder
         $this->requireExtended('search facet values');
 
         $field = $this->filterable($facet);
+        $engine = $this->engine();
 
-        return $this->formatter->terms($this, $field, $this->engine()->facetValues($this, $facet, $field, $query));
+        return $engine instanceof SupportsExtendedSearch
+            ? $this->formatter->terms($this, $field, $engine->facetValues($this, $facet, $field, $query))
+            : [];
     }
 
     /**
@@ -555,7 +559,9 @@ class Builder extends ScoutBuilder
      */
     private function extended(): bool
     {
-        return $this->engine() instanceof SupportsExtendedSearch;
+        // Scout's null driver finds nothing whatever it is asked, so it can be asked anything: an
+        // application under test builds its searches the way it does in production.
+        return $this->engine() instanceof SupportsExtendedSearch || $this->engine() instanceof NullEngine;
     }
 
     /**

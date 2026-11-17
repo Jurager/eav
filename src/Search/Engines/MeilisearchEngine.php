@@ -99,36 +99,24 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
 
     public function federated(array $searches, int $limit, int $offset): array
     {
-        $queries = [];
-        $owners = [];
-        $federation = ['limit' => $limit, 'offset' => $offset];
+        $partitioned = array_filter($searches, static fn (Builder $search): bool => $search->partition !== null);
 
-        foreach ($searches as $search) {
-            // A boosted search is several queries over its index; the server keeps each document once.
-            foreach ($this->queries($search) as $query) {
-                $queries[] = $query;
-                $owners[] = $search;
-            }
+        if ($partitioned === []) {
+            $found = $this->federation($searches, $limit, $offset);
+        } else {
+            // What leads comes first across every type: the leading side of each partition, and the
+            // searches that are not partitioned. The trailing sides follow, topping the page up.
+            $leading = $this->federation($searches, $limit, $offset, leading: true);
+            $missing = max(0, $limit - count($leading['hits']));
+            $trailing = $this->federation(array_values($partitioned), $missing, max(0, $offset - $leading['total']), leading: false);
 
-            if (($facets = $this->facetPaths($search)) !== []) {
-                $federation['facetsByIndex'][$search->uid()] = array_values($facets);
-            }
+            $found = [
+                'hits' => [...$leading['hits'], ...$trailing['hits']],
+                'total' => $leading['total'] + $trailing['total'],
+            ];
         }
 
-        $response = $this->multiSearch($queries, $federation);
-        $hits = [];
-
-        foreach ($response['hits'] ?? [] as $hit) {
-            if (($search = $owners[$hit['_federation']['queriesPosition'] ?? -1] ?? null) !== null) {
-                $hits[] = [$search, $hit];
-            }
-        }
-
-        return [
-            'hits' => $hits,
-            'total' => (int) ($response['estimatedTotalHits'] ?? count($hits)),
-            'facets' => $this->federatedFacets($searches, $response),
-        ];
+        return [...$found, 'facets' => $this->federatedFacets($searches)];
     }
 
     public function facetValues(Builder $search, string $name, IndexField $field, ?string $query): array
@@ -209,15 +197,16 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
     }
 
     /**
-     * The queries of a search within a federation: the search itself, then one per boosted condition.
+     * The queries of a search within a federation: the search itself, or one side of its partition, then
+     * one per boosted condition.
      *
      * @return list<array<string, mixed>>
      */
-    private function queries(Builder $search): array
+    private function queries(Builder $search, ?bool $side = null): array
     {
         $weight = $search->weight ?? 1.0;
         $queries = [[
-            ...$this->request($search),
+            ...$this->request($search, side: $side),
             ...($search->weight === null ? [] : ['federationOptions' => ['weight' => $weight]]),
         ]];
 
@@ -226,6 +215,45 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
         }
 
         return $queries;
+    }
+
+    /**
+     * Run searches as one federated request.
+     *
+     * @param  list<Builder>  $searches
+     * @param  bool|null  $leading  Which side of the partitioned searches to take: the leading one, or the
+     *                              trailing one; null when none is partitioned.
+     * @return array{hits: list<array{0: Builder, 1: array<string, mixed>}>, total: int}
+     */
+    private function federation(array $searches, int $limit, int $offset, ?bool $leading = null): array
+    {
+        $queries = [];
+        $owners = [];
+
+        foreach ($searches as $search) {
+            $side = $leading === null || $search->partition === null ? null : $leading === $search->partitionFirst;
+
+            // A boosted search is several queries over its index; the server keeps each document once.
+            foreach ($this->queries($search, $side) as $query) {
+                $queries[] = $query;
+                $owners[] = $search;
+            }
+        }
+
+        if ($queries === []) {
+            return ['hits' => [], 'total' => 0];
+        }
+
+        $response = $this->multiSearch($queries, ['limit' => $limit, 'offset' => $offset]);
+        $hits = [];
+
+        foreach ($response['hits'] ?? [] as $hit) {
+            if (($search = $owners[$hit['_federation']['queriesPosition'] ?? -1] ?? null) !== null) {
+                $hits[] = [$search, $hit];
+            }
+        }
+
+        return ['hits' => $hits, 'total' => (int) ($response['estimatedTotalHits'] ?? count($hits))];
     }
 
     /**
@@ -270,48 +298,49 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
     }
 
     /**
-     * Facets of a federated response, keyed by entity type: those of all its hits of that type.
+     * Facets of federated searches, keyed by entity type: those of every hit of that type, each counted
+     * as in a regular search. They are asked apart from the hits, in one round trip for all searches.
      *
      * @param  list<Builder>  $searches
-     * @param  array<string, mixed>  $response
      * @return array<string, array<string, mixed>>
      */
-    private function federatedFacets(array $searches, array $response): array
+    private function federatedFacets(array $searches): array
     {
         $requests = [];
 
-        // The federation cannot leave a facet's own filter out: ask for those facets apart, in one round trip.
         foreach ($searches as $position => $search) {
-            foreach ($this->scopedFacetRequests($search, $this->facetPaths($search)) as $key => $request) {
+            if (($facets = $this->facetPaths($search)) === []) {
+                continue;
+            }
+
+            $requests["{$position}:main"] = [...$this->request($search), 'limit' => 0, 'facets' => array_values($facets)];
+
+            foreach ($this->scopedFacetRequests($search, $facets) as $key => $request) {
                 $requests["{$position}:{$key}"] = $request;
             }
         }
 
-        $scoped = $requests === []
-            ? []
-            : array_combine(array_keys($requests), $this->multiSearch(array_values($requests))['results']);
+        if ($requests === []) {
+            return [];
+        }
 
+        $responses = array_combine(array_keys($requests), $this->multiSearch(array_values($requests))['results']);
         $found = [];
 
         foreach ($searches as $position => $search) {
-            $data = $response['facetsByIndex'][$search->uid()] ?? null;
-
-            if ($data === null) {
+            if (! isset($responses["{$position}:main"])) {
                 continue;
             }
 
-            $own = [];
+            $scoped = [];
 
-            foreach ($scoped as $key => $result) {
-                if (str_starts_with($key, "{$position}:")) {
-                    $own[substr($key, strlen("{$position}:"))] = $result;
+            foreach ($responses as $key => $response) {
+                if (str_starts_with($key, "{$position}:facet:")) {
+                    $scoped[substr($key, strlen("{$position}:"))] = $response;
                 }
             }
 
-            $found[$search->definition->entityType] = $this->facetData($search, $this->facetPaths($search), [
-                'facetDistribution' => $data['distribution'] ?? [],
-                'facetStats' => $data['stats'] ?? [],
-            ], $own);
+            $found[$search->definition->entityType] = $this->facetData($search, $this->facetPaths($search), $responses["{$position}:main"], $scoped);
         }
 
         return $found;

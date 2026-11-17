@@ -64,6 +64,7 @@ Replace the methods that described the index with one `searchIndex()` method:
 | `searchableWith()`                            | `$index->field(...)->with('relation')` or `$index->with()` |
 | `InteractsWithIndex::indexFields()`           | `->filterable()` and `->sortable()` on each field    |
 | `InteractsWithIndex::indexAliases()`          | `->alias('name')` on the field                       |
+| An `indexFields()` path covering nested keys, such as `prices` for `prices.retail` | `->keyed()` on the field |
 | `Builder::map()`                              | `->alias('name')` on the field                       |
 
 ```php

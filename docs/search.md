@@ -72,6 +72,20 @@ A field reads the column named by its path unless you pass a closure to `using()
 | `watch()`    | Columns whose change rebuilds the document, for computed fields      |
 | `alias()`    | Other names the field answers to in filters, sorts, and facets       |
 | `localized()`| The value is an array keyed by locale code                           |
+| `keyed()`    | The value is a map, each key a field of its own at `path.{key}`      |
+
+A keyed field holds one value per key, such as a price per price type or a stock per warehouse. Each key can be filtered, sorted, and faceted on by name:
+
+```php
+$index->field('prices')
+    ->number()
+    ->keyed()
+    ->filterable()
+    ->sortable()
+    ->using(fn (Product $product) => $product->prices->pluck('amount', 'type')->all());
+
+Product::search()->where('prices.retail', '<=', 500)->sort('prices.retail');
+```
 
 `$index->distinct()` keeps one hit per value of a field, such as one variant per parent. `$index->settings([...])` sets Meilisearch settings for this index.
 
@@ -276,6 +290,8 @@ Facets are keyed by entity type, then by name, and describe every hit of that ty
 $results->facets()['product']['color'];
 ```
 
+A `partition()` on one of the searches leads across the whole list: its matching side, together with the searches that are not partitioned, comes before its other side.
+
 Meilisearch rejects federated searches whose sort rules conflict. Give the searches the same sorting, or none.
 
 ## Index settings
@@ -370,6 +386,10 @@ On any other driver a search uses Scout's own query API: text, `where()` with co
 What Scout cannot express there throws Scout's `NotSupportedException`: `or` groups, facets, `searchOn()`, `highlight()`, `boost()`, `partition()`, and facet search. Federated search still works: each search runs alone, and the hits are ranked by weight and rank.
 
 Keep in mind that Scout's `database` and `collection` drivers search the model's columns, not the indexed document, so they do not see attribute values.
+
+Scout's `null` driver, commonly used in tests, takes any search and finds nothing: facets, boosts, and the rest are accepted, and no index settings are synced.
+
+A model that uses Scout's `Searchable` trait on its own, without `HasSearchableAttributes`, is left alone: the package does not touch its index settings.
 
 To add these features to another engine, extend it as you extend any Scout engine and implement the package's contracts:
 
