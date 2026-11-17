@@ -7,8 +7,6 @@ namespace Jurager\Eav\Search;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Pagination\Paginator;
 use InvalidArgumentException;
-use Jurager\Eav\Contracts\Search\Engine;
-use Jurager\Eav\Contracts\Search\FederatesSearches;
 
 /**
  * Searches over several entity types run as one, their hits merged into a single list ranked across the types.
@@ -19,15 +17,19 @@ class FederatedBuilder
      * @param  list<Builder>  $searches
      */
     public function __construct(
-        private readonly Engine $engine,
         private readonly FacetFormatter $formatter,
         private readonly array $searches,
     ) {
-        $types = array_map(static fn (Builder $search): string => $search->index->entityType, $searches);
+        $types = array_map(static fn (Builder $search): string => $search->definition->entityType, $searches);
 
         // Hits of one type form one list, with one set of facets: ranking some of them higher is a boost.
         if (count($types) !== count(array_unique($types))) {
             throw new InvalidArgumentException('A federated search takes one search per entity type. To rank some hits of a type higher, boost() its search.');
+        }
+
+        // One request can only go to one engine.
+        if (count(array_unique(array_map(static fn (Builder $search): string => $search->dialect()::class, $searches))) > 1) {
+            throw new InvalidArgumentException('The searches of a federated search must run on the same search engine.');
         }
     }
 
@@ -37,22 +39,24 @@ class FederatedBuilder
      * The total is an estimate. Facets are keyed by entity type, then by facet name, and describe every hit
      * of that type.
      */
-    public function paginate(int $perPage = 15, ?int $page = null, string $pageName = 'page'): Results
+    public function paginate(?int $perPage = null, string $pageName = 'page', ?int $page = null): Results
     {
+        $perPage ??= 15;
         $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
-        $offset = ($page - 1) * $perPage;
 
-        $found = match (true) {
-            $this->searches === [] => new Response,
-            $this->engine instanceof FederatesSearches => $this->engine->federated($this->searches, $perPage, $offset),
-            default => $this->merge($perPage, $offset),
-        };
+        $found = $this->searches === []
+            ? new Response
+            : $this->searches[0]->dialect()->federated($this->searches, $perPage, ($page - 1) * $perPage);
 
-        $facets = [];
+        $facets = $found->facets;
 
-        foreach ($this->searches as $search) {
-            if (isset($found->facets[$search->index->entityType])) {
-                $facets[$search->index->entityType] = $this->formatter->format($search, $found->facets[$search->index->entityType]);
+        if (! $found->formatted) {
+            $facets = [];
+
+            foreach ($this->searches as $search) {
+                if (isset($found->facets[$search->definition->entityType])) {
+                    $facets[$search->definition->entityType] = $this->formatter->format($search, $found->facets[$search->definition->entityType]);
+                }
             }
         }
 
@@ -69,40 +73,11 @@ class FederatedBuilder
      */
     public function get(int $limit = 20): EloquentCollection
     {
-        return $this->paginate($limit, 1)->getCollection();
+        return $this->paginate($limit, 'page', 1)->getCollection();
     }
 
     /**
-     * Federate for an engine that cannot: run each search and rank the hits together by weighted score.
-     */
-    private function merge(int $limit, int $offset): Response
-    {
-        $ranked = [];
-        $facets = [];
-        $total = 0;
-
-        foreach ($this->searches as $position => $search) {
-            // Any of the searches may fill the whole page, so each is asked for all of it.
-            $found = $search->run($offset + $limit);
-            $total += $found->total;
-
-            foreach ($found->hits as $rank => $hit) {
-                $ranked[] = [($hit->score ?? 0.0) * ($search->weight ?? 1.0), $position, $rank, $hit];
-            }
-
-            if ($found->facets !== []) {
-                $facets[$search->index->entityType] = $found->facets;
-            }
-        }
-
-        // Best weighted score first; equal scores keep the order of the searches and of their own hits.
-        usort($ranked, static fn (array $a, array $b): int => [$b[0], $a[1], $a[2]] <=> [$a[0], $b[1], $b[2]]);
-
-        return new Response(array_column(array_slice($ranked, $offset, $limit), 3), $total, $facets);
-    }
-
-    /**
-     * Load the models of each search's hits with that search's own relations and load query.
+     * Load the models of each search's hits as Scout loads them, with that search's own query callback.
      *
      * @param  list<Hit>  $hits
      * @return list<Hit>
@@ -110,7 +85,19 @@ class FederatedBuilder
     private function load(array $hits): array
     {
         foreach ($this->searches as $search) {
-            $search->load(array_values(array_filter($hits, $search->made(...))));
+            $own = array_filter($hits, static fn (Hit $hit): bool => $hit->model === null && $hit->search === $search);
+
+            if ($own === []) {
+                continue;
+            }
+
+            $models = $search->model
+                ->getScoutModelsByIds($search, array_map(static fn (Hit $hit): int|string => $hit->key, array_values($own)))
+                ->keyBy(static fn ($model): string => (string) $model->getScoutKey());
+
+            foreach ($own as $hit) {
+                $hit->model = $models->get((string) $hit->key);
+            }
         }
 
         return $hits;

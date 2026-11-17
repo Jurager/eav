@@ -99,61 +99,12 @@ return [
     ],
 
     /*
-     * Search over entities indexed with Laravel Scout.
+     * Search over entities indexed with Laravel Scout. Entities are searched
+     * with the Scout driver they are indexed with; index settings such as
+     * typo tolerance, synonyms and stop words belong to Scout's own
+     * configuration, under "scout.meilisearch.index-settings".
      */
     'search' => [
-
-        /*
-         * The engine searches run on. "meilisearch" is built in; register
-         * your own with Search::extend() and name it here.
-         */
-        'driver' => env('EAV_SEARCH_DRIVER', 'meilisearch'),
-
-        'engines' => [
-
-            'meilisearch' => [
-
-                /*
-                 * Meilisearch settings applied to every index, and to the
-                 * index of one entity type. Searchable, filterable and
-                 * sortable fields, the distinct field and localized fields
-                 * are derived from the index definition and merged on top.
-                 *
-                 * Run `php artisan eav:sync-index-settings` after changing
-                 * these. Synonyms and stop words apply to an index as a
-                 * whole, not per locale.
-                 */
-                'settings' => [
-                    // 'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
-                    // 'synonyms' => ['sneakers' => ['trainers']],
-                    // 'stopWords' => ['the', 'a'],
-                    // 'pagination' => ['maxTotalHits' => 10000],
-                    // 'faceting' => ['maxValuesPerFacet' => 200],
-                ],
-
-                'indexes' => [
-                    // 'product' => ['rankingRules' => ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness']],
-                ],
-
-                /*
-                 * The Meilisearch language of a locale, by locale code. A
-                 * locale not listed here uses the first two letters of its
-                 * code, e.g. "en_US" is "en". Set this when the code is not
-                 * an ISO 639-1 language.
-                 */
-                'locales' => [
-                    // 'ua' => 'uk',
-                ],
-
-                /*
-                 * Whether the "like" filter operator is allowed. It compiles
-                 * to the CONTAINS operator, an experimental Meilisearch
-                 * feature you must enable on the server. When off, "like"
-                 * is rejected with a 422.
-                 */
-                'contains' => false,
-            ],
-        ],
 
         /*
          * Whether a search removes the documents it finds whose entity no
@@ -175,6 +126,27 @@ return [
          * sent in the filter expression, so a broader filter is rejected.
          */
         'relation_limit' => 1000,
+
+        'meilisearch' => [
+
+            /*
+             * The Meilisearch language of a locale, by locale code. A locale
+             * not listed here uses the first two letters of its code, e.g.
+             * "en_US" is "en". Set this when the code is not an ISO 639-1
+             * language.
+             */
+            'locales' => [
+                // 'ua' => 'uk',
+            ],
+
+            /*
+             * Whether the "like" filter operator is allowed. It compiles to
+             * the CONTAINS operator, an experimental Meilisearch feature you
+             * must enable on the server. When off, "like" is rejected with
+             * a 422.
+             */
+            'contains' => false,
+        ],
     ],
 
 ];

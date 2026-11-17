@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Engines\Meilisearch;
+namespace Jurager\Eav\Search\Dialects\Meilisearch;
 
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Meilisearch\Client;

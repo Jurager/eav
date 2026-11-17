@@ -24,11 +24,6 @@ class Index
      */
     public const string LABELS = 'labels';
 
-    /**
-     * The document field Scout marks trashed entities with, when it keeps them in the index.
-     */
-    public const string SOFT_DELETED = '__soft_deleted';
-
     /** @var array<string, IndexField> Fields keyed by path. */
     private array $fields = [];
 
@@ -45,13 +40,11 @@ class Index
 
     /**
      * @param  list<string>  $locales  Codes of the locales localized fields are indexed in.
-     * @param  bool  $softDeletes  Whether trashed entities stay in the index, marked as such by Scout.
      */
     public function __construct(
         public readonly Model $model,
         public readonly string $entityType,
         private readonly array $locales = [],
-        public readonly bool $softDeletes = false,
     ) {
         $key = $this->field('id')
             ->using(static fn (Model $model): mixed => $model->getScoutKey())

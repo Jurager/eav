@@ -114,14 +114,6 @@ class Indexer
     }
 
     /**
-     * Remove every document of the type from the index.
-     */
-    public function flush(string $entityType): void
-    {
-        $this->indexes->model($entityType)?->removeAllFromSearch();
-    }
-
-    /**
      * Ids of the entities reading their values off the given ones.
      *
      * @param  array<int, int|string>  $entityIds

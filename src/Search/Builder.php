@@ -4,30 +4,34 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
-use Closure;
+use Illuminate\Contracts\Support\Arrayable;
 use InvalidArgumentException;
-use LogicException;
-use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
-use Illuminate\Database\Eloquent\Model;
-use Illuminate\Pagination\Paginator;
-use Jurager\Eav\Contracts\Search\BoostsMatches;
-use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Contracts\Search\FilterResolver;
-use Jurager\Eav\Contracts\Search\SearchesFacetValues;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Jurager\Eav\Search\Dialects\Dialect;
 use Jurager\Eav\Search\Filters\Group;
 use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\Indexer;
+use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
+use Laravel\Scout\Builder as ScoutBuilder;
+use Laravel\Scout\Exceptions\NotSupportedException;
+use LogicException;
 
 /**
- * Fluent search query over the index of one entity type.
+ * Scout's search builder for an entity with attributes: `Product::search('phone')`.
+ *
+ * Fields are named as the index definition names them and checked against it, and the builder adds what
+ * Scout's query API lacks — request filters, facets, locales, boosts — through the dialect of the engine.
+ *
+ * @template TModel of \Illuminate\Database\Eloquent\Model
+ *
+ * @extends ScoutBuilder<TModel>
  */
-class Builder
+class Builder extends ScoutBuilder
 {
     /**
      * Comparison signs accepted by where(), and the filter operators they stand for.
@@ -36,19 +40,19 @@ class Builder
         '=' => 'eq', '!=' => 'ne', '<>' => 'ne', '>' => 'gt', '>=' => 'gte', '<' => 'lt', '<=' => 'lte',
     ];
 
-    public ?string $query = null;
+    /**
+     * The index definition of the entity searched.
+     */
+    public readonly Index $definition;
 
     /** @var list<Group> Checked conditions that must all hold. */
-    public array $filters = [];
+    public array $conditions = [];
 
     /** @var list<array{0: IndexField, 1: string}> Sortable fields and their directions. */
-    public array $orders = [];
+    public array $sorts = [];
 
     /** @var list<string> Names of the filterable fields facets are asked for. */
     public array $facets = [];
-
-    /** @var list<string> Locale codes the search runs in. */
-    private array $locales;
 
     /** @var list<string>|null Names of the searchable fields the text is matched against; all of them when null. */
     public ?array $searchOn = null;
@@ -62,14 +66,9 @@ class Builder
 
     public ?Group $partition = null;
 
-    /** @var list<array{0: Group, 1: float}> Conditions whose matches rank higher, with the weight of each. */
-    private array $boosts = [];
-
     /**
-     * Trashed entities to include: none (false), all alongside the rest (true), or only them (null).
+     * Whether documents matching the partition come first.
      */
-    public ?bool $trashed = false;
-
     public bool $partitionFirst = true;
 
     /**
@@ -82,44 +81,65 @@ class Builder
      */
     public ?float $threshold = null;
 
-    /** @var array<string, mixed> Engine parameters passed through as they are. */
-    public array $options = [];
+    /** @var list<array{0: Group, 1: float}> Conditions whose matches rank higher, with the weight of each. */
+    private array $boosts = [];
 
-    /** @var list<string> */
-    private array $with = [];
+    /** @var list<string> Locale codes the search runs in. */
+    private array $locales;
 
-    /** @var (Closure(EloquentBuilder): mixed)|null */
-    private ?Closure $loadUsing = null;
+    private readonly Dialect $dialect;
 
     /**
-     * @param  iterable<FilterResolver>  $resolvers
-     * @param  list<string>  $locales  Locale codes the search runs in unless told otherwise.
+     * Whether the search is run by the dialect, rather than by a callback the caller gave.
      */
+    private readonly bool $native;
+
+    /** @var iterable<FilterResolver> */
+    private readonly iterable $resolvers;
+
     public function __construct(
-        private readonly Engine $engine,
-        public readonly Index $index,
+        IndexFactory $indexes,
+        SearchManager $search,
         private readonly Indexer $indexer,
         private readonly FacetFormatter $formatter,
-        private readonly iterable $resolvers = [],
-        array $locales = [],
+        $model,
+        $query = '',
+        $callback = null,
+        $softDelete = false,
     ) {
-        $this->locales = $locales;
+        parent::__construct($model, $query, $callback, $softDelete);
+
+        $this->definition = $indexes->for($model);
+        $this->dialect = $search->dialect($this->engine());
+        $this->locales = $search->currentLocales();
+        $this->resolvers = $search->resolvers();
+
+        // A callback given to search() is the caller taking the request into their own hands.
+        $this->native = $this->callback === null;
+
+        if ($this->native) {
+            $this->callback = $this->dialect->callback($this);
+        }
     }
 
     /**
-     * Set the text to search for.
+     * The dialect's callback runs the search it was made for: a copy needs one of its own.
      */
-    public function query(?string $query): static
+    public function __clone()
     {
-        $this->query = $query === '' ? null : $query;
-
-        return $this;
+        if ($this->native) {
+            $this->callback = $this->dialect->callback($this);
+        }
     }
 
     /**
      * Add a condition: `where('brand', 'nike')`, `where('price', '>=', 100)`.
+     *
+     * @param  string  $field
+     * @param  mixed  $operator
+     * @param  mixed  $value
      */
-    public function where(string $field, mixed $operator = null, mixed $value = null): static
+    public function where($field, $operator, $value = null): static
     {
         if (func_num_args() === 2) {
             [$operator, $value] = ['=', $operator];
@@ -135,21 +155,22 @@ class Builder
         return $this->condition($field, $alias, $value);
     }
 
-    public function whereNot(string $field, mixed $value): static
+    /**
+     * @param  string  $field
+     * @param  Arrayable<array-key, mixed>|array<int, mixed>  $values
+     */
+    public function whereIn($field, $values): static
     {
-        return $this->condition($field, 'ne', $value);
+        return $this->condition($field, 'in', array_values($values instanceof Arrayable ? $values->toArray() : $values));
     }
 
-    /** @param  array<int, mixed>  $values */
-    public function whereIn(string $field, array $values): static
+    /**
+     * @param  string  $field
+     * @param  Arrayable<array-key, mixed>|array<int, mixed>  $values
+     */
+    public function whereNotIn($field, $values): static
     {
-        return $this->condition($field, 'in', array_values($values));
-    }
-
-    /** @param  array<int, mixed>  $values */
-    public function whereNotIn(string $field, array $values): static
-    {
-        return $this->condition($field, 'nin', array_values($values));
+        return $this->condition($field, 'nin', array_values($values instanceof Arrayable ? $values->toArray() : $values));
     }
 
     /** @param  array{0: mixed, 1: mixed}  $range */
@@ -181,6 +202,20 @@ class Builder
     }
 
     /**
+     * Customize the query the models of the hits are loaded with. The text to search for goes to `search()`.
+     *
+     * @param  callable  $callback
+     */
+    public function query($callback): static
+    {
+        if (is_string($callback) && ! is_callable($callback)) {
+            throw new InvalidArgumentException('query() customizes how models are loaded. Pass the text to search(): Model::search($text).');
+        }
+
+        return parent::query($callback);
+    }
+
+    /**
      * Add JSON:API filters as sent in a request: `['brand' => 'nike', 'price' => ['gte' => 100]]`.
      *
      * @param  array<string, mixed>|null  $filter
@@ -188,7 +223,8 @@ class Builder
     public function filter(?array $filter): static
     {
         if ($filter !== null && $filter !== [] && ! ($group = $this->parse($filter))->isEmpty()) {
-            $this->filters[] = $group;
+            $this->conditions[] = $group;
+            $this->dialect->where($this, $group);
         }
 
         return $this;
@@ -206,22 +242,24 @@ class Builder
         return $this;
     }
 
-    public function orderBy(string $field, string $direction = 'asc'): static
+    /**
+     * @param  string  $column
+     * @param  string  $direction
+     */
+    public function orderBy($column, $direction = 'asc'): static
     {
-        $sortable = $this->field($field);
+        $field = $this->field($column);
 
-        if (! $sortable->sortable) {
-            throw InvalidSearchQueryException::notSortable($field);
+        if (! $field->sortable) {
+            throw InvalidSearchQueryException::notSortable($column);
         }
 
-        $this->orders[] = [$sortable, strtolower($direction) === 'desc' ? 'desc' : 'asc'];
+        $direction = strtolower($direction) === 'desc' ? 'desc' : 'asc';
+
+        $this->sorts[] = [$field, $direction];
+        $this->dialect->orderBy($this, $field, $direction);
 
         return $this;
-    }
-
-    public function orderByDesc(string $field): static
-    {
-        return $this->orderBy($field, 'desc');
     }
 
     /**
@@ -232,6 +270,8 @@ class Builder
      */
     public function partition(array $condition, bool $first = true): static
     {
+        $this->extended('partition results');
+
         if ($this->boosts !== []) {
             throw new LogicException('A search cannot be both partitioned and boosted.');
         }
@@ -255,6 +295,8 @@ class Builder
      */
     public function boost(array $condition, float $weight = 2.0): static
     {
+        $this->extended('boost matches');
+
         if ($weight <= 0) {
             throw new InvalidArgumentException('The weight of a boost must be greater than zero.');
         }
@@ -277,7 +319,7 @@ class Builder
      */
     public function boosts(): array
     {
-        return $this->query !== null && $this->orders === [] ? $this->boosts : [];
+        return $this->text() !== null && $this->sorts === [] ? $this->boosts : [];
     }
 
     /**
@@ -287,6 +329,8 @@ class Builder
      */
     public function facets(array|string $facets): static
     {
+        $this->extended('compute facets');
+
         array_map($this->filterable(...), (array) $facets);
 
         $this->facets = array_values(array_unique([...$this->facets, ...(array) $facets]));
@@ -299,7 +343,7 @@ class Builder
      */
     public function locale(string ...$locales): static
     {
-        if (($unknown = array_diff($locales, $this->index->locales())) !== []) {
+        if (($unknown = array_diff($locales, $this->definition->locales())) !== []) {
             throw InvalidSearchQueryException::unknownLocale(implode(', ', $unknown));
         }
 
@@ -313,6 +357,8 @@ class Builder
      */
     public function searchOn(string ...$fields): static
     {
+        $this->extended('search chosen fields');
+
         foreach ($fields as $name) {
             if (! $this->field($name)->searchable) {
                 throw InvalidSearchQueryException::notSearchable($name);
@@ -329,6 +375,8 @@ class Builder
      */
     public function highlight(string ...$fields): static
     {
+        $this->extended('highlight matches');
+
         array_map($this->field(...), $fields);
 
         $this->highlight = array_values($fields);
@@ -341,6 +389,8 @@ class Builder
      */
     public function matching(string $strategy): static
     {
+        $this->extended('choose a matching strategy');
+
         $this->matching = $strategy;
 
         return $this;
@@ -351,6 +401,8 @@ class Builder
      */
     public function threshold(float $score): static
     {
+        $this->extended('drop hits by relevance');
+
         $this->threshold = $score;
 
         return $this;
@@ -361,29 +413,11 @@ class Builder
      */
     public function distinct(string $field): static
     {
+        $this->extended('keep one hit per value');
+
         $this->filterable($field);
 
         $this->distinct = $field;
-
-        return $this;
-    }
-
-    /**
-     * Include trashed entities, where Scout keeps them in the index (`scout.soft_delete`).
-     */
-    public function withTrashed(): static
-    {
-        $this->trashed = true;
-
-        return $this;
-    }
-
-    /**
-     * Match trashed entities only, where Scout keeps them in the index (`scout.soft_delete`).
-     */
-    public function onlyTrashed(): static
-    {
-        $this->trashed = null;
 
         return $this;
     }
@@ -399,76 +433,45 @@ class Builder
     }
 
     /**
-     * Pass search parameters of the engine in use through as they are, e.g. `['hybrid' => [...]]` with Meilisearch.
-     *
-     * @param  array<string, mixed>  $options
-     */
-    public function options(array $options): static
-    {
-        $this->options = [...$this->options, ...$options];
-
-        return $this;
-    }
-
-    /**
-     * Eager load relations on the models of the hits.
-     */
-    public function with(string ...$relations): static
-    {
-        $this->with = [...$this->with, ...$relations];
-
-        return $this;
-    }
-
-    /**
-     * Customize the query the models of the hits are loaded with.
-     *
-     * @param  Closure(EloquentBuilder): mixed  $callback
-     */
-    public function loadUsing(Closure $callback): static
-    {
-        $this->loadUsing = $callback;
-
-        return $this;
-    }
-
-    /**
      * Run the search and get a page of models, with hits and facets.
-     */
-    public function paginate(int $perPage = 15, ?int $page = null, string $pageName = 'page'): Results
-    {
-        $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
-        $found = $this->execute($perPage, $page);
-
-        return Results::make($this->load($found->hits), $this->formatter->format($this, $found->facets), $found->total, $perPage, $page, [
-            'path' => Paginator::resolveCurrentPath(),
-            'pageName' => $pageName,
-        ]);
-    }
-
-    /**
-     * Run the search and get the models of the best hits.
      *
-     * @return EloquentCollection<int, Model>
+     * @param  int|null  $perPage
+     * @param  string  $pageName
+     * @param  int|null  $page
      */
-    public function get(int $limit = 20): EloquentCollection
+    public function paginate($perPage = null, $pageName = 'page', $page = null): Results
     {
-        return $this->paginate($limit, 1)->getCollection();
-    }
+        [$paginator, $raw] = $this->capturing(fn () => parent::paginate($perPage, $pageName, $page));
 
-    public function first(): ?Model
-    {
-        return $this->get(1)->first();
-    }
+        $hits = $this->dialect->hits($this, $raw);
 
-    /**
-     * Run the search and get the keys of the best hits, without loading models.
-     *
-     * @return list<int|string>
-     */
-    public function keys(int $limit = 20): array
-    {
-        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->withoutFacets()->execute($limit, 1)->hits);
+        if ($hits === []) {
+            // The engine's raw results are not understood: the models are all there is to tell.
+            $hits = $paginator->getCollection()->map(fn ($model): Hit => $this->hit($model->getScoutKey()))->all();
+        }
+
+        $models = $paginator->getCollection()->keyBy(static fn ($model): string => (string) $model->getScoutKey());
+        $missing = [];
+
+        foreach ($hits as $hit) {
+            if (($hit->model = $models->get((string) $hit->key)) === null) {
+                $missing[] = $hit->key;
+            }
+        }
+
+        // A hit without a model may be a document left behind by a deleted entity: clean those up.
+        if (config('eav.search.prune', true)) {
+            $this->indexer->prune($this->model::class, $missing);
+        }
+
+        return Results::make(
+            $hits,
+            $this->formatter->format($this, $this->dialect->facets($this, $raw)),
+            $paginator->total(),
+            $paginator->perPage(),
+            $paginator->currentPage(),
+            ['path' => $paginator->path(), 'pageName' => $pageName],
+        )->appends('query', $this->query);
     }
 
     /**
@@ -476,7 +479,9 @@ class Builder
      */
     public function count(): int
     {
-        return $this->withoutFacets()->execute(0, 1)->total;
+        $search = $this->withoutFacets()->take(0);
+
+        return (int) $search->engine()->getTotalCount($search->raw());
     }
 
     /**
@@ -488,89 +493,23 @@ class Builder
     {
         $field = $this->filterable($facet);
 
-        if ($this->engine instanceof SearchesFacetValues) {
-            return $this->formatter->terms($this, $field, $this->engine->facetValues($this, $field, $query));
-        }
-
-        // The engine cannot search a facet: match the values a regular search returns for it.
-        $search = $this->withoutFacets()->facets($facet);
-        $values = $search->execute(0, 1)->facets[$facet] ?? [];
-
-        if ($query !== null && $query !== '') {
-            $values = array_filter($values, static fn (int|string $value): bool => mb_stripos((string) $value, $query) !== false, ARRAY_FILTER_USE_KEY);
-        }
-
-        return $this->formatter->terms($this, $field, $values);
+        return $this->formatter->terms($this, $field, $this->dialect->facetValues($this, $facet, $field, $query));
     }
 
     /**
-     * Run the search for a federated search, which merges and loads the hits itself.
-     *
-     * @internal
+     * The text searched for, or null when there is none.
      */
-    public function run(int $limit): Response
+    public function text(): ?string
     {
-        return $this->execute($limit, 1);
+        return $this->query === null || $this->query === '' ? null : (string) $this->query;
     }
 
     /**
-     * Ask the engine, covering for it where it cannot rank boosted matches itself.
+     * Name of the index searched.
      */
-    private function execute(int $perPage, int $page): Response
+    public function uid(): string
     {
-        $boosts = $this->boosts();
-
-        if ($boosts === [] || $perPage <= 0 || $this->engine instanceof BoostsMatches) {
-            return $this->engine->search($this, $perPage, $page);
-        }
-
-        // Every candidate for the page: the best hits as they are, and the best of each boosted condition.
-        $size = $perPage * $page;
-        $base = $this->engine->search($this->narrowed(), $size, 1);
-        $ranked = [];
-
-        foreach ($base->hits as $rank => $hit) {
-            $ranked[(string) $hit->key] = [$hit->score ?? 0.0, $rank, $hit];
-        }
-
-        foreach ($boosts as [$condition, $weight]) {
-            foreach ($this->engine->search($this->narrowed($condition), $size, 1)->hits as $hit) {
-                $key = (string) $hit->key;
-                $score = ($hit->score ?? 0.0) * $weight;
-
-                if ($score > ($ranked[$key][0] ?? -1.0)) {
-                    $ranked[$key] = [$score, $ranked[$key][1] ?? PHP_INT_MAX, $hit];
-                }
-            }
-        }
-
-        // Best weighted score first; equal scores keep the engine's own order.
-        usort($ranked, static fn (array $a, array $b): int => [$b[0], $a[1]] <=> [$a[0], $b[1]]);
-
-        return new Response(
-            array_map(
-                fn (array $entry): Hit => $this->hit($entry[2]->key, $entry[2]->document, $entry[2]->formatted, $entry[0]),
-                array_slice($ranked, ($page - 1) * $perPage, $perPage),
-            ),
-            $base->total,
-            $base->facets,
-        );
-    }
-
-    /**
-     * The same search without boosts — as it is, or narrowed to one boosted condition, which needs no facets.
-     */
-    private function narrowed(?Group $condition = null): static
-    {
-        $search = clone $this;
-        $search->boosts = [];
-
-        if ($condition !== null) {
-            $search->filters[] = $condition;
-            $search->facets = [];
-        }
-
-        return $search;
+        return $this->index ?: $this->definition->uid();
     }
 
     /**
@@ -584,13 +523,21 @@ class Builder
     }
 
     /**
+     * The dialect of the engine the search runs on.
+     */
+    public function dialect(): Dialect
+    {
+        return $this->dialect;
+    }
+
+    /**
      * Find an index field by the name a request refers to it.
      *
      * @throws InvalidSearchQueryException
      */
     public function field(string $name): IndexField
     {
-        return $this->index->find($name) ?? throw InvalidSearchQueryException::unknownField($name);
+        return $this->definition->find($name) ?? throw InvalidSearchQueryException::unknownField($name);
     }
 
     /**
@@ -618,79 +565,24 @@ class Builder
      */
     public function constrains(IndexField $field): bool
     {
-        return array_any($this->filters, static fn (Group $group): bool => $group->constrains($field));
+        return array_any($this->conditions, static fn (Group $group): bool => $group->constrains($field));
     }
 
     /**
-     * Make a hit of this search — what an engine returns for each document it found.
+     * Make a hit of this search — what a dialect returns for each document found.
      *
      * @param  array<string, mixed>  $document  The document as indexed.
      * @param  array<string, mixed>  $formatted  The document with matches highlighted, if the engine highlights.
      */
     public function hit(int|string $key, array $document = [], array $formatted = [], ?float $score = null): Hit
     {
-        return new Hit($key, $this->index->entityType, $document, $formatted, $score, $this);
-    }
-
-    /**
-     * Whether the hit was made by this search.
-     */
-    public function made(Hit $hit): bool
-    {
-        return $hit->search === $this;
-    }
-
-    /**
-     * Attach their models to hits. A hit whose model is gone, or left out by the load query, keeps `model` null.
-     *
-     * @internal
-     *
-     * @param  list<Hit>  $hits
-     * @return list<Hit>
-     */
-    public function load(array $hits): array
-    {
-        if ($hits === []) {
-            return $hits;
-        }
-
-        $model = $this->index->model;
-        $query = $model->newQuery()->whereIn($model->qualifyColumn($model->getScoutKeyName()), array_map(static fn (Hit $hit): int|string => $hit->key, $hits));
-
-        if ($this->index->softDeletes && $this->trashed !== false) {
-            $this->trashed ? $query->withTrashed() : $query->onlyTrashed();
-        }
-
-        if ($this->with !== []) {
-            $query->with($this->with);
-        }
-
-        if ($this->loadUsing !== null) {
-            ($this->loadUsing)($query);
-        }
-
-        $models = $query->get()->keyBy(static fn (Model $model): string => (string) $model->getScoutKey());
-
-        $missing = [];
-
-        foreach ($hits as $hit) {
-            if (($hit->model = $models->get((string) $hit->key)) === null) {
-                $missing[] = $hit->key;
-            }
-        }
-
-        // A hit without a model may be a document left behind by a deleted entity: clean those up.
-        if (config('eav.search.prune', true)) {
-            $this->indexer->prune($this->index->model::class, $missing);
-        }
-
-        return $hits;
+        return new Hit($key, $this->definition->entityType, $document, $formatted, $score, $this);
     }
 
     /**
      * The same search with no facets to compute.
      */
-    private function withoutFacets(): static
+    public function withoutFacets(): static
     {
         $search = clone $this;
         $search->facets = [];
@@ -698,9 +590,48 @@ class Builder
         return $search;
     }
 
+    /**
+     * Run a Scout terminal and keep the engine's raw results alongside what it returned.
+     *
+     * @template TResult
+     *
+     * @param  callable(): TResult  $terminal
+     * @return array{0: TResult, 1: mixed}
+     */
+    private function capturing(callable $terminal): array
+    {
+        $raw = null;
+        $after = $this->afterRawSearchCallback;
+
+        $this->afterRawSearchCallback = static function (mixed $results) use (&$raw, $after): mixed {
+            $results = $after !== null ? ($after($results) ?: $results) : $results;
+
+            return $raw = $results;
+        };
+
+        try {
+            return [$terminal(), $raw];
+        } finally {
+            $this->afterRawSearchCallback = $after;
+        }
+    }
+
+    /**
+     * Refuse what Scout's query API cannot express on an engine that has no dialect of its own.
+     */
+    private function extended(string $ability): void
+    {
+        if (! $this->dialect->extended()) {
+            throw new NotSupportedException("The search engine in use cannot {$ability}.");
+        }
+    }
+
     private function condition(string $field, string $operator, mixed $value): static
     {
-        $this->filters[] = $this->normalize(new ParsedFilters([$field => [$operator => $value]], [], [], [], []));
+        $group = $this->normalize(new ParsedFilters([$field => [$operator => $value]], [], [], [], []));
+
+        $this->conditions[] = $group;
+        $this->dialect->where($this, $group);
 
         return $this;
     }
@@ -726,7 +657,7 @@ class Builder
      */
     private function normalize(ParsedFilters $parsed): Group
     {
-        return (new Normalizer($this->index))->normalize($parsed);
+        return (new Normalizer($this->definition))->normalize($parsed);
     }
 
     /**
@@ -742,9 +673,9 @@ class Builder
         foreach ($conditions as $name => $value) {
             $name = (string) $name;
 
-            if ($this->index->find($name) === null) {
+            if ($this->definition->find($name) === null) {
                 foreach ($this->resolvers as $resolver) {
-                    if (($substitute = $resolver->resolve($name, $value, $this->index->model)) !== null) {
+                    if (($substitute = $resolver->resolve($name, $value, $this->model)) !== null) {
                         [$name, $value] = $substitute;
 
                         break;

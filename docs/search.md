@@ -3,15 +3,15 @@ title: Searching entities
 weight: 83
 ---
 
-The package indexes attribute values with [Laravel Scout](https://laravel.com/docs/scout) and searches them through a search engine: full-text search with typo tolerance, per-locale search, filters, facets, sorting, and federated search across entity types.
+The package indexes and searches entities with [Laravel Scout](https://laravel.com/docs/scout). `Product::search()` returns Scout's own builder, taught the entity's attributes: request filters, facets, per-locale search, boosting, and federated search across entity types.
 
-[Meilisearch](https://www.meilisearch.com) is the built-in engine. Install Scout and the Meilisearch client, and set Scout's driver to `meilisearch`:
+Install Scout and a driver. With [Meilisearch](https://www.meilisearch.com), every feature on this page is available:
 
 ```bash
 composer require laravel/scout meilisearch/meilisearch-php
 ```
 
-Native federated search requires Meilisearch 1.10 or higher. You can also [add your own engine](#search-engines).
+Set `SCOUT_DRIVER=meilisearch`. Native federated search requires Meilisearch 1.10 or higher. [Other Scout drivers](#other-scout-drivers) search with what Scout's own query API can express.
 
 ## Making a model searchable
 
@@ -41,7 +41,7 @@ An attribute with none of these flags is not indexed. The attribute's type must 
 
 ## Declaring model fields
 
-Declare the model's own columns and computed values in `searchIndex()`. This one definition drives the document, the engine settings, and the fields a request may filter and sort by:
+Declare the model's own columns and computed values in `searchIndex()`. This one definition drives the document, the index settings, and the fields a request may filter and sort by:
 
 ```php
 use Jurager\Eav\Search\Index\Index;
@@ -101,22 +101,22 @@ Dates are indexed as Unix timestamps. Every locale is indexed, whichever one the
 
 ## Searching
 
-```php
-use Jurager\Eav\Facades\Search;
+Search as you do with Scout. Everything Scout's builder offers still works: `paginate()`, `get()`, `first()`, `keys()`, `take()`, `raw()`, `withTrashed()`, and `query()` to customize how the models are loaded.
 
-$results = Search::for(Product::class)
-    ->query('красн кросовки')
+```php
+$results = Product::search('красн кросовки')
     ->where('brand', 'nike')
     ->whereBetween('price', [1000, 5000])
     ->filter($request->query('filter'))
     ->sort('-price,name')
     ->facets(['brand', 'color', 'price'])
+    ->query(fn ($query) => $query->with('media'))
     ->paginate(15);
 ```
 
-`Search::for()` accepts a model, its class, or its morph alias. Refer to a field by its path, an alias, or the attribute code. The labels of a select are the field `labels.{code}`.
+Refer to a field by its path, an alias, or the attribute code. The labels of a select are the field `labels.{code}`.
 
-`paginate()` returns a `LengthAwarePaginator` of models in ranking order. The total is exact up to Meilisearch's `pagination.maxTotalHits`, which is 1000 by default. Raise it in the [index settings](#index-settings) to page deeper:
+`paginate()` returns a `LengthAwarePaginator` of models in ranking order, with the hits and facets alongside:
 
 ```php
 $results->items();   // models
@@ -125,54 +125,38 @@ $results->facets();
 $results->hits();    // documents, highlights, ranking scores
 ```
 
-| Method          | Returns                                         |
-|-----------------|-------------------------------------------------|
-| `paginate()`    | A page of models, with hits and facets          |
-| `get($limit)`   | A collection of models                          |
-| `first()`       | The best match, or `null`                       |
-| `keys($limit)`  | Keys of the matches, without loading models     |
-| `count()`       | Number of matches                               |
+With Meilisearch the total is exact up to `pagination.maxTotalHits`, which is 1000 by default. Raise it in the [index settings](#index-settings) to page deeper.
 
-A document whose entity no longer exists, for example after rows were deleted with a raw query, is removed from the index when a search finds it. Set `eav.search.prune` to `false` to turn this off.
+`count()` returns the number of matches without loading anything.
 
-Use `with()` to eager load relations on the models, or `loadUsing()` to change the query they are loaded with:
+A document whose entity no longer exists, for example after rows were deleted with a raw query, is removed from the index when a paginated search finds it. Set `eav.search.prune` to `false` to turn this off.
 
-```php
-Search::for(Product::class)
-    ->query('shoes')
-    ->with('media')
-    ->loadUsing(fn ($query) => $query->where('published', true))
-    ->paginate();
-```
-
-### Trashed entities
-
-When Scout keeps soft-deleted models in the index (`scout.soft_delete`), they are left out of the results. Use `withTrashed()` to include them, or `onlyTrashed()` to search them alone.
+The text to search for goes to `search()`. As in Scout, `query()` takes a callback for the Eloquent query that loads the models.
 
 ### Locales
 
-Text is matched against the searchable fields of the current locale. Meilisearch is told the language, so typo tolerance and word splitting follow it. Pass other locales to `locale()`:
+Text is matched against the searchable fields of the current locale. The engine is told the language, so typo tolerance and word splitting follow it. Pass other locales to `locale()`:
 
 ```php
-Search::for(Product::class)->query('кроссовки')->locale('ru')->paginate();
+Product::search('кроссовки')->locale('ru')->paginate();
 
-Search::for(Product::class)->query('shoes')->locale('en', 'ru')->paginate();
+Product::search('shoes')->locale('en', 'ru')->paginate();
 ```
 
 Filters, sorts, and facets on a localizable field use the first locale.
 
-A locale's language is the first two letters of its code. Map other codes in `eav.search.engines.meilisearch.locales`. Searching in a locale that does not exist throws `InvalidSearchQueryException`.
+A locale's Meilisearch language is the first two letters of its code. Map other codes in `eav.search.meilisearch.locales`. Searching in a locale that does not exist throws `InvalidSearchQueryException`.
 
 Adding a locale syncs the index settings. Removing a locale or changing its code also rebuilds the documents that hold localized values, so no value stays indexed under a locale that is gone.
 
 ### Filters
 
-`where()` accepts `=`, `!=`, `>`, `>=`, `<`, and `<=`. You can also use `whereNot()`, `whereIn()`, `whereNotIn()`, `whereBetween()`, `whereNotBetween()`, `whereNull()`, and `whereNotNull()`.
+`where()` accepts `=`, `!=`, `>`, `>=`, `<`, and `<=`; comparing with `null` asks whether the field holds a value. You can also use `whereIn()`, `whereNotIn()`, `whereBetween()`, `whereNotBetween()`, `whereNull()`, and `whereNotNull()`.
 
 `filter()` accepts JSON:API filters as sent in a request, including `or` and `and` groups:
 
 ```php
-Search::for(Product::class)->filter([
+Product::search()->filter([
     'color' => ['red', 'blue'],
     'price' => ['gte' => 100, 'lte' => 500],
     'released' => ['gte' => '2026-01-01'],
@@ -182,24 +166,24 @@ Search::for(Product::class)->filter([
 
 Values are cast to the field's type, so dates can be sent as date strings and booleans as `true` or `1`.
 
-Filters are strict. A field that is not filterable, an unsupported operator, or a value that does not fit the field's type throws `InvalidSearchQueryException`, which renders as a 422. A condition is never dropped silently.
+Filters are strict. A field that is not filterable, an operator the field's type does not allow, or a value that does not fit throws `InvalidSearchQueryException` as soon as it is added, which renders as a 422. A condition is never dropped silently.
 
-The `like` operator is rejected unless you set `eav.search.engines.meilisearch.contains` to `true`. It compiles to Meilisearch's `CONTAINS` operator, an experimental feature you must enable on the server.
+The `like` operator is rejected unless you set `eav.search.meilisearch.contains` to `true`. It compiles to Meilisearch's `CONTAINS` operator, an experimental feature you must enable on the server.
 
 ### Sorting
 
 `sort()` accepts a JSON:API sort string. Sorting by a field that is not sortable throws `InvalidSearchQueryException`:
 
 ```php
-Search::for(Product::class)->sort('-price,name');
+Product::search()->sort('-price,name');
 
-Search::for(Product::class)->orderBy('price', 'desc');
+Product::search()->orderBy('price', 'desc');
 ```
 
 To lead the results with the documents matching a condition, use `partition()`:
 
 ```php
-Search::for(Product::class)->partition(['in_stock' => true])->sort('price');
+Product::search()->partition(['in_stock' => true])->sort('price');
 ```
 
 ### Boosting
@@ -207,8 +191,7 @@ Search::for(Product::class)->partition(['in_stock' => true])->sort('price');
 To rank some hits higher without filtering the rest out, boost a condition. The relevance of the hits matching it is multiplied by the weight:
 
 ```php
-Search::for(Product::class)
-    ->query('phone')
+Product::search('phone')
     ->boost(['in_stock' => true], 3)
     ->boost(['brand' => 'apple'], 1.5)
     ->paginate();
@@ -237,14 +220,13 @@ A facet you filter on is counted without its own filter, so its other values sta
 To search the values of a facet with many values, use `facetValues()`:
 
 ```php
-Search::for(Product::class)->where('category', 5)->facetValues('brand', 'ni');
+Product::search()->where('category', 5)->facetValues('brand', 'ni');
 ```
 
 ### Highlighting and ranking
 
 ```php
-$results = Search::for(Product::class)
-    ->query('leather')
+$results = Product::search('leather')
     ->highlight('title')
     ->matching('all')
     ->threshold(0.3)
@@ -265,16 +247,18 @@ $hit->model;
 | `matching()`  | How query words must match: `last`, `all`, or `frequency`      |
 | `threshold()` | Drop hits below a ranking score                                |
 | `distinct()`  | Keep one hit per value of a field, for this search             |
-| `options()`   | Pass any other Meilisearch search parameter                    |
+| `options()`   | Scout's own: pass any other engine parameter                   |
 
 ## Federated search
 
 Search several entity types at once and get one list ranked across them, such as products and services for the same query:
 
 ```php
+use Jurager\Eav\Facades\Search;
+
 $results = Search::federated([
-    Search::for(Product::class)->query($term)->weight(2),
-    Search::for(Service::class)->query($term),
+    Product::search($term)->weight(2),
+    Service::search($term),
 ])->paginate(20);
 
 foreach ($results->hits() as $hit) {
@@ -297,43 +281,35 @@ Meilisearch rejects federated searches whose sort rules conflict. Give the searc
 
 ## Index settings
 
-With Meilisearch, searchable, filterable, and sortable fields, localized fields, and the distinct field are derived from the index definition. Typo tolerance is turned off for searchable fields that are not text, such as numbers.
-
-Set anything else in `config/eav.php`, for all indexes or for one entity type:
+Index settings belong to Scout. Configure typo tolerance, synonyms, stop words, and ranking rules in `config/scout.php`, by model class or index name:
 
 ```php
-'search' => [
-    'engines' => [
-        'meilisearch' => [
-            'settings' => [
-                'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
-                'stopWords' => ['the', 'a'],
-                'pagination' => ['maxTotalHits' => 10000],
-            ],
-            'indexes' => [
-                'product' => ['synonyms' => ['sneakers' => ['trainers']]],
-            ],
+'meilisearch' => [
+    'index-settings' => [
+        Product::class => [
+            'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4, 'twoTypos' => 8]],
+            'synonyms' => ['sneakers' => ['trainers']],
+            'pagination' => ['maxTotalHits' => 10000],
         ],
     ],
 ],
 ```
 
+The package adds what follows from the index definition: searchable, filterable, and sortable fields, localized fields, and the distinct field. Typo tolerance is turned off for searchable fields that are not text, such as numbers. You do not list these yourself.
+
 Synonyms and stop words apply to an index as a whole, not per locale.
 
-Settings are synced when an attribute, the entity types it is shared with, or a locale changes. Sync them yourself after changing the configuration or `searchIndex()`:
+Settings are synced when an attribute, the entity types it is shared with, or a locale changes. Sync them yourself after changing the configuration or `searchIndex()`, with Scout's command:
 
 ```bash
-php artisan eav:sync-index-settings
-php artisan eav:sync-index-settings product
+php artisan scout:sync-index-settings
 ```
 
-Settings in `scout.meilisearch.index-settings` are still read, and the derived settings are restored after `scout:sync-index-settings`.
-
-To rebuild the documents of an entity type:
+To rebuild the documents of an entity type, use Scout's commands as well:
 
 ```bash
-php artisan eav:reindex product
-php artisan eav:reindex product --flush
+php artisan scout:flush "App\Models\Product"
+php artisan scout:import "App\Models\Product"
 ```
 
 Run a queue worker for index updates.
@@ -386,64 +362,37 @@ public function indexFields(): array
 
 Override `facetLabels()` to label facet values.
 
-## Search engines
+## Other Scout drivers
 
-Searches run on the engine named by `eav.search.driver`, `meilisearch` by default. Indexing always goes through Scout, so your engine searches the index Scout's driver writes to.
+Entities are searched with the Scout driver they are indexed with. On a driver the package has no dialect for, a search uses Scout's own query API: text, `where()` with comparisons, `whereIn()`, `whereNotIn()`, `whereBetween()`, sorting, and pagination. Fields are still checked against the index definition.
 
-To add an engine, implement `Jurager\Eav\Contracts\Search\Engine` and register it, usually in a service provider:
+What Scout cannot express there throws Scout's `NotSupportedException`: `or` groups, facets, `searchOn()`, `highlight()`, `boost()`, `partition()`, and facet search. Federated search still works: each search runs alone, and the hits are ranked by weight and position.
+
+Keep in mind that Scout's `database` and `collection` drivers search the model's columns, not the indexed document, so they do not see attribute values.
+
+To teach another engine these features, write a dialect and register it for the engine's class:
 
 ```php
-use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Builder;
-use Jurager\Eav\Search\Hit;
-use Jurager\Eav\Search\Response;
+use Jurager\Eav\Search\Dialects\Dialect;
+use Laravel\Scout\Engines\TypesenseEngine;
 
-class TypesenseEngine implements Engine
+class TypesenseDialect extends Dialect
 {
-    public function search(Builder $search, int $perPage, int $page): Response
-    {
-        // Translate $search->query, $search->filters, $search->orders, $search->facets ...
-        // into a request, then return the hits, the total, and the facets.
-
-        $hits = array_map(
-            fn (array $document) => $search->hit($document['id'], $document, score: $document['score']),
-            $found['documents'],
-        );
-
-        return new Response($hits, $found['total'], $facets);
-    }
+    // callback(), hits(), facets(), federated(), settings() ...
 }
 
-Search::extend('typesense', fn ($app) => new TypesenseEngine($app->make(Client::class)));
+Search::extend(TypesenseEngine::class, TypesenseDialect::class);
 ```
 
-Then set `EAV_SEARCH_DRIVER=typesense`.
-
-The builder is checked against the index definition before it reaches the engine, so every engine is equally strict:
-
-- `$search->filters` are groups of `Condition` objects: a filterable field, a `Comparison`, and a value already cast to the field's type. A request with an unknown field, an operator the field's type does not allow, or a value that does not fit is refused with a 422 before any engine is asked.
-- `$search->orders` are sortable fields with a direction; `$search->facets` are names of filterable fields.
-- `$search->path($field)` gives a field's document path in the searched locale.
-
-Return each facet keyed by the name it was asked for, as a map of value to count, or as `min` and `max` for a numeric or date field. The package adds labels and loads the models. `$perPage` is 0 when only the total or the facets are wanted.
-
-An engine may implement more contracts for what it can do natively. Without them the package falls back:
-
-| Contract               | Native                                  | Fallback                                                      |
-|------------------------|-----------------------------------------|---------------------------------------------------------------|
-| `FederatesSearches`    | One request merging several searches    | Each search runs alone; hits are ranked by score times weight |
-| `BoostsMatches`        | Ranking boosted matches higher          | Each boosted condition is searched alone; hits are ranked by score times weight |
-| `SearchesFacetValues`  | Searching the values of a facet         | The facet's values from a regular search, matched by substring |
-| `UpdatesIndexSettings` | Syncing index settings from the definition | Nothing is synced                                          |
-
-Federated search and boosting therefore work on any engine. The fallbacks ask each search for a whole page, so prefer a native implementation where the engine has one. An engine implementing `BoostsMatches` reads the boosts in effect from `$search->boosts()`.
+A dialect receives searches already checked against the index definition: `$search->conditions` are filterable fields with a `Comparison` and a value of the field's type, `$search->sorts` are sortable fields. `MeilisearchDialect` is the reference.
 
 ## Testing
 
-`Search::fake()` answers searches with the hits you prepare instead of asking an engine, and records them:
+`Search::fake()` swaps Scout's driver for one that answers searches with the hits you prepare and records them. Indexing does nothing:
 
 ```php
+use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Search\Builder;
 
 $search = Search::fake();

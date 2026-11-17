@@ -6,7 +6,6 @@ namespace Jurager\Eav\Search\Index;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
@@ -48,9 +47,7 @@ class IndexFactory
             return $this->indexes[$key][1];
         }
 
-        $softDeletes = config('scout.soft_delete', false) && in_array(SoftDeletes::class, class_uses_recursive($model), true);
-
-        $index = new Index($model, $entityType, $locales, $softDeletes);
+        $index = new Index($model, $entityType, $locales);
 
         if (method_exists($model, 'searchIndex')) {
             $model->searchIndex($index);

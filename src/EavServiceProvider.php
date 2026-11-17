@@ -16,8 +16,6 @@ use Jurager\Eav\Attributes\AttributesFactory;
 use Jurager\Eav\Attributes\AttributeValueSorter;
 use Jurager\Eav\Attributes\Query\AttributeQueryFactory;
 use Jurager\Eav\Console\ClearCommand;
-use Jurager\Eav\Console\ReindexCommand;
-use Jurager\Eav\Console\SyncIndexSettingsCommand;
 use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Fields\FieldTypes;
@@ -158,7 +156,7 @@ class EavServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ClearCommand::class, SyncIndexSettingsCommand::class, ReindexCommand::class]);
+            $this->commands([ClearCommand::class]);
         }
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
@@ -190,7 +188,7 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->app->scoped(IndexFactory::class);
         $this->app->scoped(Document::class);
-        $this->app->scoped(SearchManager::class, static fn (Application $app): SearchManager => new SearchManager($app));
+        $this->app->scoped(SearchManager::class);
     }
 
     /**
@@ -204,7 +202,7 @@ class EavServiceProvider extends ServiceProvider
             $this->app->make(Synchronizer::class)->values($event->entityType, $event->entityIds);
         });
 
-        // Scout's own command resets an index to the configured settings: put the derived ones back.
+        // Scout's command sets an index to the configured settings alone: follow it with the derived ones.
         $events->listen(CommandFinished::class, function (CommandFinished $event): void {
             if ($event->command === 'scout:sync-index-settings' && $event->exitCode === 0) {
                 $this->app->make(Configurator::class)->all();

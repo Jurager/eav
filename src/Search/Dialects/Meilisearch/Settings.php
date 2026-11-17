@@ -2,14 +2,14 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Engines\Meilisearch;
+namespace Jurager\Eav\Search\Dialects\Meilisearch;
 
 use Illuminate\Contracts\Config\Repository;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
 
 /**
- * Derive the Meilisearch settings of an index from its definition and the configuration.
+ * Derive the Meilisearch settings of an index: what Scout is configured with, plus what the definition requires.
  */
 class Settings
 {
@@ -37,10 +37,11 @@ class Settings
      */
     public function for(Index $index): array
     {
+        // What the application configured for Scout comes first: by model class, or by index name.
+        $configured = (array) $this->config->get('scout.meilisearch.index-settings', []);
+
         $settings = array_replace_recursive(
-            (array) $this->config->get('scout.meilisearch.index-settings.'.$index->model::class, []),
-            (array) $this->config->get('eav.search.engines.meilisearch.settings', []),
-            (array) $this->config->get("eav.search.engines.meilisearch.indexes.{$index->entityType}", []),
+            (array) ($configured[$index->model::class] ?? $configured[$index->uid()] ?? []),
             $index->ownSettings(),
         );
 
@@ -52,10 +53,6 @@ class Settings
 
         foreach (self::PATH_LISTS as $key) {
             $settings[$key] = array_values(array_unique([...$derived[$key], ...array_values((array) ($settings[$key] ?? []))]));
-        }
-
-        if ($index->softDeletes) {
-            $settings['filterableAttributes'][] = Index::SOFT_DELETED;
         }
 
         if (($distinct = $index->distinctField()) !== null) {
@@ -84,7 +81,7 @@ class Settings
      */
     public function language(string $locale): ?string
     {
-        $language = $this->config->get("eav.search.engines.meilisearch.locales.{$locale}") ?? strtolower(substr($locale, 0, 2));
+        $language = $this->config->get("eav.search.meilisearch.locales.{$locale}") ?? strtolower(substr($locale, 0, 2));
 
         return in_array($language, self::LANGUAGES, true) ? $language : null;
     }

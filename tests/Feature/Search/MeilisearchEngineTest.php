@@ -38,7 +38,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_text_is_matched_against_searchable_fields_of_the_current_locale(): void
     {
-        Search::for(SearchableProduct::class)->query('shoes')->paginate();
+        SearchableProduct::search('shoes')->paginate();
 
         $request = $this->request();
 
@@ -52,7 +52,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_locale_switches_the_fields_and_language_searched(): void
     {
-        Search::for(SearchableProduct::class)->query('кеды')->locale('ru')->paginate();
+        SearchableProduct::search('кеды')->locale('ru')->paginate();
 
         $this->assertContains('attributes.title.ru', $this->request()['attributesToSearchOn']);
         $this->assertNotContains('attributes.title.en', $this->request()['attributesToSearchOn']);
@@ -61,7 +61,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_several_locales_are_searched_together(): void
     {
-        Search::for(SearchableProduct::class)->query('x')->locale('ru', 'en')->paginate();
+        SearchableProduct::search('x')->locale('ru', 'en')->paginate();
 
         $this->assertContains('attributes.title.ru', $this->request()['attributesToSearchOn']);
         $this->assertContains('attributes.title.en', $this->request()['attributesToSearchOn']);
@@ -72,19 +72,19 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         $this->expectExceptionMessage('locale [de] is not available');
 
-        Search::for(SearchableProduct::class)->query('x')->locale('de')->paginate();
+        SearchableProduct::search('x')->locale('de')->paginate();
     }
 
     public function test_search_on_narrows_the_fields(): void
     {
-        Search::for(SearchableProduct::class)->query('x')->searchOn('title')->paginate();
+        SearchableProduct::search('x')->searchOn('title')->paginate();
 
         $this->assertSame(['attributes.title.en'], $this->request()['attributesToSearchOn']);
     }
 
     public function test_without_text_no_search_fields_are_sent(): void
     {
-        Search::for(SearchableProduct::class)->paginate();
+        SearchableProduct::search()->paginate();
 
         $this->assertArrayNotHasKey('q', $this->request());
         $this->assertArrayNotHasKey('attributesToSearchOn', $this->request());
@@ -92,7 +92,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_conditions_accumulate_and_each_is_parenthesised(): void
     {
-        Search::for(SearchableProduct::class)
+        SearchableProduct::search()
             ->where('color', 'red')
             ->where('price', '>=', 100)
             ->whereIn('sku', ['A', 'B'])
@@ -113,12 +113,12 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         $this->expectException(InvalidSearchQueryException::class);
 
-        Search::for(SearchableProduct::class)->filter(['nope' => 1])->paginate();
+        SearchableProduct::search()->filter(['nope' => 1])->paginate();
     }
 
     public function test_sort_accepts_several_fields_and_directions(): void
     {
-        Search::for(SearchableProduct::class)->sort('-price,name')->paginate();
+        SearchableProduct::search()->sort('-price,name')->paginate();
 
         $this->assertSame(['attributes.price:desc', 'name:asc'], $this->request()['sort']);
     }
@@ -127,13 +127,12 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         $this->expectExceptionMessage('field [sku] is not sortable');
 
-        Search::for(SearchableProduct::class)->sort('sku')->paginate();
+        SearchableProduct::search()->sort('sku')->paginate();
     }
 
     public function test_options_highlight_and_distinct_reach_the_engine(): void
     {
-        Search::for(SearchableProduct::class)
-            ->query('x')
+        SearchableProduct::search('x')
             ->highlight('title')
             ->matching('all')
             ->threshold(0.5)
@@ -161,7 +160,7 @@ class MeilisearchEngineTest extends SearchTestCase
             ['id' => $first->id, 'name' => 'First', 'attributes' => ['title' => ['en' => 'One']]],
         ], total: 40);
 
-        $results = Search::for(SearchableProduct::class)->query('x')->paginate(3);
+        $results = SearchableProduct::search('x')->paginate(3);
 
         $this->assertSame([$second->id, $first->id], $results->modelKeys());
         $this->assertSame(40, $results->total());
@@ -188,7 +187,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
         Queue::fake();
 
-        Search::for(SearchableProduct::class)->loadUsing(fn ($query) => $query->whereKey($kept->id))->paginate();
+        SearchableProduct::search()->query(fn ($query) => $query->whereKey($kept->id))->paginate();
 
         // Left out by the load query, but still there: only the key no row has is removed.
         Queue::assertPushed(RemoveFromSearch::class, 1);
@@ -201,7 +200,7 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->engine->respond(self::PRODUCTS, [['id' => 999]]);
         Queue::fake();
 
-        Search::for(SearchableProduct::class)->paginate();
+        SearchableProduct::search()->paginate();
 
         Queue::assertNotPushed(RemoveFromSearch::class);
     }
@@ -211,11 +210,11 @@ class MeilisearchEngineTest extends SearchTestCase
         $product = $this->product();
         $this->engine->respond(self::PRODUCTS, [['id' => $product->id]], total: 7);
 
-        $search = Search::for(SearchableProduct::class);
+        $search = SearchableProduct::search();
 
         $this->assertTrue($search->get()->first()->is($product));
         $this->assertTrue($search->first()->is($product));
-        $this->assertSame([$product->id], $search->keys());
+        $this->assertSame([$product->id], $search->keys()->all());
         $this->assertSame(7, $search->facets('color')->count());
         $this->assertSame(0, $this->request(3)['hitsPerPage']);
         $this->assertArrayNotHasKey('facets', $this->request(3));
@@ -226,9 +225,9 @@ class MeilisearchEngineTest extends SearchTestCase
         $product = $this->product();
         $this->engine->respond(self::PRODUCTS, [['id' => $product->id]]);
 
-        $results = Search::for(SearchableProduct::class)
-            ->with('parent')
-            ->loadUsing(fn ($query) => $query->where('name', 'Other'))
+        $results = SearchableProduct::search()
+            ->query(fn ($query) => $query->with('parent'))
+            ->query(fn ($query) => $query->where('name', 'Other'))
             ->paginate();
 
         $this->assertCount(0, $results->items());
@@ -244,7 +243,7 @@ class MeilisearchEngineTest extends SearchTestCase
             stats: ['attributes.price' => ['min' => 100, 'max' => 900]],
         );
 
-        $results = Search::for(SearchableProduct::class)->facets(['color', 'price'])->locale('ru')->paginate();
+        $results = SearchableProduct::search()->facets(['color', 'price'])->locale('ru')->paginate();
 
         $this->assertSame(['attributes.color', 'attributes.price'], $this->request()['facets']);
         $this->assertSame([
@@ -259,7 +258,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_a_filtered_facet_is_counted_without_its_own_filter(): void
     {
-        Search::for(SearchableProduct::class)
+        SearchableProduct::search()
             ->where('color', 'red')
             ->where('price', '<', 500)
             ->facets(['color', 'sku'])
@@ -278,14 +277,14 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         $this->expectExceptionMessage('field [title] is not filterable');
 
-        Search::for(SearchableProduct::class)->facets('title')->paginate();
+        SearchableProduct::search()->facets('title')->paginate();
     }
 
     public function test_facet_values_can_be_searched(): void
     {
         $this->engine->respond(self::PRODUCTS, [], facets: ['attributes.color' => ['red' => 2]]);
 
-        $values = Search::for(SearchableProduct::class)->where('color', 'blue')->where('price', '>', 1)->facetValues('color', 're');
+        $values = SearchableProduct::search()->where('color', 'blue')->where('price', '>', 1)->facetValues('color', 're');
 
         $this->assertSame([['value' => 'red', 'label' => 'Red', 'count' => 2]], $values);
         $this->assertSame(
@@ -299,7 +298,7 @@ class MeilisearchEngineTest extends SearchTestCase
         $a = $this->product('A');
         $this->engine->respond(self::PRODUCTS, [['id' => $a->id]], total: 1);
 
-        Search::for(SearchableProduct::class)
+        SearchableProduct::search()
             ->where('price', '>', 0)
             ->partition(['color' => 'red'])
             ->paginate(2);
@@ -320,12 +319,11 @@ class MeilisearchEngineTest extends SearchTestCase
         $product = $this->product();
         $this->engine->respond(self::PRODUCTS, [['id' => $product->id]], total: 7);
 
-        $results = Search::for(SearchableProduct::class)
-            ->query('shoes')
+        $results = SearchableProduct::search('shoes')
             ->where('price', '>', 1)
             ->boost(['color' => 'red'], 3)
             ->facets('sku')
-            ->paginate(5, 2);
+            ->paginate(5, 'page', 2);
 
         [$count, $hits] = $this->engine->searches;
 
@@ -346,9 +344,9 @@ class MeilisearchEngineTest extends SearchTestCase
 
     public function test_a_boost_has_no_effect_where_relevance_does_not_rank(): void
     {
-        Search::for(SearchableProduct::class)->boost(['color' => 'red'])->paginate();
-        Search::for(SearchableProduct::class)->query('x')->boost(['color' => 'red'])->sort('price')->paginate();
-        Search::for(SearchableProduct::class)->query('x')->boost(['color' => 'red'])->count();
+        SearchableProduct::search()->boost(['color' => 'red'])->paginate();
+        SearchableProduct::search('x')->boost(['color' => 'red'])->sort('price')->paginate();
+        SearchableProduct::search('x')->boost(['color' => 'red'])->count();
 
         $this->assertCount(3, $this->engine->searches);
 
@@ -365,7 +363,7 @@ class MeilisearchEngineTest extends SearchTestCase
             fn ($search) => $search->partition(['color' => 'blue'])->boost(['color' => 'red']),
         ] as $attempt) {
             try {
-                $attempt(Search::for(SearchableProduct::class));
+                $attempt(SearchableProduct::search());
                 $this->fail('Boosting a partitioned search should be refused.');
             } catch (LogicException $e) {
                 $this->assertStringContainsString('partitioned and boosted', $e->getMessage());
@@ -374,7 +372,7 @@ class MeilisearchEngineTest extends SearchTestCase
 
         $this->expectException(InvalidArgumentException::class);
 
-        Search::for(SearchableProduct::class)->boost(['color' => 'red'], 0);
+        SearchableProduct::search()->boost(['color' => 'red'], 0);
     }
 
     public function test_a_boosted_search_keeps_its_boosts_within_a_federation(): void
@@ -386,8 +384,8 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->engine->respond('eav_test_categories', [['id' => $category->id]]);
 
         $results = Search::federated([
-            Search::for(SearchableProduct::class)->query('phone')->boost(['color' => 'red'], 3)->weight(2),
-            Search::for(SearchableCategory::class)->query('phone'),
+            SearchableProduct::search('phone')->boost(['color' => 'red'], 3)->weight(2),
+            SearchableCategory::search('phone'),
         ])->paginate();
 
         $queries = $this->engine->searches[0]['queries'];
@@ -406,8 +404,8 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->engine->respond(self::PRODUCTS, [], facets: ['attributes.color' => ['red' => 2, 'blue' => 5]]);
 
         $results = Search::federated([
-            Search::for(SearchableProduct::class)->query('x')->where('color', 'red')->where('price', '>', 1)->facets(['color', 'sku']),
-            Search::for(SearchableCategory::class)->query('x'),
+            SearchableProduct::search('x')->where('color', 'red')->where('price', '>', 1)->facets(['color', 'sku']),
+            SearchableCategory::search('x'),
         ])->paginate();
 
         [$federated, $scoped] = $this->engine->searches;
@@ -428,8 +426,8 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->engine->respond('eav_test_categories', [['id' => $category->id]]);
 
         $results = Search::federated([
-            Search::for(SearchableProduct::class)->query('shoes')->where('price', '>', 1)->facets('color')->weight(2),
-            Search::for(SearchableCategory::class)->query('shoes'),
+            SearchableProduct::search('shoes')->where('price', '>', 1)->facets('color')->weight(2),
+            SearchableCategory::search('shoes'),
         ])->paginate(10);
 
         $sent = $this->engine->searches[0];
@@ -451,7 +449,7 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         $this->expectExceptionMessage('field [parent.sku] is not part of the search index');
 
-        Search::for(SearchableProduct::class)->filter(['parent' => ['sku' => 'AB']])->paginate();
+        SearchableProduct::search()->filter(['parent' => ['sku' => 'AB']])->paginate();
     }
 
     public function test_the_relation_resolver_turns_a_related_attribute_into_ids(): void
@@ -461,7 +459,7 @@ class MeilisearchEngineTest extends SearchTestCase
         $parent = $this->product('Model');
         $parent->eav()->set('sku', 'AB')->save();
 
-        Search::for(SearchableProduct::class)->filter(['parent' => ['sku' => 'AB']])->paginate();
+        SearchableProduct::search()->filter(['parent' => ['sku' => 'AB']])->paginate();
 
         $this->assertSame("(parent_id IN [{$parent->id}])", $this->request()['filter']);
     }
@@ -470,7 +468,7 @@ class MeilisearchEngineTest extends SearchTestCase
     {
         config(['eav.search.resolvers' => [AttributeRelationFilterResolver::class]]);
 
-        Search::for(SearchableProduct::class)->filter(['parent' => ['sku' => 'none']])->paginate();
+        SearchableProduct::search()->filter(['parent' => ['sku' => 'none']])->paginate();
 
         $this->assertSame('(parent_id IN [])', $this->request()['filter']);
     }
@@ -485,6 +483,6 @@ class MeilisearchEngineTest extends SearchTestCase
 
         $this->expectExceptionMessage('matches more than 1 related records');
 
-        Search::for(SearchableProduct::class)->filter(['parent' => ['sku' => 'AB']])->paginate();
+        SearchableProduct::search()->filter(['parent' => ['sku' => 'AB']])->paginate();
     }
 }

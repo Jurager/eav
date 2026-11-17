@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
+use Illuminate\Contracts\Console\Kernel;
 use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Engines\Meilisearch\Settings;
+use Jurager\Eav\Search\Dialects\Meilisearch\Settings;
+use Jurager\Eav\Search\Index\Configurator;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 
@@ -133,10 +135,12 @@ class IndexTest extends SearchTestCase
         $this->attribute('number', 'price', ['filterable' => true]);
 
         config([
-            'scout.meilisearch.index-settings' => [SearchableProduct::class => ['filterableAttributes' => ['legacy']]],
-            'eav.search.engines.meilisearch.settings' => ['typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4]], 'stopWords' => ['the']],
-            'eav.search.engines.meilisearch.indexes.searchable_product' => ['stopWords' => ['a'], 'synonyms' => ['tv' => ['television']]],
-            'eav.search.engines.meilisearch.locales' => ['ru' => 'uk'],
+            'scout.meilisearch.index-settings' => [SearchableProduct::class => [
+                'filterableAttributes' => ['legacy'],
+                'typoTolerance' => ['minWordSizeForTypos' => ['oneTypo' => 4]],
+                'stopWords' => ['a'],
+                'synonyms' => ['tv' => ['television']],
+            ]],
         ]);
 
         $settings = app(Settings::class)->for(Search::index(SearchableProduct::class));
@@ -159,19 +163,36 @@ class IndexTest extends SearchTestCase
         $this->assertSame(['en', 'ru'], array_merge(...array_column($settings['localizedAttributes'], 'locales')));
     }
 
-    public function test_sync_command_pushes_settings_to_the_engine(): void
+    public function test_settings_configured_for_scout_by_index_name_are_read_too(): void
+    {
+        config(['scout.meilisearch.index-settings' => ['eav_test_products' => ['stopWords' => ['the']]]]);
+
+        $this->assertSame(['the'], app(Settings::class)->for(Search::index(SearchableProduct::class))['stopWords']);
+    }
+
+    public function test_derived_settings_reach_the_engine_through_scout(): void
     {
         $this->attribute('number', 'price', ['filterable' => true]);
 
-        $this->artisan('eav:sync-index-settings', ['type' => 'searchable_product'])->assertSuccessful();
+        $this->assertTrue(app(Configurator::class)->configure('searchable_product'));
+        $this->assertFalse(app(Configurator::class)->configure('product'));
 
         $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
+        $this->assertArrayNotHasKey('eav_test_categories', $this->engine->settings);
     }
 
-    public function test_sync_command_covers_every_searchable_type(): void
+    public function test_scouts_settings_command_syncs_the_derived_settings(): void
     {
-        $this->artisan('eav:sync-index-settings')->assertSuccessful();
+        $this->attribute('number', 'price', ['filterable' => true]);
+        config(['scout.meilisearch.index-settings' => ['eav_test_products' => ['stopWords' => ['the']]]]);
 
-        $this->assertEqualsCanonicalizing(['eav_test_products', 'eav_test_categories'], array_keys($this->engine->settings));
+        // Laravel announces a starting command only when run from the command line: do as it does there.
+        $this->app->make(Kernel::class)->rerouteSymfonyCommandEvents();
+
+        $this->artisan('scout:sync-index-settings')->assertSuccessful();
+
+        $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
+        $this->assertSame(['the'], $this->engine->settings['eav_test_products']['stopWords']);
+        $this->assertArrayHasKey('eav_test_categories', $this->engine->settings);
     }
 }

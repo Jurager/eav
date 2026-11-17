@@ -2,26 +2,24 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Engines;
+namespace Jurager\Eav\Search\Dialects;
 
-use Jurager\Eav\Contracts\Search\BoostsMatches;
-use Jurager\Eav\Contracts\Search\Engine;
-use Jurager\Eav\Contracts\Search\FederatesSearches;
-use Jurager\Eav\Contracts\Search\SearchesFacetValues;
-use Jurager\Eav\Contracts\Search\UpdatesIndexSettings;
+use Closure;
 use Jurager\Eav\Search\Builder;
-use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
-use Jurager\Eav\Search\Engines\Meilisearch\RequestFactory;
-use Jurager\Eav\Search\Engines\Meilisearch\Settings;
+use Jurager\Eav\Search\Dialects\Meilisearch\Gateway;
+use Jurager\Eav\Search\Dialects\Meilisearch\RequestFactory;
+use Jurager\Eav\Search\Dialects\Meilisearch\Settings;
+use Jurager\Eav\Search\Filters\Group;
 use Jurager\Eav\Search\Hit;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Eav\Search\Response;
 
 /**
- * Search with Meilisearch: multi-search requests, native federation and boosting, facet search and index settings.
+ * What Scout's Meilisearch engine is asked beyond Scout's own query API: groups of conditions, facets,
+ * per-locale search, boosting, partitioning, native federation, facet search and derived index settings.
  */
-class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, SearchesFacetValues, UpdatesIndexSettings
+class MeilisearchDialect extends Dialect
 {
     public function __construct(
         private readonly Gateway $meilisearch,
@@ -29,9 +27,61 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
         private readonly Settings $settings,
     ) {}
 
-    public function search(Builder $search, int $perPage, int $page): Response
+    public function extended(): bool
     {
-        // Nothing to order when no hits are asked for, as when counting.
+        return true;
+    }
+
+    /**
+     * Conditions are kept on the search and written as one filter expression when it runs.
+     */
+    public function where(Builder $search, Group $group): void {}
+
+    /**
+     * Sorts are kept on the search too: the path of a localized field depends on the locale searched.
+     */
+    public function orderBy(Builder $search, IndexField $field, string $direction): void {}
+
+    public function callback(Builder $search): Closure
+    {
+        // Scout hands over its own parameters: paging, and whatever was set through options().
+        return function (mixed $index, ?string $query, array $parameters) use ($search): array {
+            // Anything else Scout adds, such as semantic search parameters, travels as options of this run.
+            $extra = array_diff_key($parameters, $search->options, array_flip(['filter', 'sort', 'limit', 'hitsPerPage', 'page']));
+
+            if ($extra !== []) {
+                $search = clone $search;
+                $search->options = [...$search->options, ...$extra];
+            }
+
+            // Scout leaves a limit of zero out: asking for no hits, as when counting, is read off the search.
+            return $this->search($search, (int) ($parameters['hitsPerPage'] ?? $search->limit ?? 20), (int) ($parameters['page'] ?? 1));
+        };
+    }
+
+    public function hits(Builder $search, mixed $results): array
+    {
+        return array_map(static fn (array $hit): Hit => $search->hit(
+            $hit['id'],
+            array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
+            $hit['_formatted'] ?? [],
+            isset($hit['_rankingScore']) ? (float) $hit['_rankingScore'] : null,
+        ), array_values($results['hits'] ?? []));
+    }
+
+    public function facets(Builder $search, mixed $results): array
+    {
+        return $results['facets'] ?? [];
+    }
+
+    /**
+     * Run a search and answer as Meilisearch would, with the facets already keyed by the asked names.
+     *
+     * @return array{hits: list<array<string, mixed>>, totalHits: int, facets: array<string, mixed>}
+     */
+    private function search(Builder $search, int $perPage, int $page): array
+    {
+        // Nothing to order when no hits are asked for.
         $partitioned = $search->partition !== null && $perPage > 0;
         $boosted = $search->boosts() !== [] && $perPage > 0;
         $facets = $this->facetPaths($search);
@@ -53,17 +103,15 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
         $responses = array_combine(array_keys($requests), $this->meilisearch->multiSearch(array_values($requests))['results']);
         $main = $responses['main'];
 
-        $hits = match (true) {
-            $partitioned => $this->partition($search, $responses['leading'], $perPage, $page),
-            $boosted => $this->meilisearch->multiSearch($this->queries($search), ['limit' => $perPage, 'offset' => ($page - 1) * $perPage])['hits'] ?? [],
-            default => $main['hits'],
-        };
-
-        return new Response(
-            $this->hits($search, $hits),
-            (int) ($main['totalHits'] ?? $main['estimatedTotalHits'] ?? 0),
-            $this->facets($search, $facets, $main, $responses),
-        );
+        return [
+            'hits' => match (true) {
+                $partitioned => $this->partition($search, $responses['leading'], $perPage, $page),
+                $boosted => $this->meilisearch->multiSearch($this->queries($search), ['limit' => $perPage, 'offset' => ($page - 1) * $perPage])['hits'] ?? [],
+                default => $main['hits'],
+            },
+            'totalHits' => (int) ($main['totalHits'] ?? $main['estimatedTotalHits'] ?? 0),
+            'facets' => $this->facetData($search, $facets, $main, $responses),
+        ];
     }
 
     public function federated(array $searches, int $limit, int $offset): Response
@@ -80,7 +128,7 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
             }
 
             if (($facets = $this->facetPaths($search)) !== []) {
-                $federation['facetsByIndex'][$search->index->uid()] = array_values($facets);
+                $federation['facetsByIndex'][$search->uid()] = array_values($facets);
             }
         }
 
@@ -89,18 +137,18 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
 
         foreach ($response['hits'] ?? [] as $hit) {
             if (($search = $owners[$hit['_federation']['queriesPosition'] ?? -1] ?? null) !== null) {
-                array_push($hits, ...$this->hits($search, [$hit]));
+                array_push($hits, ...$this->hits($search, ['hits' => [$hit]]));
             }
         }
 
         return new Response($hits, (int) ($response['estimatedTotalHits'] ?? count($hits)), $this->federatedFacets($searches, $response));
     }
 
-    public function facetValues(Builder $search, IndexField $field, ?string $query): array
+    public function facetValues(Builder $search, string $name, IndexField $field, ?string $query): array
     {
         $request = $this->requests->make($search, except: [$field->path]);
 
-        $response = $this->meilisearch->facetSearch($search->index->uid(), array_filter([
+        $response = $this->meilisearch->facetSearch($search->uid(), array_filter([
             'facetName' => $search->path($field),
             'facetQuery' => $query,
             'q' => $request['q'] ?? null,
@@ -112,9 +160,9 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
         return array_column($response['facetHits'] ?? [], 'count', 'value');
     }
 
-    public function updateIndexSettings(Index $index): void
+    public function settings(Index $index): array
     {
-        $this->meilisearch->updateSettings($index->uid(), $this->settings->for($index));
+        return $this->settings->for($index);
     }
 
     /**
@@ -139,20 +187,6 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
         ]])['results'][0];
 
         return [...$hits, ...$trailing['hits']];
-    }
-
-    /**
-     * @param  list<array<string, mixed>>  $hits
-     * @return list<Hit>
-     */
-    private function hits(Builder $search, array $hits): array
-    {
-        return array_map(static fn (array $hit): Hit => $search->hit(
-            $hit['id'],
-            array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
-            $hit['_formatted'] ?? [],
-            isset($hit['_rankingScore']) ? (float) $hit['_rankingScore'] : null,
-        ), array_values($hits));
     }
 
     /**
@@ -221,7 +255,7 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
      * @param  array<string, array<string, mixed>>  $scoped
      * @return array<string, mixed>
      */
-    private function facets(Builder $search, array $facets, array $response, array $scoped = []): array
+    private function facetData(Builder $search, array $facets, array $response, array $scoped = []): array
     {
         $found = [];
 
@@ -257,7 +291,7 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
         $found = [];
 
         foreach ($searches as $position => $search) {
-            $data = $response['facetsByIndex'][$search->index->uid()] ?? null;
+            $data = $response['facetsByIndex'][$search->uid()] ?? null;
 
             if ($data === null) {
                 continue;
@@ -271,7 +305,7 @@ class MeilisearchEngine implements BoostsMatches, Engine, FederatesSearches, Sea
                 }
             }
 
-            $found[$search->index->entityType] = $this->facets($search, $this->facetPaths($search), [
+            $found[$search->definition->entityType] = $this->facetData($search, $this->facetPaths($search), [
                 'facetDistribution' => $data['distribution'] ?? [],
                 'facetStats' => $data['stats'] ?? [],
             ], $own);

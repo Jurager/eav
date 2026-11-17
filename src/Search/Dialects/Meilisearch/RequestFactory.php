@@ -2,12 +2,11 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Engines\Meilisearch;
+namespace Jurager\Eav\Search\Dialects\Meilisearch;
 
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
 use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\Filters\Group;
-use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
 
 /**
@@ -33,7 +32,7 @@ class RequestFactory
     public function make(Builder $builder, array $except = [], ?bool $side = null, ?Group $boosted = null): array
     {
         $request = [
-            'indexUid' => $builder->index->uid(),
+            'indexUid' => $builder->uid(),
             'showRankingScore' => true,
             ...$this->text($builder),
         ];
@@ -42,7 +41,7 @@ class RequestFactory
             $request['filter'] = $filter;
         }
 
-        foreach ($builder->orders as [$field, $direction]) {
+        foreach ($builder->sorts as [$field, $direction]) {
             $request['sort'][] = $builder->path($field).':'.$direction;
         }
 
@@ -74,18 +73,18 @@ class RequestFactory
      */
     private function text(Builder $builder): array
     {
-        if ($builder->query === null) {
+        if (($text = $builder->text()) === null) {
             return [];
         }
 
-        $request = ['q' => $builder->query];
+        $request = ['q' => $text];
 
         if (($paths = $this->searchOn($builder)) !== []) {
             $request['attributesToSearchOn'] = $paths;
         }
 
         $languages = array_values(array_unique(array_filter(array_map($this->settings->language(...), $builder->locales()))));
-        $localized = $builder->index->paths(static fn (IndexField $field): bool => $field->localized && $field->searchable);
+        $localized = $builder->definition->paths(static fn (IndexField $field): bool => $field->localized && $field->searchable);
 
         if ($languages !== [] && $localized !== []) {
             $request['locales'] = $languages;
@@ -102,7 +101,7 @@ class RequestFactory
     private function searchOn(Builder $builder): array
     {
         if ($builder->searchOn === null) {
-            return $builder->index->paths(static fn (IndexField $field): bool => $field->searchable, $builder->locales());
+            return $builder->definition->paths(static fn (IndexField $field): bool => $field->searchable, $builder->locales());
         }
 
         $paths = [];
@@ -124,7 +123,7 @@ class RequestFactory
         $locale = $builder->locales()[0] ?? null;
         $filters = [];
 
-        foreach ($builder->filters as $group) {
+        foreach ($builder->conditions as $group) {
             $filters[] = $this->compiler->compile($group->except($except), $locale);
         }
 
@@ -137,8 +136,13 @@ class RequestFactory
             $filters[] = $this->compiler->compile($boosted, $locale);
         }
 
-        if ($builder->index->softDeletes && $builder->trashed !== true) {
-            $filters[] = Index::SOFT_DELETED.' = '.($builder->trashed === null ? 1 : 0);
+        // Scout's own wheres: the soft-delete marker, or anything a caller pushed onto the builder directly.
+        foreach ($builder->wheres as $where) {
+            $filters[] = $where['field'].' '.$where['operator'].' '.match (true) {
+                is_bool($where['value']) => $where['value'] ? 'true' : 'false',
+                is_numeric($where['value']) => (string) $where['value'],
+                default => '"'.addcslashes((string) $where['value'], '"\\').'"',
+            };
         }
 
         $filters = array_filter($filters);

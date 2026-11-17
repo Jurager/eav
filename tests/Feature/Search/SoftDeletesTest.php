@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Facades\Search;
-use Jurager\Eav\Search\Engines\Meilisearch\Settings;
+use Jurager\Eav\Search\Index\Configurator;
 use Jurager\Eav\Tests\Fixtures\TrashableProduct;
 
 class SoftDeletesTest extends SearchTestCase
@@ -31,43 +31,50 @@ class SoftDeletesTest extends SearchTestCase
 
     private function filter(callable $search): ?string
     {
-        $search(Search::for(TrashableProduct::class))->paginate();
+        $search(TrashableProduct::search())->paginate();
 
         $queries = $this->engine->queries();
 
         return end($queries)['filter'] ?? null;
     }
 
-    public function test_trashed_entities_are_not_searched_unless_scout_keeps_them(): void
+    public function test_nothing_is_filtered_unless_scout_keeps_trashed_entities_in_the_index(): void
     {
         $this->assertNull($this->filter(fn ($search) => $search));
-        $this->assertNotContains('__soft_deleted', app(Settings::class)->for(Search::index(TrashableProduct::class))['filterableAttributes']);
+
+        app(Configurator::class)->configure('trashable_product');
+
+        $this->assertNotContains('__soft_deleted', $this->engine->settings['eav_test_products']['filterableAttributes']);
     }
 
-    public function test_trashed_entities_kept_in_the_index_are_left_out_by_default(): void
+    public function test_scouts_soft_delete_marker_leaves_trashed_entities_out(): void
     {
         config(['scout.soft_delete' => true]);
 
         $this->assertSame('(__soft_deleted = 0)', $this->filter(fn ($search) => $search));
         $this->assertSame('(parent_id = 1) AND (__soft_deleted = 0)', $this->filter(fn ($search) => $search->where('parent', 1)));
-        $this->assertContains('__soft_deleted', app(Settings::class)->for(Search::index(TrashableProduct::class))['filterableAttributes']);
+        $this->assertNull($this->filter(fn ($search) => $search->withTrashed()));
+        $this->assertSame('(__soft_deleted = 1)', $this->filter(fn ($search) => $search->onlyTrashed()));
     }
 
-    public function test_trashed_entities_can_be_included_or_searched_alone(): void
+    public function test_scouts_soft_delete_marker_is_made_filterable(): void
     {
         config(['scout.soft_delete' => true]);
 
-        $kept = TrashableProduct::create(['name' => 'Kept']);
+        app(Configurator::class)->configure('trashable_product');
+
+        $this->assertContains('__soft_deleted', $this->engine->settings['eav_test_products']['filterableAttributes']);
+    }
+
+    public function test_trashed_entities_the_engine_returns_are_loaded(): void
+    {
+        config(['scout.soft_delete' => true]);
+
         $trashed = TrashableProduct::create(['name' => 'Trashed']);
         $trashed->delete();
 
-        $this->engine->respond('eav_test_products', [['id' => $kept->id], ['id' => $trashed->id]]);
+        $this->engine->respond('eav_test_products', [['id' => $trashed->id]]);
 
-        $this->assertNull($this->filter(fn ($search) => $search->withTrashed()));
-        $this->assertSame('(__soft_deleted = 1)', $this->filter(fn ($search) => $search->onlyTrashed()));
-
-        $this->assertSame(['Kept'], Search::for(TrashableProduct::class)->get()->pluck('name')->all());
-        $this->assertSame(['Kept', 'Trashed'], Search::for(TrashableProduct::class)->withTrashed()->get()->pluck('name')->all());
-        $this->assertSame(['Trashed'], Search::for(TrashableProduct::class)->onlyTrashed()->get()->pluck('name')->all());
+        $this->assertSame(['Trashed'], TrashableProduct::search()->onlyTrashed()->get()->pluck('name')->all());
     }
 }

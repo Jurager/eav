@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Fixtures;
 
-use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
+use Jurager\Eav\Search\Dialects\Meilisearch\Gateway;
 use PHPUnit\Framework\Assert;
 
 /**

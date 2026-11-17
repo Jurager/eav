@@ -51,7 +51,7 @@ class Hit
      */
     private function path(string $name): string
     {
-        $field = $this->search?->index->find($name);
+        $field = $this->search?->definition->find($name);
 
         return $field !== null ? $this->search->path($field) : $name;
     }

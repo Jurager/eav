@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Jurager\Eav\Search\Engines\Meilisearch;
+namespace Jurager\Eav\Search\Dialects\Meilisearch;
 
 use Illuminate\Contracts\Config\Repository;
 use Jurager\Eav\Enums\Comparison;
@@ -66,7 +66,7 @@ class FilterCompiler
      */
     private function contains(Condition $condition, string $path): string
     {
-        if (! $this->config->get('eav.search.engines.meilisearch.contains', false)) {
+        if (! $this->config->get('eav.search.meilisearch.contains', false)) {
             throw InvalidSearchQueryException::unsupportedOperator($condition->name, $condition->comparison->value);
         }
 

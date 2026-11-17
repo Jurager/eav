@@ -4,17 +4,15 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search\Testing;
 
-use Jurager\Eav\Contracts\Search\BoostsMatches;
-use Jurager\Eav\Contracts\Search\Engine;
 use Jurager\Eav\Search\Builder;
-use Jurager\Eav\Search\Hit;
-use Jurager\Eav\Search\Response;
+use Laravel\Scout\Builder as ScoutBuilder;
+use Laravel\Scout\Engines\NullEngine;
 use PHPUnit\Framework\Assert;
 
 /**
- * Answers searches with prepared hits and records them, in place of a real engine.
+ * A Scout engine that answers searches with prepared hits and records them. Indexing does nothing.
  */
-class FakeEngine implements BoostsMatches, Engine
+class FakeEngine extends NullEngine
 {
     /** @var list<Builder> The searches run so far. */
     public array $searches = [];
@@ -40,20 +38,43 @@ class FakeEngine implements BoostsMatches, Engine
         return $this;
     }
 
-    public function search(Builder $search, int $perPage, int $page): Response
+    public function search(ScoutBuilder $builder)
     {
-        $this->searches[] = $search;
+        return $this->paginate($builder, $builder->limit ?? 20, 1);
+    }
 
-        $response = $this->responses[$search->index->entityType] ?? ['hits' => [], 'total' => 0, 'facets' => []];
+    public function paginate(ScoutBuilder $builder, $perPage, $page)
+    {
+        $this->searches[] = $builder;
 
-        $hits = array_map(static fn (array $hit): Hit => $search->hit(
-            $hit['id'],
-            array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
-            $hit['_formatted'] ?? [],
-            isset($hit['_score']) ? (float) $hit['_score'] : null,
-        ), array_slice($response['hits'], ($page - 1) * $perPage, $perPage));
+        $response = $this->responses[$builder->definition->entityType] ?? ['hits' => [], 'total' => 0, 'facets' => []];
 
-        return new Response($hits, $response['total'], array_intersect_key($response['facets'], array_flip($search->facets)));
+        return [
+            'hits' => array_slice($response['hits'], ((int) $page - 1) * (int) $perPage, (int) $perPage),
+            'total' => $response['total'],
+            'facets' => array_intersect_key($response['facets'], array_flip($builder->facets)),
+        ];
+    }
+
+    public function mapIds($results)
+    {
+        return collect($results['hits'])->pluck('id')->values();
+    }
+
+    public function map(ScoutBuilder $builder, $results, $model)
+    {
+        $keys = $this->mapIds($results)->all();
+        $positions = array_flip(array_map(strval(...), $keys));
+
+        return $model->getScoutModelsByIds($builder, $keys)
+            ->filter(static fn ($model): bool => isset($positions[(string) $model->getScoutKey()]))
+            ->sortBy(static fn ($model): int => $positions[(string) $model->getScoutKey()])
+            ->values();
+    }
+
+    public function getTotalCount($results)
+    {
+        return $results['total'];
     }
 
     /**

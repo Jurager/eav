@@ -7,19 +7,27 @@ namespace Jurager\Eav\Concerns;
 use Illuminate\Database\Eloquent\Collection;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
 use Laravel\Scout\Searchable;
 
 /**
- * Index the entity with Scout: the fields it declares in `searchIndex()` and its indexed attributes.
+ * Index and search the entity with Scout: the fields it declares in `searchIndex()` and its indexed attributes.
  *
  * @mixin Searchable
  */
 trait HasSearchableAttributes
 {
     use Searchable;
+
+    /**
+     * The builder `search()` returns: Scout's own, taught the entity's index definition.
+     *
+     * @var class-string<Builder>
+     */
+    public static string $scoutBuilder = Builder::class;
 
     /**
      * Whether the save in progress writes attribute values, which reindexes the entity by itself.
