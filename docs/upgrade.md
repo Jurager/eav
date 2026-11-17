@@ -3,11 +3,11 @@ title: Upgrade guide
 weight: 95
 ---
 
-## Upgrading to 1.0.5 from 1.0.3 or earlier
+## Upgrading to 1.0.7 from 1.0.3 or earlier
 
-Search was rebuilt around one index definition per model. The public search API changed, and the search document has a new shape, so indexes must be rebuilt.
+Search was rebuilt on Laravel Scout's own builder, around one index definition per model. The public search API changed, and the search document has a new shape, so indexes must be rebuilt.
 
-These are breaking changes released in 1.0.4 and 1.0.5. A `^1.0` constraint installs them on `composer update`, so follow this guide before updating a project. If a project already runs 1.0.4, also read [Upgrading to 1.0.5 from 1.0.4](#upgrading-to-105-from-104).
+These are breaking changes released as patch versions. A `^1.0` constraint installs them on `composer update`, so follow this guide before updating a project. If a project already runs 1.0.4, 1.0.5 or 1.0.6, read [Upgrading to 1.0.7 from 1.0.4 – 1.0.6](#upgrading-to-107-from-104--106) instead.
 
 Estimated time: 30 minutes, plus the time to reindex.
 
@@ -64,6 +64,7 @@ Replace the methods that described the index with one `searchIndex()` method:
 | `searchableWith()`                            | `$index->field(...)->with('relation')` or `$index->with()` |
 | `InteractsWithIndex::indexFields()`           | `->filterable()` and `->sortable()` on each field    |
 | `InteractsWithIndex::indexAliases()`          | `->alias('name')` on the field                       |
+| An `indexFields()` path covering nested keys, such as `prices` for `prices.retail` | `->keyed()` on the field |
 | `Builder::map()`                              | `->alias('name')` on the field                       |
 
 ```php
@@ -103,7 +104,7 @@ Only fields declared `searchable` are matched by full-text search. Previously ev
 
 ### 3. Update search calls
 
-`SearchFactory` was replaced by the `Search` facade:
+`SearchFactory` is gone. Search with Scout's own entry point, `Model::search()`:
 
 ```php
 // Before
@@ -118,29 +119,31 @@ $products = $result->paginate(Product::class, $perPage, $page);
 $facets = $result->facets;
 
 // After
-$products = Search::for(Product::class)
-    ->query($term)
+$products = Product::search($term)
     ->filter($filter)
     ->facets(['color', 'price'])
     ->sort('-price')
-    ->paginate($perPage, $page);
+    ->paginate($perPage, 'page', $page);
 
 $facets = $products->facets();
 ```
 
 | Before                              | After                                              |
 |-------------------------------------|----------------------------------------------------|
-| `->search($perPage, $page)`         | `->paginate($perPage, $page)`                      |
-| `$result->ids`                      | `$results->keys()`, or `->keys($limit)` on the builder |
+| `->for('product')->query($term)`    | `Product::search($term)`                           |
+| `->search($perPage, $page)`         | `->paginate($perPage, 'page', $page)`, as in Scout |
+| `$result->ids`                      | `->keys()` on the builder, or `$results->modelKeys()` |
 | `$result->total`                    | `$results->total()`                                |
 | `$result->facets`                   | `$results->facets()`                               |
 | `$result->paginate($model, ...)`    | `paginate()` already returns the models            |
 | `->orderBy('attributes.price')`     | `->orderBy('price')`                               |
 | `->hasFilter()`, `->ids()`, `->map()`, getters | Removed                                 |
 
+The builder is Scout's, so its methods mean what they mean in Scout. In particular `query()` takes a callback for the Eloquent query that loads the models; the text goes to `search()`.
+
 `filter()` now adds to the conditions already set instead of replacing them.
 
-The total is exact up to Meilisearch's `pagination.maxTotalHits` (1000 by default). It was an estimate.
+With Meilisearch the total is exact up to `pagination.maxTotalHits` (1000 by default). It was an estimate.
 
 ### 4. Update code that reads facets
 
@@ -168,13 +171,13 @@ Requests that were silently relaxed now fail with a 422 (`InvalidSearchQueryExce
 - a value that does not fit the field's type
 - a sort by a field that is not sortable; an unknown sort field was ignored before
 
-The exception is thrown when the filter or sort is added to the builder, not when the search runs. Check the filters and sorts your clients send. To keep `like`, set `eav.search.engines.meilisearch.contains` to `true` and enable the `containsFilter` experimental feature in Meilisearch.
+The exception is thrown when the filter or sort is added to the builder, not when the search runs. Check the filters and sorts your clients send. To keep `like`, set `eav.search.meilisearch.contains` to `true` and enable the `containsFilter` experimental feature in Meilisearch.
 
 Date filters now work with date strings. Dates are indexed as timestamps, and the old compiler dropped date conditions that were not numeric.
 
 Sort resolvers of `jurager/filterable` are no longer consulted for search. Sorting uses the index definition.
 
-Trashed entities are left out of the results when `scout.soft_delete` is on. Use `withTrashed()` to include them.
+Trashed entities are left out of the results when `scout.soft_delete` is on, as in Scout. Use `withTrashed()` to include them.
 
 ### 6. Read option labels by locale
 
@@ -197,7 +200,7 @@ Filtering by an attribute of a related entity, such as `category.color`, is off 
 ```php
 'search' => [
     'resolvers' => [
-        \Jurager\Eav\Search\AttributeRelationFilterResolver::class,
+        \Jurager\Eav\Search\Filters\RelationFilterResolver::class,
     ],
 ],
 ```
@@ -208,9 +211,9 @@ The `eav.search.resolvers` container tag is no longer used.
 
 ### 8. Move index settings
 
-Publish the configuration again, or add the `search` section from [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php). Searches run on the engine named by `eav.search.driver`, `meilisearch` by default.
+Index settings belong to Scout. Keep typo tolerance, synonyms, stop words, and ranking rules in `scout.meilisearch.index-settings`, and remove `filterableAttributes`, `sortableAttributes`, and `searchableAttributes` from there: they are derived from `searchIndex()` and the attribute flags.
 
-Settings in `scout.meilisearch.index-settings` are still read. You can remove `filterableAttributes`, `sortableAttributes`, and `searchableAttributes` from there: they are derived from `searchIndex()` and the attribute flags. Move typo tolerance, synonyms, stop words, and ranking rules to `eav.search.engines.meilisearch.settings` or `eav.search.engines.meilisearch.indexes.{entity type}`.
+Publish the package configuration again, or add the `search` section from [config/eav.php](https://github.com/Jurager/eav/blob/main/config/eav.php).
 
 ### 9. Update custom fields
 
@@ -228,6 +231,7 @@ Most fields only need `indexType()` and `toIndex()`. The document is built from 
 | Removed                                   | Replacement                                    |
 |-------------------------------------------|------------------------------------------------|
 | `Schema::search()`                        | Removed. Use Scout on your own attribute model |
+| `SearchFactory`, `Search\Engine`, `Search\Compiler` | `Model::search()`; the engine is Scout's       |
 | `Jobs\SyncSearchable`                     | `Jobs\ReindexAttribute`                        |
 | `SchemaSynchronizer::refresh($attribute, documents:, settings:)` | `refresh($attribute, indexed:, entityTypes:)` |
 | `Search\Indexer::refresh($type)->ids($ids)` | `app(Search\Index\Indexer::class)->ids($type, $ids)` |
@@ -250,7 +254,7 @@ Classes outside search were moved to follow Laravel's layout. Update your import
 | `Jurager\Eav\Attributes\Validation\AttributeValidator`  | `Jurager\Eav\Attributes\AttributeValidator`         |
 | `Jurager\Eav\Commands\ClearCommand`                     | `Jurager\Eav\Console\ClearCommand`                  |
 | `Jurager\Eav\Search\Contracts\FilterResolver`           | `Jurager\Eav\Contracts\Search\FilterResolver`       |
-| `Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver` | `Jurager\Eav\Search\AttributeRelationFilterResolver` |
+| `Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver` | `Jurager\Eav\Search\Filters\RelationFilterResolver` |
 
 The `eav:clear` command keeps its name.
 
@@ -258,65 +262,95 @@ The `eav:clear` command keeps its name.
 
 The document changed: localizable values are keyed by locale code (`attributes.title.en`), and select labels moved from `attributes.{code}_label` to `labels.{code}`, stored per locale. Old documents do not match the new settings.
 
-For each searchable entity type:
+Sync the settings, then rebuild each searchable model with Scout's commands:
 
 ```bash
-php artisan eav:reindex product --flush
+php artisan scout:sync-index-settings
+php artisan scout:flush "App\Models\Product"
+php artisan scout:import "App\Models\Product"
 ```
 
-The command syncs the index settings and reindexes every entity. Run a queue worker if Scout queues indexing. Search returns partial results until the reindex finishes, so run it in a maintenance window or against a new index prefix (`SCOUT_PREFIX`).
+Run a queue worker if Scout queues indexing. Search returns partial results until the import finishes, so run it in a maintenance window or against a new index prefix (`SCOUT_PREFIX`).
 
-After deploying, `eav:sync-index-settings` is enough when only the configuration or `searchIndex()` changed.
+After deploying, `scout:sync-index-settings` is enough when only the configuration or `searchIndex()` changed.
 
 Two things change how the index behaves from here on:
 
 - An entity without indexed attribute values is indexed too, so an index may hold more documents than before.
-- A search that finds a document whose entity no longer exists removes it from the index. Set `eav.search.prune` to `false` to turn this off.
+- A paginated search that finds a document whose entity no longer exists removes it from the index. Set `eav.search.prune` to `false` to turn this off.
 
-## Upgrading to 1.0.5 from 1.0.4
+## Upgrading to 1.0.7 from 1.0.4 – 1.0.6
 
-1.0.5 made the search engine a driver. If a project already runs 1.0.4, apply these changes on top.
+1.0.7 moves search onto Scout's own builder. The package no longer has search engines of its own: entities are searched with the Scout driver they are indexed with. The search document did not change, so no reindex is needed.
 
-### Configuration
+### Search calls
 
-Meilisearch options moved under the engine:
+`Search::for()` is gone. `Model::search()` returns Scout's builder with the same methods on top:
 
-| 1.0.4                               | 1.0.5                                                 |
-|-------------------------------------|-------------------------------------------------------|
-| `eav.search.settings`               | `eav.search.engines.meilisearch.settings`             |
-| `eav.search.indexes.{entity type}`  | `eav.search.engines.meilisearch.indexes.{entity type}` |
-| `eav.search.locales`                | `eav.search.engines.meilisearch.locales`              |
-| `eav.search.contains`               | `eav.search.engines.meilisearch.contains`             |
+```php
+// Before
+Search::for(Product::class)->query($term)->where('brand', 'nike')->paginate(15, 2);
 
-### Federated search
+// After
+Product::search($term)->where('brand', 'nike')->paginate(15, 'page', 2);
+```
+
+| Before                                   | After                                                    |
+|------------------------------------------|----------------------------------------------------------|
+| `Search::for(Product::class)`            | `Product::search()`                                      |
+| `->query($term)`                         | `Product::search($term)`                                 |
+| `->paginate($perPage, $page)`            | `->paginate($perPage, 'page', $page)`                    |
+| `->get($limit)`                          | `->take($limit)->get()`                                  |
+| `->keys($limit)`, an array               | `->take($limit)->keys()`, a collection                   |
+| `->with('media')`, `->loadUsing($callback)` | `->query(fn ($query) => $query->with('media'))`       |
+| `->matching('all')`, `->threshold(0.3)`  | `->options(['matchingStrategy' => 'all', 'rankingScoreThreshold' => 0.3])` |
+| `$results->hits()`, `$hit->score`        | `$model->scoutMetadata()['_rankingScore']`               |
+| `$hit->highlight('title')`               | `$model->highlighted('title')`                           |
+| `$hit->entityType` in a federated search | `$model->getEntityType()`                                |
+| `->whereNot('color', 'red')`             | `->where('color', '!=', 'red')`                          |
+| `Search::federated([...])->paginate(20, 2)` | `Search::federated([...])->paginate(20, 'page', 2)`   |
+
+`query()` now means what it means in Scout: a callback for the Eloquent query that loads the models. Passing it text throws. `options()` is Scout's too: a second call replaces the first instead of adding to it.
 
 `Search::federated()` takes one search per entity type and throws for two searches over one type. To rank some hits of a type higher, use `boost()` on its search.
 
+### Configuration and commands
+
+| Before                                              | After                                              |
+|-----------------------------------------------------|----------------------------------------------------|
+| `eav.search.driver`, `EAV_SEARCH_DRIVER`            | Removed: Scout's driver is the driver              |
+| `eav.search.settings`, `eav.search.engines.meilisearch.settings` and `indexes` | `scout.meilisearch.index-settings` |
+| `eav.search.locales`, `eav.search.engines.meilisearch.locales`   | `eav.search.meilisearch.locales`      |
+| `eav.search.contains`, `eav.search.engines.meilisearch.contains` | `eav.search.meilisearch.contains`     |
+| `php artisan eav:sync-index-settings` (`eav:search:sync`) | `php artisan scout:sync-index-settings`      |
+| `php artisan eav:reindex product` (`eav:search:reindex`)  | `php artisan scout:import "App\Models\Product"` |
+
+Move the settings you kept under `eav.search` to `config/scout.php`, by model class or index name.
+
 ### Tests
 
-`Search::fake()` now replaces the engine instead of recording Meilisearch requests:
+`Search::fake()` swaps Scout's driver for a fake one:
 
 ```php
-// 1.0.4
-$engine = Search::fake();
-$engine->respond('products', [['id' => $product->id]]);
-$engine->assertSearched(fn (array $request) => $request['q'] === 'shoes');
-
-// 1.0.5
 $search = Search::fake();
 $search->respond('product', [$product->id]);
 $search->assertSearched(fn (Builder $search) => $search->query === 'shoes');
 ```
 
-`respond()` takes the entity type instead of the index name.
+`respond()` takes the entity type, and `assertSearched()` receives the builder. In 1.0.4 they took the index name and a Meilisearch request array.
 
-### Renamed classes
+### Removed classes
 
-| 1.0.4                                        | 1.0.5                                                    |
-|----------------------------------------------|----------------------------------------------------------|
-| `Search\Engine`                              | `Search\Engines\MeilisearchEngine`, behind `Contracts\Search\Engine` |
-| `Search\RequestFactory`, `Search\FilterCompiler` | `Search\Engines\Meilisearch\*`                      |
-| `Search\Index\Settings`                      | `Search\Engines\Meilisearch\Settings`                   |
-| `Contracts\Search\Transport`, `Search\Transport\*` | Removed                                             |
+| Removed                                                        | Replacement                                    |
+|----------------------------------------------------------------|------------------------------------------------|
+| `Search\Engine`, `Search\Engines\MeilisearchEngine` as a driver of the package | `Search\Engines\MeilisearchEngine`, an extension of Scout's engine |
+| `Contracts\Search\Engine`, `BoostsMatches`, `SearchesFacetValues`, `UpdatesIndexSettings` | `Contracts\Search\SupportsExtendedSearch`, `FederatesSearches`, `DerivesIndexSettings` |
+| `Search::extend($driver, ...)`, `Search::driver()`              | Scout's own `EngineManager::extend()`          |
+| `Search\RequestFactory`, `Search\FilterCompiler`, `Search\Index\Settings` | `Search\Grammars\MeilisearchGrammar` |
+| `Search\Hit`, `Results::hits()`, `Results::keys()`              | Scout metadata on the models                   |
+| `Search\AttributeRelationFilterResolver`                        | `Search\Filters\RelationFilterResolver`        |
+| `Search\Testing\FakeEngine`                                    | `Search\Engines\FakeEngine`                    |
+| `Contracts\Search\Transport`, `Search\Transport\*`            | Removed                                        |
+| `Console\SyncIndexSettingsCommand`, `Console\ReindexCommand`   | Scout's commands                               |
 
-`Builder::$filters` and `Builder::$orders` hold checked conditions and index fields instead of raw request data.
+`Builder::$filters` is now `Builder::$conditions` and `Builder::$orders` is `Builder::$sorts`; both hold checked conditions and index fields instead of raw request data. `Builder::$index` is Scout's index name; the index definition is `Builder::$definition`.

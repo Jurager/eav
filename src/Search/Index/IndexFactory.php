@@ -6,7 +6,7 @@ namespace Jurager\Eav\Search\Index;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Illuminate\Database\Eloquent\SoftDeletes;
+use Jurager\Eav\Concerns\HasSearchableAttributes;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
@@ -48,9 +48,7 @@ class IndexFactory
             return $this->indexes[$key][1];
         }
 
-        $softDeletes = config('scout.soft_delete', false) && in_array(SoftDeletes::class, class_uses_recursive($model), true);
-
-        $index = new Index($model, $entityType, $locales, $softDeletes);
+        $index = new Index($model, $entityType, $locales);
 
         if (method_exists($model, 'searchIndex')) {
             $model->searchIndex($index);
@@ -89,7 +87,8 @@ class IndexFactory
     }
 
     /**
-     * Entity types with a search index: searchable models in the morph map, and those holding attributes.
+     * Entity types whose search index the package defines: models using HasSearchableAttributes, in the
+     * morph map or holding attributes.
      *
      * @return list<string>
      */
@@ -100,7 +99,19 @@ class IndexFactory
             ...Eav::$attributeEntityTypeModel::query()->distinct()->pluck('entity_type')->all(),
         ];
 
-        return array_values(array_filter(array_unique($types), fn (string $type): bool => $this->model($type) !== null));
+        // A model searched with Scout alone keeps the index settings it was given: only those that define
+        // their index through the package have settings to derive.
+        return array_values(array_filter(array_unique($types), fn (string $type): bool => self::defines($this->model($type))));
+    }
+
+    /**
+     * Whether a model defines its search index through the package, as opposed to using Scout on its own.
+     */
+    public static function defines(mixed $model): bool
+    {
+        $class = is_object($model) ? $model::class : $model;
+
+        return self::searchable($class) && in_array(HasSearchableAttributes::class, class_uses_recursive($class), true);
     }
 
     /**

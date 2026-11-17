@@ -16,10 +16,9 @@ use Jurager\Eav\Attributes\AttributesFactory;
 use Jurager\Eav\Attributes\AttributeValueSorter;
 use Jurager\Eav\Attributes\Query\AttributeQueryFactory;
 use Jurager\Eav\Console\ClearCommand;
-use Jurager\Eav\Console\ReindexCommand;
-use Jurager\Eav\Console\SyncIndexSettingsCommand;
 use Jurager\Eav\Events\EntityValuesChanged;
 use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Fields\FieldTypes;
 use Jurager\Eav\Filterable\AttributeEntityTypeFilterResolver;
 use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
@@ -40,8 +39,7 @@ use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Registries\SchemaRegistry;
 use Jurager\Eav\Registries\SchemaVersion;
 use Jurager\Eav\Schema\SchemaManager;
-use Jurager\Eav\Search\AttributeRelationFilterResolver;
-use Jurager\Eav\Search\Index\Configurator;
+use Jurager\Eav\Search\Filters\RelationFilterResolver;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\IndexFactory;
 use Jurager\Eav\Search\Index\Synchronizer;
@@ -117,7 +115,7 @@ class EavServiceProvider extends ServiceProvider
         $this->app->scoped(AttributeSortResolver::class);
         $this->app->singleton(AttributeEnumUsageResolver::class);
         $this->app->singleton(AttributeEntityTypeFilterResolver::class);
-        $this->app->singleton(AttributeRelationFilterResolver::class);
+        $this->app->singleton(RelationFilterResolver::class);
 
         $this->app->tag([
             AttributeFilterResolver::class,
@@ -158,7 +156,7 @@ class EavServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ClearCommand::class, SyncIndexSettingsCommand::class, ReindexCommand::class]);
+            $this->commands([ClearCommand::class]);
         }
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
@@ -190,7 +188,7 @@ class EavServiceProvider extends ServiceProvider
     {
         $this->app->scoped(IndexFactory::class);
         $this->app->scoped(Document::class);
-        $this->app->scoped(SearchManager::class, static fn (Application $app): SearchManager => new SearchManager($app));
+        $this->app->scoped(SearchManager::class);
     }
 
     /**
@@ -204,10 +202,12 @@ class EavServiceProvider extends ServiceProvider
             $this->app->make(Synchronizer::class)->values($event->entityType, $event->entityIds);
         });
 
-        // Scout's own command resets an index to the configured settings: put the derived ones back.
+        // Scout's command sets an index to the configured settings alone: follow it with the derived ones.
         $events->listen(CommandFinished::class, function (CommandFinished $event): void {
             if ($event->command === 'scout:sync-index-settings' && $event->exitCode === 0) {
-                $this->app->make(Configurator::class)->all();
+                foreach ($this->app->make(IndexFactory::class)->entityTypes() as $entityType) {
+                    $this->app->call([new SyncIndexSettings($entityType), 'handle']);
+                }
             }
         });
     }

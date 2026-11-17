@@ -4,15 +4,33 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Fixtures;
 
-use Jurager\Eav\Search\Engines\Meilisearch\Gateway;
+use Jurager\Eav\Search\Engines\MeilisearchEngine;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
+use Meilisearch\Client;
 use PHPUnit\Framework\Assert;
 
 /**
- * Stands in for Meilisearch: records the requests the engine sends and answers with prepared hits.
+ * The package's Meilisearch engine with no server behind it: it records the requests it would send and
+ * answers with prepared hits. Indexing does nothing, and settings are recorded.
  */
-class RecordingGateway extends Gateway
+class RecordingMeilisearchEngine extends MeilisearchEngine
 {
-    public function __construct() {}
+    public function __construct(bool $softDelete = false)
+    {
+        parent::__construct(new Client('http://127.0.0.1:1'), $softDelete, app(MeilisearchGrammar::class));
+    }
+
+    public function update($models) {}
+
+    public function delete($models) {}
+
+    public function flush($model) {}
+
+    public function updateIndexSettings($name, array $settings = [])
+    {
+        $this->settings[$name] = $settings;
+    }
+
 
     /** @var list<array{queries: list<array<string, mixed>>, federation: array<string, mixed>|null}> */
     public array $searches = [];
@@ -45,12 +63,12 @@ class RecordingGateway extends Gateway
         return $this;
     }
 
-    public function multiSearch(array $queries, ?array $federation = null): array
+    protected function multiSearch(array $queries, ?array $federation = null): array
     {
         $this->searches[] = ['queries' => $queries, 'federation' => $federation];
 
         if ($federation !== null) {
-            return $this->federated($queries, $federation);
+            return $this->federatedResponse($queries, $federation);
         }
 
         return ['results' => array_map(function (array $query): array {
@@ -69,7 +87,7 @@ class RecordingGateway extends Gateway
         }, $queries)];
     }
 
-    public function facetSearch(string $index, array $query): array
+    protected function facetSearch(string $index, array $query): array
     {
         $this->facetSearches[] = ['index' => $index, 'query' => $query];
 
@@ -82,10 +100,6 @@ class RecordingGateway extends Gateway
         return ['facetHits' => $hits, 'facetQuery' => $query['facetQuery'] ?? null];
     }
 
-    public function updateSettings(string $index, array $settings): void
-    {
-        $this->settings[$index] = $settings;
-    }
 
     /**
      * The search requests sent so far, flattened across round trips.
@@ -119,7 +133,7 @@ class RecordingGateway extends Gateway
      * @param  array<string, mixed>  $federation
      * @return array<string, mixed>
      */
-    private function federated(array $queries, array $federation): array
+    private function federatedResponse(array $queries, array $federation): array
     {
         $hits = [];
         $facets = [];

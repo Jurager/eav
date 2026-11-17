@@ -19,39 +19,26 @@ class IndexerTest extends SearchTestCase
         config(['scout.queue' => true]);
     }
 
-    public function test_reindex_command_syncs_settings_and_queues_every_entity(): void
+    public function test_every_entity_of_a_type_is_queued_for_reindexing(): void
     {
-        $this->attribute('number', 'price', ['filterable' => true]);
         $first = $this->product('First');
         $second = $this->product('Second');
         Queue::fake();
 
-        $this->artisan('eav:reindex', ['type' => 'searchable_product'])->assertSuccessful();
+        app(Indexer::class)->all('searchable_product');
 
-        $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
-        $this->assertArrayNotHasKey('eav_test_categories', $this->engine->settings);
         Queue::assertPushed(MakeSearchable::class, fn (MakeSearchable $job) => $job->models->modelKeys() === [$first->id, $second->id]);
     }
 
-    public function test_reindex_command_respects_the_chunk_size(): void
+    public function test_scouts_import_command_reindexes_an_entity_type(): void
     {
         $this->product('First');
         $this->product('Second');
         Queue::fake();
 
-        $this->artisan('eav:reindex', ['type' => 'searchable_product', '--chunk' => 1])->assertSuccessful();
+        $this->artisan('scout:import', ['model' => SearchableProduct::class, '--chunk' => 1])->assertSuccessful();
 
         Queue::assertPushed(MakeSearchable::class, 2);
-    }
-
-    public function test_reindex_command_covers_every_searchable_type_and_reports_others(): void
-    {
-        $this->artisan('eav:reindex')->assertSuccessful();
-        $this->assertEqualsCanonicalizing(['eav_test_products', 'eav_test_categories'], array_keys($this->engine->settings));
-
-        $this->artisan('eav:reindex', ['type' => 'product'])
-            ->expectsOutputToContain('[product] is not searchable')
-            ->assertSuccessful();
     }
 
     public function test_since_queues_only_what_was_touched_after_the_moment(): void

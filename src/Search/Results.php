@@ -4,63 +4,37 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
-use Illuminate\Database\Eloquent\Collection as EloquentCollection;
+use Illuminate\Contracts\Pagination\LengthAwarePaginator as PaginatorContract;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Collection;
 
 /**
- * A page of search results: the models as a paginator, with the hits and facets alongside.
+ * A page of search results: Scout's paginator of models, with the facets alongside.
+ *
+ * What the engine tells about each hit — its ranking score, highlights — is on the model, as Scout's
+ * metadata: `$model->scoutMetadata()`.
  *
  * @extends LengthAwarePaginator<int, \Illuminate\Database\Eloquent\Model>
  */
 class Results extends LengthAwarePaginator
 {
-    /** @var list<Hit> */
-    protected array $hits = [];
-
     /** @var array<string, mixed> */
     protected array $facets = [];
 
     /**
-     * @param  list<Hit>  $hits
+     * Carry a paginator's page over, with facets.
+     *
      * @param  array<string, mixed>  $facets
-     * @param  array<string, mixed>  $options
      */
-    public static function make(array $hits, array $facets, int $total, int $perPage, int $page, array $options = []): static
+    public static function of(PaginatorContract $paginator, array $facets = []): static
     {
-        $models = [];
+        $results = new static($paginator->getCollection(), $paginator->total(), max(1, $paginator->perPage()), $paginator->currentPage(), [
+            'path' => $paginator->path(),
+            'pageName' => $paginator->getPageName(),
+        ]);
 
-        foreach ($hits as $hit) {
-            if ($hit->model !== null) {
-                $models[] = $hit->model;
-            }
-        }
-
-        $results = new static(new EloquentCollection($models), $total, max(1, $perPage), $page, $options);
-        $results->hits = $hits;
         $results->facets = $facets;
 
         return $results;
-    }
-
-    /**
-     * The hits behind the page: documents, highlights and ranking scores.
-     *
-     * @return Collection<int, Hit>
-     */
-    public function hits(): Collection
-    {
-        return new Collection($this->hits);
-    }
-
-    /**
-     * Keys of the matched documents, in ranking order.
-     *
-     * @return list<int|string>
-     */
-    public function keys(): array
-    {
-        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->hits);
     }
 
     /**

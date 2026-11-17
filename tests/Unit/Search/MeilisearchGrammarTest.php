@@ -6,13 +6,13 @@ namespace Jurager\Eav\Tests\Unit\Search;
 
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Search\Engines\Meilisearch\FilterCompiler;
+use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
 use Jurager\Eav\Search\Filters\Normalizer;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Tests\TestCase;
 use Jurager\Filterable\Parsing\FilterParser;
 
-class MeilisearchFilterCompilerTest extends TestCase
+class MeilisearchGrammarTest extends TestCase
 {
     private Index $index;
 
@@ -40,7 +40,7 @@ class MeilisearchFilterCompilerTest extends TestCase
     {
         $group = (new Normalizer($this->index))->normalize((new FilterParser)->parse($filter, []));
 
-        return app(FilterCompiler::class)->compile($group->except($except), $locale);
+        return app(MeilisearchGrammar::class)->compileFilter($group->except($except), $locale);
     }
 
     public function test_a_scalar_is_an_equality_cast_to_the_field_type(): void
@@ -174,7 +174,7 @@ class MeilisearchFilterCompilerTest extends TestCase
 
     public function test_like_compiles_to_contains_when_enabled(): void
     {
-        config(['eav.search.engines.meilisearch.contains' => true]);
+        config(['eav.search.meilisearch.contains' => true]);
 
         $this->assertSame('brand CONTAINS "nik"', $this->compile(['brand' => ['like' => '%nik%']]));
         $this->assertSame('(brand CONTAINS "nik" OR brand CONTAINS "pum")', $this->compile(['brand' => ['like' => ['nik', 'pum']]]));

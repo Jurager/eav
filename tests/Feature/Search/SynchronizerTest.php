@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Tests\Feature\Search;
 
-use Illuminate\Console\Events\CommandFinished;
 use Illuminate\Support\Facades\Queue;
 use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\ReindexEntities;
@@ -12,8 +11,6 @@ use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Schema\Repositories\AttributeRepository;
 use Laravel\Scout\Jobs\MakeSearchable;
-use Symfony\Component\Console\Input\ArrayInput;
-use Symfony\Component\Console\Output\NullOutput;
 
 class SynchronizerTest extends SearchTestCase
 {
@@ -152,23 +149,6 @@ class SynchronizerTest extends SearchTestCase
         $this->ru->delete();
 
         Queue::assertNotPushed(ReindexEntities::class);
-    }
-
-    public function test_scouts_settings_command_is_followed_by_the_derived_settings(): void
-    {
-        $this->attribute('number', 'price', ['filterable' => true]);
-
-        event(new CommandFinished('scout:sync-index-settings', new ArrayInput([]), new NullOutput, 0));
-
-        $this->assertContains('attributes.price', $this->engine->settings['eav_test_products']['filterableAttributes']);
-    }
-
-    public function test_other_or_failed_commands_sync_nothing(): void
-    {
-        event(new CommandFinished('migrate', new ArrayInput([]), new NullOutput, 0));
-        event(new CommandFinished('scout:sync-index-settings', new ArrayInput([]), new NullOutput, 1));
-
-        $this->assertSame([], $this->engine->settings);
     }
 
     public function test_reindexing_an_attribute_covers_its_holders_and_their_variants(): void

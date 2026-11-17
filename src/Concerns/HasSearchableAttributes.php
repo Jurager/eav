@@ -6,20 +6,31 @@ namespace Jurager\Eav\Concerns;
 
 use Illuminate\Database\Eloquent\Collection;
 use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Search\Builder;
 use Jurager\Eav\Search\Index\Document;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexFactory;
+use Jurager\Eav\Search\SearchManager;
+use Laravel\Scout\Engines\Engine;
 use Laravel\Scout\Searchable;
 
 /**
- * Index the entity with Scout: the fields it declares in `searchIndex()` and its indexed attributes.
+ * Index and search the entity with Scout: the fields it declares in `searchIndex()` and its indexed attributes.
  *
  * @mixin Searchable
  */
 trait HasSearchableAttributes
 {
     use Searchable;
+
+    /**
+     * The builder `search()` returns: Scout's own, taught the entity's index definition.
+     *
+     * @var class-string<Builder>
+     */
+    public static string $scoutBuilder = Builder::class;
 
     /**
      * Whether the save in progress writes attribute values, which reindexes the entity by itself.
@@ -41,6 +52,28 @@ trait HasSearchableAttributes
      * Declare the model's own index fields; indexed attributes are added on top.
      */
     public function searchIndex(Index $index): void {}
+
+    /**
+     * Index and search with the engine Scout is configured with, in its extended form where there is one.
+     *
+     * @return Engine
+     */
+    public function searchableUsing()
+    {
+        return app(SearchManager::class)->engine();
+    }
+
+    /**
+     * An indexed field as the last search returned it, with the matched words highlighted where the search
+     * asked for highlighting; the plain value otherwise.
+     */
+    public function highlighted(string $name, ?string $locale = null): mixed
+    {
+        $field = app(IndexFactory::class)->for($this)->find($name);
+        $path = $field?->pathFor($locale ?? app(LocaleRegistry::class)->code(app(LocaleRegistry::class)->current())) ?? $name;
+
+        return data_get($this->scoutMetadata()['_formatted'] ?? [], $path) ?? data_get($this->toSearchableArray(), $path);
+    }
 
     public function toSearchableArray(): array
     {

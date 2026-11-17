@@ -28,6 +28,11 @@ class IndexField
     public bool $localized = false;
 
     /**
+     * Whether the field holds a map of values, each of them a field of its own at `path.{key}`.
+     */
+    public bool $keyed = false;
+
+    /**
      * The attribute the field is built from; null for a field the model declares.
      */
     public ?Attribute $attribute = null;
@@ -108,6 +113,32 @@ class IndexField
         $this->localized = $value;
 
         return $this;
+    }
+
+    /**
+     * The value is a map, such as prices by price type: each key can be filtered, sorted and faceted on
+     * as `path.{key}`, with the type and abilities of this field.
+     */
+    public function keyed(bool $value = true): static
+    {
+        $this->keyed = $value;
+
+        return $this;
+    }
+
+    /**
+     * The field of one key of a keyed field.
+     */
+    public function key(string $key): static
+    {
+        $field = new static("{$this->path}.{$key}");
+        $field->type = $this->type;
+        $field->searchable = $this->searchable;
+        $field->filterable = $this->filterable;
+        $field->sortable = $this->sortable;
+        $field->attribute = $this->attribute;
+
+        return $field;
     }
 
     /**
