@@ -31,7 +31,6 @@ use Jurager\Eav\Schema\SchemaManager;
  * @method static Builder<AttributeGroup> groups()
  * @method static Builder<AttributeEnum> enums(Attribute $attribute)
  * @method static Builder<AttributeType> types()
- * @method static mixed search(string $query)
  *
  * @see SchemaManager
  */

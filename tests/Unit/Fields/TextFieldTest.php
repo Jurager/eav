@@ -7,8 +7,8 @@ namespace Jurager\Eav\Tests\Unit\Fields;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Text;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 use Mockery;
 
@@ -257,22 +257,24 @@ class TextFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData()
+    // indexFields()
     // -----------------------------------------------------------------------
 
-    public function test_index_data_returns_empty_when_no_value(): void
+    public function test_index_field_holds_the_value_under_attributes(): void
     {
-        $field = $this->makeField(['code' => 'name']);
-
-        $this->assertSame([], $field->indexData());
-    }
-
-    public function test_index_data_returns_value_keyed_by_code(): void
-    {
-        $field = $this->makeField(['code' => 'name']);
+        $field = $this->makeField(['code' => 'name', 'searchable' => true]);
         $field->fill('John');
 
-        $this->assertSame(['name' => 'John'], $field->indexData());
+        [$index] = $field->indexFields();
+
+        $this->assertSame('attributes.name', $index->path);
+        $this->assertTrue($index->searchable);
+        $this->assertSame('John', ($index->value)($this->createStub(\Illuminate\Database\Eloquent\Model::class)));
+    }
+
+    public function test_to_index_is_null_when_no_value(): void
+    {
+        $this->assertNull($this->makeField(['code' => 'name'])->toIndex());
     }
 
     // -----------------------------------------------------------------------

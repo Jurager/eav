@@ -167,17 +167,3 @@ $created->get('color'); // Attribute, keyed by code
 Attribute codes are globally unique. A duplicate code rolls back the batch. Use `firstOrCreate()` for repeatable imports.
 
 Pass `fireEvents: false` to suppress `AttributeCreated` events during large imports.
-
-## Full-Text search over attributes
-
-When [Laravel Scout](https://laravel.com/docs/scout) is configured on the `Attribute` model, `search()` looks up attributes by code and translated labels:
-
-```php
-use Jurager\Eav\Exceptions\SearchNotAvailableException;
-
-try {
-    $results = Schema::search('color')->paginate(15);
-} catch (SearchNotAvailableException $e) {
-    // Scout is not configured on the attribute model
-}
-```

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature\Schema;
 
 use Illuminate\Database\Eloquent\ModelNotFoundException;
-use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Facades\Schema;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
 
@@ -92,12 +91,5 @@ class SchemaLookupTest extends FeatureTestCase
         $this->createAttributeType('number');
 
         $this->assertCount(2, Schema::types()->get());
-    }
-
-    public function test_search_throws_when_scout_is_not_configured(): void
-    {
-        $this->expectException(SearchNotAvailableException::class);
-
-        Schema::search('color');
     }
 }

@@ -37,7 +37,7 @@ public function attributeScopeRelation(): BelongsToMany
 `$product->availableAttributes()` now resolves to the union of attributes assigned to every category the product belongs to.
 
 `AttributeScope` clears cached schemas when assignments change. After raw SQL changes, call
-`app(\Jurager\Eav\Registry\SchemaRegistry::class)->forget()`.
+`app(\Jurager\Eav\Registries\SchemaRegistry::class)->forget()`.
 
 ## Scoped uniqueness
 

@@ -11,8 +11,8 @@ use Illuminate\Support\Collection;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
 use Jurager\Filterable\Support\FilterOperator;
 
 /**

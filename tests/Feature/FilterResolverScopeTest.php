@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 
 class FilterResolverScopeTest extends FeatureTestCase

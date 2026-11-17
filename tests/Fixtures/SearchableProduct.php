@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Fixtures;
 
 use Jurager\Eav\Concerns\HasSearchableAttributes;
+use Jurager\Eav\Search\Index\Index;
 
 class SearchableProduct extends Product
 {
@@ -15,8 +16,14 @@ class SearchableProduct extends Product
         return 'searchable_product';
     }
 
-    public function getScoutKey(): mixed
+    public function searchableAs(): string
     {
-        return $this->id;
+        return 'eav_test_products';
+    }
+
+    public function searchIndex(Index $index): void
+    {
+        $index->field('name')->searchable()->sortable();
+        $index->field('parent_id')->number()->filterable()->alias('parent');
     }
 }

@@ -5,8 +5,8 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 class ActiveLocaleScopeTest extends FeatureTestCase
 {

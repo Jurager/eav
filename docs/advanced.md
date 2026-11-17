@@ -25,13 +25,9 @@ Choose which attributes an entity can use through a [related model](inheritance.
 
 [Limit unique values to a scope](inheritance.md#scoped-uniqueness), such as a category tree.
 
-## Scout integration
+## Search
 
-[Index attribute values with Scout](search.md) and configure Meilisearch filters.
-
-## Search indexing
-
-Search documents update automatically after values are saved. See [indexing attributes](search.md).
+[Search entities with Meilisearch](search.md): full-text search per locale, filters, facets, and federated search. Search documents update automatically after values are saved.
 
 ### Deleting attributes permanently
 

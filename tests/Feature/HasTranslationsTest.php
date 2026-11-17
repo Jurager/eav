@@ -7,7 +7,7 @@ namespace Jurager\Eav\Tests\Feature;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Fixtures\SoftDeletingTranslatableEntity;
 use Jurager\Eav\Tests\Fixtures\TranslatableEntity;
 

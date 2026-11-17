@@ -12,11 +12,11 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema as DbSchema;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Facades\Schema;
+use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\SyncIndexSettings;
-use Jurager\Eav\Jobs\SyncSearchable;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\Service;
@@ -115,8 +115,8 @@ class AttributeSharingTest extends FeatureTestCase
 
         Schema::attribute($attribute)->searchable()->update();
 
-        Queue::assertPushed(SyncSearchable::class, fn (SyncSearchable $job) => $job->uniqueId() === "product:{$attribute->id}");
-        Queue::assertPushed(SyncSearchable::class, fn (SyncSearchable $job) => $job->uniqueId() === "service:{$attribute->id}");
+        Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "product:{$attribute->id}");
+        Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "service:{$attribute->id}");
     }
 
     public function test_toggling_filterable_dispatches_index_settings_sync_for_every_applicable_type(): void
@@ -144,8 +144,8 @@ class AttributeSharingTest extends FeatureTestCase
 
         $attribute = Schema::attribute('warranty_months', ['product', 'service'])->type('text')->searchable()->create();
 
-        Queue::assertPushed(SyncSearchable::class, fn (SyncSearchable $job) => $job->uniqueId() === "product:{$attribute->id}");
-        Queue::assertPushed(SyncSearchable::class, fn (SyncSearchable $job) => $job->uniqueId() === "service:{$attribute->id}");
+        Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "product:{$attribute->id}");
+        Queue::assertPushed(ReindexAttribute::class, fn (ReindexAttribute $job) => $job->uniqueId() === "service:{$attribute->id}");
     }
 
     public function test_detaching_a_type_invalidates_the_registry_cache_for_it(): void

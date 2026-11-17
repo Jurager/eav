@@ -11,8 +11,8 @@ use Jurager\Eav\Events\AttributeTypeDeleted;
 use Jurager\Eav\Events\AttributeTypeUpdated;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeGroup;
-use Jurager\Eav\Registry\AttributeGroupRegistry;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
+use Jurager\Eav\Registries\AttributeGroupRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
 
 class AttributeReferenceDataRegistryTest extends FeatureTestCase
 {

@@ -6,7 +6,10 @@ namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\Index\IndexField;
 
 /**
  * Field for enum-backed select, storing selected ID in an integer column.
@@ -99,66 +102,73 @@ class Select extends Field
         return $this->enum()?->label($localeId);
     }
 
-    /**
-     * Get data for the search index.
-     */
-    public function indexData(): array
+    public function indexType(): IndexType
     {
-        $code = $this->code();
-        $value = $this->value();
-
-        if ($value === null) {
-            return [];
-        }
-
-        $enums = $this->enums();
-        $enumCode = $this->isMultiple()
-            ? array_map(static fn (AttributeEnum $enum) => $enum->getAttribute('code'), $enums)
-            : $this->enum()?->getAttribute('code');
-
-        if ($enumCode === null || $enumCode === []) {
-            return [];
-        }
-
-        $result = [$code => $enumCode];
-
-        $labels = collect($this->localeRegistry->ids())
-            ->map(fn (int $localeId) => $this->label($localeId))
-            ->flatten()
-            ->filter(fn ($label) => $label !== null && $label !== '')
-            ->unique()
-            ->values()
-            ->all();
-
-        if ($labels) {
-            $result["{$code}_label"] = $labels;
-        }
-
-        return $result;
+        return IndexType::Keyword;
     }
 
     /**
-     * Enrich distribution data with labels.
+     * Options are indexed by code; their labels go to a separate localized field.
+     *
+     * @return string|list<string>|null
      */
-    public function enrichFacetDistribution(array $distribution, ?int $localeId = null): array
+    public function toIndex(?int $localeId = null): string|array|null
     {
-        $enums = $this->enumRegistry->all($this->attribute->getAttribute('id'))->keyBy('code');
-        $result = [];
-
-        foreach ($distribution as $code => $count) {
-            $enum = $enums->get($code);
-            $label = $code;
-
-            if ($enum !== null) {
-                $label = $localeId !== null
-                    ? ($enum->label($localeId) ?? $code)
-                    : ($enum->translations->first()?->pivot?->getAttribute('label') ?? $code);
-            }
-
-            $result[$code] = ['count' => $count, 'label' => $label];
+        if ($this->isMultiple()) {
+            return array_values(array_map(static fn (AttributeEnum $enum): string => (string) $enum->getAttribute('code'), $this->enums()));
         }
 
-        return $result;
+        $code = $this->enum()?->getAttribute('code');
+
+        return $code === null ? null : (string) $code;
+    }
+
+    /**
+     * The option code, filterable and sortable, plus its labels per locale for full-text search.
+     *
+     * @return list<IndexField>
+     */
+    public function indexFields(): array
+    {
+        return [
+            $this->indexField(Index::ATTRIBUTES)
+                ->filterable($this->isFilterable())
+                ->sortable($this->isSortable() && ! $this->isMultiple()),
+            $this->indexField(Index::LABELS, fn (): array => $this->perLocale($this->indexLabel(...)))
+                ->text()
+                ->localized()
+                ->searchable($this->isSearchable()),
+        ];
+    }
+
+    /**
+     * Labels of the selected options in one locale.
+     *
+     * @return string|list<string>|null
+     */
+    protected function indexLabel(int $localeId): string|array|null
+    {
+        $labels = array_values(array_filter((array) $this->label($localeId), static fn ($label): bool => $label !== null && $label !== ''));
+
+        return $this->isMultiple() ? $labels : ($labels[0] ?? null);
+    }
+
+    /**
+     * Option labels for facet values, falling back to the option code.
+     *
+     * @param  list<string>  $values
+     * @return array<string, string>
+     */
+    public function facetLabels(array $values, int $localeId): array
+    {
+        $enums = $this->enumRegistry->all($this->attribute->getAttribute('id'))->keyBy('code');
+        $labels = [];
+
+        foreach ($values as $code) {
+            $labels[$code] = $enums->get($code)?->label($localeId) ?? $code;
+        }
+
+        return $labels;
     }
 
     /**

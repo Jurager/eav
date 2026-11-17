@@ -11,8 +11,8 @@ use Jurager\Eav\Fields\Concerns\Indexable;
 use Jurager\Eav\Fields\Concerns\ValidatesPayload;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Base attribute field.
@@ -323,6 +323,11 @@ abstract class Field
         return $this->attribute->getAttribute('searchable') ?? false;
     }
 
+    public function isSortable(): bool
+    {
+        return $this->attribute->getAttribute('sortable') ?? false;
+    }
+
     /** @return array<string, mixed> */
     public function toMetadata(): array
     {
@@ -335,6 +340,7 @@ abstract class Field
             'unique' => $this->isUnique(),
             'filterable' => $this->isFilterable(),
             'searchable' => $this->isSearchable(),
+            'sortable' => $this->isSortable(),
         ];
     }
 

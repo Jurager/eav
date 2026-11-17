@@ -18,13 +18,14 @@ use Jurager\Eav\Eav;
  * @property bool $unique
  * @property bool $filterable
  * @property bool $searchable
+ * @property bool $sortable
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, Attribute> $attributes
  */
 class AttributeType extends Model
 {
-    protected $fillable = ['code', 'localizable', 'multiple', 'unique', 'filterable', 'searchable'];
+    protected $fillable = ['code', 'localizable', 'multiple', 'unique', 'filterable', 'searchable', 'sortable'];
 
     /**
      * Force any flags in $data to false for capabilities this type does not support.
@@ -34,7 +35,7 @@ class AttributeType extends Model
      */
     public function constrain(array $data): array
     {
-        foreach (['localizable', 'multiple', 'unique', 'filterable', 'searchable'] as $flag) {
+        foreach (['localizable', 'multiple', 'unique', 'filterable', 'searchable', 'sortable'] as $flag) {
             if (array_key_exists($flag, $data) && ! $this->{$flag}) {
                 $data[$flag] = false;
             }
@@ -56,6 +57,7 @@ class AttributeType extends Model
             'unique' => 'boolean',
             'filterable' => 'boolean',
             'searchable' => 'boolean',
+            'sortable' => 'boolean',
         ];
     }
 }

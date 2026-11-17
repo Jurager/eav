@@ -6,7 +6,7 @@ namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
 
 /**
  * @property int $id

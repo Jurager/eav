@@ -6,7 +6,7 @@ namespace Jurager\Eav\Tests\Feature\Translation;
 
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\Feature\FeatureTestCase;
 use Jurager\Eav\Translation\LocaleRepository;
 use Jurager\Eav\Translation\TranslationRepository;

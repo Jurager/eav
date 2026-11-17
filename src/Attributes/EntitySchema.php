@@ -12,8 +12,8 @@ use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
 
 /**
  * The attribute definitions available to an entity or entity type.

@@ -10,13 +10,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
-use Jurager\Eav\Attributes\Scope\AttributeInheritanceResolver;
+use Jurager\Eav\Attributes\AttributeInheritanceResolver;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Contracts\ShouldUseNestedSet;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
 use Jurager\Eav\Relations\ClosureRelation;
 
 /**

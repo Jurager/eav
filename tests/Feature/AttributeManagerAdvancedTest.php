@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
-use Jurager\Eav\Attributes\AttributeManager;
 use Jurager\Eav\Facades\Attributes;
-use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeType;
 use Jurager\Eav\Tests\Fixtures\Product;
 
@@ -155,51 +153,6 @@ class AttributeManagerAdvancedTest extends FeatureTestCase
         $results = Attributes::query(Product::class)->findWhereIn('ref', ['NONEXISTENT']);
 
         $this->assertCount(0, $results);
-    }
-
-    // -----------------------------------------------------------------------
-    // indexData() — searchable attribute values for Scout
-    // -----------------------------------------------------------------------
-
-    public function test_index_data_returns_empty_when_no_searchable_attributes(): void
-    {
-        $this->createAttribute($this->textType, ['code' => 'title', 'searchable' => false]);
-
-        $product = $this->createProduct();
-        $product->eav()->set('title', 'Widget')->save('title');
-
-        $data = $product->fresh()->eav()->indexData();
-
-        $this->assertSame([], $data);
-    }
-
-    public function test_index_data_includes_searchable_attribute_values(): void
-    {
-        $this->createAttribute($this->textType, ['code' => 'title', 'searchable' => true]);
-
-        $product = $this->createProduct();
-        $product->eav()->set('title', 'Widget')->save('title');
-
-        $data = $product->fresh()->eav()->indexData();
-
-        $this->assertArrayHasKey('attributes', $data);
-        $this->assertArrayHasKey('title', $data['attributes']);
-        $this->assertSame('Widget', $data['attributes']['title']);
-    }
-
-    public function test_index_data_is_memoized(): void
-    {
-        $this->createAttribute($this->textType, ['code' => 'title', 'searchable' => true]);
-
-        $product = $this->createProduct();
-        $product->eav()->set('title', 'Widget')->save('title');
-
-        $product = $product->fresh();
-
-        $first = $product->eav()->indexData();
-        $second = $product->eav()->indexData();
-
-        $this->assertSame($first, $second);
     }
 
     // -----------------------------------------------------------------------

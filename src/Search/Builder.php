@@ -4,394 +4,564 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
+use Closure;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Relation;
-use Jurager\Eav\Search\Contracts\FilterResolver;
-use Jurager\Eav\Search\Contracts\InteractsWithIndex;
-use Jurager\Filterable\Concerns\HasFilterable;
-use Jurager\Filterable\Contracts\SortResolver;
-use Jurager\Filterable\FilterableServiceProvider;
+use Illuminate\Pagination\Paginator;
+use Jurager\Eav\Contracts\Search\FilterResolver;
+use Jurager\Eav\Exceptions\InvalidSearchQueryException;
+use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\Index\Indexer;
+use Jurager\Eav\Search\Index\IndexField;
 use Jurager\Filterable\Parsing\FilterParser;
 use Jurager\Filterable\Support\ParsedFilters;
 
 /**
- * Build search queries for EAV entities.
+ * Fluent search query over the index of one entity type.
  */
 class Builder
 {
     /**
-     * Current search query string.
+     * Comparison signs accepted by where(), and the filter operators they stand for.
      */
-    private ?string $query = null;
+    private const array OPERATORS = [
+        '=' => 'eq', '!=' => 'ne', '<>' => 'ne', '>' => 'gt', '>=' => 'gte', '<' => 'lt', '<=' => 'lte',
+    ];
+
+    public ?string $query = null;
+
+    /** @var list<ParsedFilters> Conditions that must all hold. */
+    public array $filters = [];
+
+    /** @var list<array{0: string, 1: string}> Sort fields and directions. */
+    public array $orders = [];
+
+    /** @var list<string> */
+    public array $facets = [];
+
+    /** @var list<string> Locale codes the search runs in. */
+    private array $locales;
+
+    /** @var list<string>|null Fields the text is matched against; every searchable field when null. */
+    public ?array $searchOn = null;
+
+    /** @var list<string>|null Fields to highlight matches in; empty for every searched field. */
+    public ?array $highlight = null;
+
+    public ?string $distinct = null;
+
+    public ?float $weight = null;
+
+    public ?ParsedFilters $partition = null;
 
     /**
-     * Parsed filters.
+     * Trashed entities to include: none (false), all alongside the rest (true), or only them (null).
      */
-    private ParsedFilters $filter;
+    public ?bool $trashed = false;
 
-    /**
-     * Map of filter keys to indexed fields.
-     *
-     * @var array<string, string>
-     */
-    private array $map = [];
+    public bool $partitionFirst = true;
 
-    /**
-     * Configured search facets.
-     *
-     * @var array<int, string>
-     */
-    private array $facets = [];
+    /** @var array<string, mixed> Engine parameters passed through as they are. */
+    public array $options = [];
 
-    /**
-     * Eloquent model instance for the entity type.
-     */
-    private ?Model $model = null;
+    /** @var list<string> */
+    private array $with = [];
 
-    /**
-     * Condition splitting the result set into a leading and a trailing group.
-     */
-    private ?ParsedFilters $partition = null;
-
-    /**
-     * Whether documents matching the partition come first.
-     */
-    private bool $partitionFirst = true;
-
-    /**
-     * Native engine ordering, as `field:direction` pairs.
-     *
-     * @var list<string>
-     */
-    private array $order = [];
+    /** @var (Closure(EloquentBuilder): mixed)|null */
+    private ?Closure $loadUsing = null;
 
     /**
      * @param  iterable<FilterResolver>  $resolvers
+     * @param  list<string>  $locales  Locale codes the search runs in unless told otherwise.
      */
     public function __construct(
         private readonly Engine $engine,
-        private readonly iterable $resolvers,
-        private readonly string $entityType,
+        public readonly Index $index,
+        private readonly Indexer $indexer,
+        private readonly iterable $resolvers = [],
+        array $locales = [],
     ) {
-        $this->filter = (new FilterParser)->parse([], []);
-
-        $model = Relation::getMorphedModel($entityType) ?? $entityType;
-
-        if (class_exists($model)) {
-            $this->model = new $model;
-        }
+        $this->locales = $locales;
     }
 
     /**
-     * Set search query string.
+     * Set the text to search for.
      */
     public function query(?string $query): static
     {
-        $this->query = $query;
+        $this->query = $query === '' ? null : $query;
 
         return $this;
     }
 
     /**
-     * Parse and resolve JSON:API filters.
+     * Add a condition: `where('brand', 'nike')`, `where('price', '>=', 100)`.
      */
-    public function filter(array $filter): static
+    public function where(string $field, mixed $operator = null, mixed $value = null): static
     {
-        $parsed = (new FilterParser)->parse($filter, []);
-
-        if ($this->model !== null) {
-            $parsed = $parsed->withSanitized(
-                filters: $this->resolveFilters($parsed->filters, $this->model),
-                orGroups: $parsed->orGroups,
-                andGroups: $parsed->andGroups,
-            );
+        if (func_num_args() === 2) {
+            [$operator, $value] = ['=', $operator];
         }
 
-        $this->filter = $parsed;
+        $alias = self::OPERATORS[(string) $operator] ?? throw InvalidSearchQueryException::unsupportedOperator($field, (string) $operator);
+
+        return $this->condition($field, $alias, $value);
+    }
+
+    public function whereNot(string $field, mixed $value): static
+    {
+        return $this->condition($field, 'ne', $value);
+    }
+
+    /** @param  array<int, mixed>  $values */
+    public function whereIn(string $field, array $values): static
+    {
+        return $this->condition($field, 'in', array_values($values));
+    }
+
+    /** @param  array<int, mixed>  $values */
+    public function whereNotIn(string $field, array $values): static
+    {
+        return $this->condition($field, 'nin', array_values($values));
+    }
+
+    /** @param  array{0: mixed, 1: mixed}  $range */
+    public function whereBetween(string $field, array $range): static
+    {
+        return $this->condition($field, 'between', array_values($range));
+    }
+
+    /** @param  array{0: mixed, 1: mixed}  $range */
+    public function whereNotBetween(string $field, array $range): static
+    {
+        return $this->condition($field, 'not_between', array_values($range));
+    }
+
+    /**
+     * Match documents holding no value in the field.
+     */
+    public function whereNull(string $field): static
+    {
+        return $this->condition($field, 'null', true);
+    }
+
+    /**
+     * Match documents holding a value in the field.
+     */
+    public function whereNotNull(string $field): static
+    {
+        return $this->condition($field, 'not_null', true);
+    }
+
+    /**
+     * Add JSON:API filters as sent in a request: `['brand' => 'nike', 'price' => ['gte' => 100]]`.
+     *
+     * @param  array<string, mixed>|null  $filter
+     */
+    public function filter(?array $filter): static
+    {
+        if ($filter !== null && $filter !== []) {
+            $this->filters[] = $this->parse($filter);
+        }
 
         return $this;
     }
 
     /**
-     * Apply a sort specification through the model's Filterable sort resolvers.
+     * Sort by a JSON:API sort string: `-price,name`. Relevance decides among equals.
      */
     public function sort(?string $sort): static
     {
-        if ($sort === null || $sort === '' || $this->model === null) {
-            return $this;
-        }
-
-        $descending = str_starts_with($sort, '-');
-        $field = $descending ? substr($sort, 1) : $sort;
-
-        foreach ($this->sortResolvers() as $resolver) {
-            if ($resolver->resolve($this, $field, $descending ? 'desc' : 'asc', $this->model, $this->filter->included)) {
-                break;
-            }
+        foreach (array_filter(array_map(trim(...), explode(',', (string) $sort)), static fn (string $part): bool => $part !== '') as $part) {
+            str_starts_with($part, '-') ? $this->orderBy(substr($part, 1), 'desc') : $this->orderBy(ltrim($part, '+'));
         }
 
         return $this;
     }
 
-    /**
-     * Sort resolvers from the container tag and from the model, matching how Filterable collects them.
-     *
-     * @return list<SortResolver>
-     */
-    private function sortResolvers(): array
-    {
-        $declared = self::filterable($this->model) ? $this->model->filterableResolvers() : [];
-
-        $resolvers = [];
-
-        foreach ([...app()->tagged(FilterableServiceProvider::RESOLVER_TAG), ...$declared] as $resolver) {
-            $resolver = is_string($resolver) ? app($resolver) : $resolver;
-
-            if ($resolver instanceof SortResolver) {
-                $resolvers[] = $resolver;
-            }
-        }
-
-        return $resolvers;
-    }
-
-    /**
-     * Order the result set by an indexed field.
-     */
     public function orderBy(string $field, string $direction = 'asc'): static
     {
-        $this->order[] = $field.':'.($direction === 'desc' ? 'desc' : 'asc');
+        $this->orders[] = [$field, strtolower($direction) === 'desc' ? 'desc' : 'asc'];
 
         return $this;
     }
 
+    public function orderByDesc(string $field): static
+    {
+        return $this->orderBy($field, 'desc');
+    }
+
     /**
-     * Order the result set by whether documents match a condition.
+     * Lead the results with the documents matching a condition, the rest following.
      *
-     * @param  array<string, mixed>  $condition
-     * @param  bool  $first  Whether matches lead the result set.
+     * @param  array<string, mixed>  $condition  JSON:API filters.
+     * @param  bool  $first  Whether the matches come first, or last.
      */
     public function partition(array $condition, bool $first = true): static
     {
-        $parsed = (new FilterParser)->parse($condition, []);
-
-        if ($this->model !== null) {
-            $parsed = $parsed->withSanitized(
-                filters: $this->resolveFilters($parsed->filters, $this->model),
-                orGroups: $parsed->orGroups,
-                andGroups: $parsed->andGroups,
-            );
-        }
-
-        $this->partition = $parsed;
+        $this->partition = $this->parse($condition);
         $this->partitionFirst = $first;
 
         return $this;
     }
 
     /**
-     * Resolve filters unhandled by search index.
+     * Compute facets for the given filterable fields.
+     *
+     * @param  list<string>|string  $facets
      */
-    private function resolveFilters(array $filters, Model $model): array
+    public function facets(array|string $facets): static
     {
-        $result = [];
-
-        foreach ($filters as $key => $value) {
-            $key = (string) $key;
-
-            if (! str_contains($key, '.') || $this->directlyIndexed($key, $model)) {
-                $result[$key] = $this->castBooleanFilterValue($key, $value, $model);
-
-                continue;
-            }
-
-            $resolved = null;
-
-            foreach ($this->resolvers as $resolver) {
-                if (($resolved = $resolver->resolve($key, $value, $model)) !== null) {
-                    break;
-                }
-            }
-
-            [$resolvedKey, $resolvedValue] = $resolved ?? [$key, $value];
-
-            $result[$resolvedKey] = $this->castBooleanFilterValue($resolvedKey, $resolvedValue, $model);
-        }
-
-        return $result;
-    }
-
-    /**
-     * Check if filter key is directly indexed.
-     */
-    private function directlyIndexed(string $key, Model $model): bool
-    {
-        return $model instanceof InteractsWithIndex && array_key_exists($key, $model->indexAliases());
-    }
-
-    /**
-     * Coerce a filter value to a native bool when the model declares the field boolean.
-     */
-    private function castBooleanFilterValue(string $key, mixed $value, Model $model): mixed
-    {
-        $config = self::filterable($model) ? ($model->filterableFields()[$key] ?? null) : null;
-
-        $isBoolean = $config === 'boolean' || in_array($model->getCasts()[$key] ?? '', ['bool', 'boolean'], true);
-
-        if (! $isBoolean) {
-            return $value;
-        }
-
-        $raw = is_array($value) ? ($value['eq'] ?? null) : $value;
-        $cast = filter_var($raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
-
-        return $cast ?? $value;
-    }
-
-    /**
-     * Check if filter is active for key.
-     */
-    public function hasFilter(string $key): bool
-    {
-        return array_key_exists($key, $this->filter->filters);
-    }
-
-    /**
-     * Read numeric IDs from filter.
-     */
-    public function ids(string $key): array
-    {
-        $value = $this->filter->filters[$key] ?? null;
-
-        if (is_array($value)) {
-            $value = $value['in'] ?? $value['eq'] ?? $value;
-        }
-
-        if (blank($value)) {
-            return [];
-        }
-
-        $items = is_array($value) ? $value : explode(',', (string) $value);
-        $result = [];
-
-        foreach ($items as $item) {
-            $id = (int) $item;
-
-            if ($id > 0) {
-                $result[] = $id;
-            }
-        }
-
-        return $result;
-    }
-
-    /**
-     * Set filter keys mapping.
-     */
-    public function map(array $map): static
-    {
-        $this->map = $map;
+        $this->facets = array_values(array_unique([...$this->facets, ...(array) $facets]));
 
         return $this;
     }
 
     /**
-     * Set facets for computation.
+     * Search in the given locales instead of the current one.
      */
-    public function facets(array $facets): static
+    public function locale(string ...$locales): static
     {
-        $this->facets = $facets;
+        if (($unknown = array_diff($locales, $this->index->locales())) !== []) {
+            throw InvalidSearchQueryException::unknownLocale(implode(', ', $unknown));
+        }
+
+        $this->locales = array_values($locales);
 
         return $this;
     }
 
     /**
-     * Execute search via engine.
+     * Match the text against these fields only.
      */
-    public function search(int $perPage = 15, int $page = 1): Result
+    public function searchOn(string ...$fields): static
     {
-        return $this->engine->search($this, $perPage, $page);
+        $this->searchOn = array_values($fields);
+
+        return $this;
     }
 
     /**
-     * Get entity type.
+     * Highlight matched words in the given fields, or in every searched field.
      */
-    public function getEntityType(): string
+    public function highlight(string ...$fields): static
     {
-        return $this->entityType;
+        $this->highlight = array_values($fields);
+
+        return $this;
     }
 
     /**
-     * Get Eloquent model instance.
+     * How query words must match: `last` (default), `all`, or `frequency`.
      */
-    public function getModel(): ?Model
+    public function matching(string $strategy): static
     {
-        return $this->model;
+        return $this->options(['matchingStrategy' => $strategy]);
     }
 
     /**
-     * Get current search query.
+     * Drop hits whose ranking score is below the threshold, between 0 and 1.
      */
-    public function getQuery(): ?string
+    public function threshold(float $score): static
     {
-        return $this->query;
+        return $this->options(['rankingScoreThreshold' => $score]);
     }
 
     /**
-     * Get parsed filters.
+     * Keep one hit per value of the field, for this search only.
      */
-    public function getFilter(): ParsedFilters
+    public function distinct(string $field): static
     {
-        return $this->filter;
+        $this->distinct = $field;
+
+        return $this;
     }
 
     /**
-     * Get configured facets.
+     * Include trashed entities, where Scout keeps them in the index (`scout.soft_delete`).
      */
-    public function getFacets(): array
+    public function withTrashed(): static
     {
-        return $this->facets;
+        $this->trashed = true;
+
+        return $this;
     }
 
     /**
-     * Get filter map.
+     * Match trashed entities only, where Scout keeps them in the index (`scout.soft_delete`).
      */
-    public function getMap(): array
+    public function onlyTrashed(): static
     {
-        return $this->map;
+        $this->trashed = null;
+
+        return $this;
     }
 
     /**
-     * Get the partition condition, if the result set is to be split.
+     * Weight of this search's hits within a federated search; 1 by default.
      */
-    public function getPartition(): ?ParsedFilters
+    public function weight(float $weight): static
     {
-        return $this->partition;
+        $this->weight = $weight;
+
+        return $this;
     }
 
     /**
-     * Whether documents matching the partition lead the result set.
+     * Pass engine search parameters through as they are, e.g. `['hybrid' => [...]]`.
+     *
+     * @param  array<string, mixed>  $options
      */
-    public function partitionsFirst(): bool
+    public function options(array $options): static
     {
-        return $this->partitionFirst;
+        $this->options = [...$this->options, ...$options];
+
+        return $this;
     }
 
     /**
-     * Native engine ordering, as `field:direction` pairs.
+     * Eager load relations on the models of the hits.
+     */
+    public function with(string ...$relations): static
+    {
+        $this->with = [...$this->with, ...$relations];
+
+        return $this;
+    }
+
+    /**
+     * Customize the query the models of the hits are loaded with.
+     *
+     * @param  Closure(EloquentBuilder): mixed  $callback
+     */
+    public function loadUsing(Closure $callback): static
+    {
+        $this->loadUsing = $callback;
+
+        return $this;
+    }
+
+    /**
+     * Run the search and get a page of models, with hits and facets.
+     */
+    public function paginate(int $perPage = 15, ?int $page = null, string $pageName = 'page'): Results
+    {
+        $page = max(1, $page ?? Paginator::resolveCurrentPage($pageName));
+        $found = $this->engine->search($this, $perPage, $page);
+
+        return Results::make($this->load($found['hits']), $found['facets'], $found['total'], $perPage, $page, [
+            'path' => Paginator::resolveCurrentPath(),
+            'pageName' => $pageName,
+        ]);
+    }
+
+    /**
+     * Run the search and get the models of the best hits.
+     *
+     * @return EloquentCollection<int, Model>
+     */
+    public function get(int $limit = 20): EloquentCollection
+    {
+        return $this->paginate($limit, 1)->getCollection();
+    }
+
+    public function first(): ?Model
+    {
+        return $this->get(1)->first();
+    }
+
+    /**
+     * Run the search and get the keys of the best hits, without loading models.
+     *
+     * @return list<int|string>
+     */
+    public function keys(int $limit = 20): array
+    {
+        return array_map(static fn (Hit $hit): int|string => $hit->key, $this->engine->search($this->withoutFacets(), $limit, 1)['hits']);
+    }
+
+    /**
+     * Number of matching documents.
+     */
+    public function count(): int
+    {
+        return $this->engine->search($this->withoutFacets(), 0, 1)['total'];
+    }
+
+    /**
+     * Search the values of one facet — for facets with more values than a result carries.
+     *
+     * @return list<array{value: string, label: string, count: int}>
+     */
+    public function facetValues(string $facet, ?string $query = null): array
+    {
+        return $this->engine->facetValues($this, $facet, $query);
+    }
+
+    /**
+     * Locale codes the search runs in.
      *
      * @return list<string>
      */
-    public function getOrder(): array
+    public function locales(): array
     {
-        return $this->order;
+        return $this->locales;
     }
 
     /**
-     * Whether a model declares its filters through jurager/filterable.
+     * Find an index field by the name a request refers to it.
+     *
+     * @throws InvalidSearchQueryException
      */
-    private static function filterable(?Model $model): bool
+    public function field(string $name): IndexField
     {
-        return $model !== null && in_array(HasFilterable::class, class_uses_recursive($model), true);
+        return $this->index->find($name) ?? throw InvalidSearchQueryException::unknownField($name);
+    }
+
+    /**
+     * Find an index field that may be filtered on, and so used as a facet.
+     *
+     * @throws InvalidSearchQueryException
+     */
+    public function filterable(string $name): IndexField
+    {
+        $field = $this->field($name);
+
+        return $field->filterable ? $field : throw InvalidSearchQueryException::notFilterable($name);
+    }
+
+    /**
+     * The document path of a field, in the first locale searched for a localized one.
+     */
+    public function path(IndexField $field): string
+    {
+        return $field->pathFor($this->locales[0] ?? null);
+    }
+
+    /**
+     * Whether a top-level condition constrains the field.
+     */
+    public function constrains(IndexField $field): bool
+    {
+        foreach ($this->filters as $parsed) {
+            foreach (array_keys($parsed->filters) as $name) {
+                if ($this->index->find((string) $name) === $field) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Attach their models to hits. A hit whose model is gone, or left out by the load query, keeps `model` null.
+     *
+     * @internal
+     *
+     * @param  list<Hit>  $hits
+     * @return list<Hit>
+     */
+    public function load(array $hits): array
+    {
+        if ($hits === []) {
+            return $hits;
+        }
+
+        $model = $this->index->model;
+        $query = $model->newQuery()->whereIn($model->qualifyColumn($model->getScoutKeyName()), array_map(static fn (Hit $hit): int|string => $hit->key, $hits));
+
+        if ($this->index->softDeletes && $this->trashed !== false) {
+            $this->trashed ? $query->withTrashed() : $query->onlyTrashed();
+        }
+
+        if ($this->with !== []) {
+            $query->with($this->with);
+        }
+
+        if ($this->loadUsing !== null) {
+            ($this->loadUsing)($query);
+        }
+
+        $models = $query->get()->keyBy(static fn (Model $model): string => (string) $model->getScoutKey());
+
+        $missing = [];
+
+        foreach ($hits as $hit) {
+            if (($hit->model = $models->get((string) $hit->key)) === null) {
+                $missing[] = $hit->key;
+            }
+        }
+
+        // A hit without a model may be a document left behind by a deleted entity: clean those up.
+        if (config('eav.search.prune', true)) {
+            $this->indexer->prune($this->index->model::class, $missing);
+        }
+
+        return $hits;
+    }
+
+    /**
+     * The same search with no facets to compute.
+     */
+    private function withoutFacets(): static
+    {
+        $search = clone $this;
+        $search->facets = [];
+
+        return $search;
+    }
+
+    private function condition(string $field, string $operator, mixed $value): static
+    {
+        $this->filters[] = new ParsedFilters([$field => [$operator => $value]], [], [], [], []);
+
+        return $this;
+    }
+
+    /**
+     * Parse request filters, handing keys the index does not hold to the filter resolvers.
+     *
+     * @param  array<string, mixed>  $filter
+     */
+    private function parse(array $filter): ParsedFilters
+    {
+        $parsed = (new FilterParser)->parse($filter, []);
+
+        return $parsed->withSanitized(
+            filters: $this->substitute($parsed->filters),
+            orGroups: array_map($this->substitute(...), $parsed->orGroups),
+            andGroups: array_map($this->substitute(...), $parsed->andGroups),
+        );
+    }
+
+    /**
+     * Swap conditions on keys the index does not hold for what a resolver makes of them.
+     *
+     * @param  array<array-key, mixed>  $conditions
+     * @return array<string, mixed>
+     */
+    private function substitute(array $conditions): array
+    {
+        $resolved = [];
+
+        foreach ($conditions as $name => $value) {
+            $name = (string) $name;
+
+            if ($this->index->find($name) === null) {
+                foreach ($this->resolvers as $resolver) {
+                    if (($substitute = $resolver->resolve($name, $value, $this->index->model)) !== null) {
+                        [$name, $value] = $substitute;
+
+                        break;
+                    }
+                }
+            }
+
+            $resolved[$name] = $value;
+        }
+
+        return $resolved;
     }
 }

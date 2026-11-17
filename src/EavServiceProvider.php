@@ -11,20 +11,22 @@ use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Schema\Grammars\PostgresGrammar;
 use Illuminate\Support\ServiceProvider;
+use Jurager\Eav\Attributes\AttributeInheritanceResolver;
 use Jurager\Eav\Attributes\AttributesFactory;
 use Jurager\Eav\Attributes\AttributeValueSorter;
 use Jurager\Eav\Attributes\Query\AttributeQueryFactory;
-use Jurager\Eav\Attributes\Scope\AttributeInheritanceResolver;
-use Jurager\Eav\Commands\ClearCommand;
+use Jurager\Eav\Console\ClearCommand;
+use Jurager\Eav\Console\ReindexCommand;
+use Jurager\Eav\Console\SyncIndexSettingsCommand;
+use Jurager\Eav\Contracts\Search\Transport;
 use Jurager\Eav\Events\EntityValuesChanged;
+use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Fields\FieldTypes;
 use Jurager\Eav\Filterable\AttributeEntityTypeFilterResolver;
 use Jurager\Eav\Filterable\AttributeEnumUsageResolver;
 use Jurager\Eav\Filterable\AttributeFilterResolver;
 use Jurager\Eav\Filterable\AttributeSortResolver;
-use Jurager\Eav\Listeners\ReindexChangedEntities;
-use Jurager\Eav\Listeners\RestoreIndexSettings;
 use Jurager\Eav\Media\MediaCollectionResolver;
 use Jurager\Eav\Media\MediaObserver;
 use Jurager\Eav\Observers\AttributeEnumObserver;
@@ -32,22 +34,27 @@ use Jurager\Eav\Observers\AttributeGroupObserver;
 use Jurager\Eav\Observers\AttributeObserver;
 use Jurager\Eav\Observers\AttributeTypeObserver;
 use Jurager\Eav\Observers\LocaleObserver;
-use Jurager\Eav\Registry\AttributeGroupRegistry;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Registry\SchemaVersion;
+use Jurager\Eav\Registries\AttributeGroupRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
+use Jurager\Eav\Registries\SchemaVersion;
 use Jurager\Eav\Schema\SchemaManager;
-use Jurager\Eav\Search\Engine;
-use Jurager\Eav\Search\Resolvers\AttributeRelationFilterResolver;
-use Jurager\Eav\Search\SearchFactory;
+use Jurager\Eav\Search\AttributeRelationFilterResolver;
+use Jurager\Eav\Search\Index\Configurator;
+use Jurager\Eav\Search\Index\Document;
+use Jurager\Eav\Search\Index\IndexFactory;
+use Jurager\Eav\Search\Index\Synchronizer;
+use Jurager\Eav\Search\SearchManager;
+use Jurager\Eav\Search\Transport\MeilisearchTransport;
 use Jurager\Eav\Translation\TranslationRepository;
 use Jurager\Eav\Translation\Translator;
 use Jurager\Filterable\FilterableServiceProvider;
 use Jurager\Media\Models\Media;
 use Jurager\Media\Support\MediaCollectionResolverRegistry;
+use Meilisearch\Client;
 
 class EavServiceProvider extends ServiceProvider
 {
@@ -64,8 +71,7 @@ class EavServiceProvider extends ServiceProvider
         $this->registerAttributes();
         $this->registerSchema();
         $this->registerFilterResolvers();
-
-        $this->app->scoped(Engine::class);
+        $this->registerSearch();
     }
 
     /**
@@ -123,9 +129,6 @@ class EavServiceProvider extends ServiceProvider
             AttributeEnumUsageResolver::class,
             AttributeEntityTypeFilterResolver::class,
         ], FilterableServiceProvider::RESOLVER_TAG);
-        $this->app->tag(AttributeRelationFilterResolver::class, 'eav.search.resolvers');
-
-        $this->app->when(SearchFactory::class)->needs('$resolvers')->giveTagged('eav.search.resolvers');
     }
 
     /**
@@ -159,7 +162,7 @@ class EavServiceProvider extends ServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         if ($this->app->runningInConsole()) {
-            $this->commands([ClearCommand::class]);
+            $this->commands([ClearCommand::class, SyncIndexSettingsCommand::class, ReindexCommand::class]);
         }
         $this->loadTranslationsFrom(__DIR__.'/../lang', 'eav');
 
@@ -185,14 +188,40 @@ class EavServiceProvider extends ServiceProvider
     }
 
     /**
+     * Register the search services.
+     */
+    private function registerSearch(): void
+    {
+        $this->app->scoped(IndexFactory::class);
+        $this->app->scoped(Document::class);
+        $this->app->scoped(SearchManager::class);
+
+        $this->app->bind(Transport::class, function ($app): Transport {
+            if (! IndexFactory::available() || ! class_exists(Client::class)) {
+                throw SearchNotAvailableException::notInstalled();
+            }
+
+            return new MeilisearchTransport($app->make(Client::class));
+        });
+    }
+
+    /**
      * Keep search documents and index settings in step with attribute values.
      */
     private function registerSearchListeners(): void
     {
         $events = $this->app->make(Dispatcher::class);
 
-        $events->listen(EntityValuesChanged::class, ReindexChangedEntities::class);
-        $events->listen(CommandFinished::class, RestoreIndexSettings::class);
+        $events->listen(EntityValuesChanged::class, function (EntityValuesChanged $event): void {
+            $this->app->make(Synchronizer::class)->values($event->entityType, $event->entityIds);
+        });
+
+        // Scout's own command resets an index to the configured settings: put the derived ones back.
+        $events->listen(CommandFinished::class, function (CommandFinished $event): void {
+            if ($event->command === 'scout:sync-index-settings' && $event->exitCode === 0) {
+                $this->app->make(Configurator::class)->all();
+            }
+        });
     }
 
     /**

@@ -4,353 +4,214 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
-use Closure;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Collection;
-use Jurager\Eav\Eav;
+use Jurager\Eav\Contracts\Search\Transport;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
-use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Registry\SchemaRegistry;
-use Jurager\Eav\Search\Contracts\InteractsWithIndex;
-use Meilisearch\Client;
-use Meilisearch\Contracts\SearchQuery;
-use Meilisearch\Exceptions\ApiException;
-use Meilisearch\Search\SearchResult as MeilisearchResult;
-use Psr\Log\LoggerInterface;
+use Jurager\Eav\Search\Index\IndexField;
 
+/**
+ * Run search builders against the engine.
+ */
 class Engine
 {
     public function __construct(
-        private readonly Client $meilisearch,
-        private readonly LoggerInterface $logger,
-        private readonly FieldFactory $fieldFactory,
-        private readonly LocaleRegistry $localeRegistry,
-        private readonly SchemaRegistry $schemaRegistry,
-        private readonly Compiler $compiler,
+        private readonly Transport $transport,
+        private readonly RequestFactory $requests,
+        private readonly FacetFormatter $facets,
     ) {}
 
     /**
-     * Execute search query.
-     */
-    public function search(Builder $builder, int $limit = 15, int $page = 1): Result
-    {
-        $model = $builder->getModel();
-
-        if (! Indexer::searchable($model)) {
-            return new Result([], 0, []);
-        }
-
-        $indexUid = $model->searchableAs();
-        $resolver = $this->createResolver($builder);
-        $filter = $builder->getFilter();
-
-        $this->logUnresolved($this->compiler->unresolved($filter, $resolver), $builder->getEntityType());
-
-        $requests = $this->buildSearchRequests($builder, $indexUid, $resolver, $limit, $page);
-        $keys = array_keys($requests);
-
-        try {
-            $response = $this->meilisearch->multiSearch(array_values($requests));
-        } catch (ApiException $e) {
-            throw $this->invalidSearchRequest($e);
-        }
-
-        $results = [];
-
-        foreach ($response['results'] as $index => $res) {
-            $results[$keys[$index]] = new MeilisearchResult($res);
-        }
-
-        $main = $results['main'];
-
-        return new Result(
-            ids: $this->collectIds($results, $builder, $indexUid, $resolver, $limit, $page),
-            total: $main->getEstimatedTotalHits() ?? 0,
-            facets: Arr::undot($this->hydrateFacets($results, $builder))
-        );
-    }
-
-    /**
-     * Collect the ids for the page, honouring a partition when one is set.
+     * Run a search.
      *
-     * @return list<int|string>
-     */
-    private function collectIds(array $results, Builder $builder, string $uid, Closure $resolver, int $limit, int $page): array
-    {
-        if (! isset($results['leading'])) {
-            return array_column($results['main']->getHits(), 'id');
-        }
-
-        $leading = $results['leading'];
-        $ids = array_column($leading->getHits(), 'id');
-        $missing = $limit - count($ids);
-
-        if ($missing <= 0) {
-            return $ids;
-        }
-
-        $offset = ($page - 1) * $limit - ($leading->getTotalHits() ?? 0);
-
-        $trailing = $this->partitionRequest($builder, $uid, $resolver, ! $builder->partitionsFirst())
-            ->setLimit($missing)
-            ->setOffset(max(0, $offset));
-
-        try {
-            $response = $this->meilisearch->multiSearch([$trailing]);
-        } catch (ApiException $e) {
-            throw $this->invalidSearchRequest($e);
-        }
-
-        return [...$ids, ...array_column((new MeilisearchResult($response['results'][0]))->getHits(), 'id')];
-    }
-
-    /**
-     * Wrap a rejected filter or sort as a human readable error — not the raw
-     */
-    private function invalidSearchRequest(ApiException $e): InvalidSearchQueryException
-    {
-        $message = explode("\n", $e->getMessage(), 2)[0];
-
-        return InvalidSearchQueryException::rejected($message, $e);
-    }
-
-    /**
-     * Build one side of a partitioned search — matches of the condition, or everything else.
-     */
-    private function partitionRequest(Builder $builder, string $uid, Closure $resolver, bool $matching): SearchQuery
-    {
-        $request = (new SearchQuery)->setIndexUid($uid);
-
-        if (($query = $builder->getQuery()) !== null) {
-            $request->setQuery($query);
-        }
-
-        $partition = $builder->getPartition();
-
-        $base = $this->compiler->compile($builder->getFilter(), $resolver);
-        $condition = $partition !== null ? $this->compiler->compile($partition, $resolver) : null;
-
-        if ($condition !== null && ! $matching) {
-            $condition = "NOT ({$condition})";
-        }
-
-        $filter = implode(' AND ', array_filter([$base, $condition]));
-
-        if ($filter !== '') {
-            $request->setFilter([$filter]);
-        }
-
-        if ($builder->getOrder() !== []) {
-            $request->setSort($builder->getOrder());
-        }
-
-        return $request;
-    }
-
-    /**
-     * Build Meilisearch multi-search requests.
-     */
-    private function buildSearchRequests(Builder $builder, string $uid, Closure $resolver, int $limit, int $page): array
-    {
-        $facetFields = [];
-
-        foreach ($builder->getFacets() as $facet) {
-            $facetFields[] = $this->formatFacetField($facet);
-        }
-
-        $mainRequest = (new SearchQuery)
-            ->setIndexUid($uid)
-            ->setLimit($limit)
-            ->setOffset(($page - 1) * $limit);
-
-        if (($query = $builder->getQuery()) !== null) {
-            $mainRequest->setQuery($query);
-        }
-
-        if (($filter = $this->compiler->compile($builder->getFilter(), $resolver)) !== null) {
-            $mainRequest->setFilter([$filter]);
-        }
-
-        if (! empty($facetFields)) {
-            $mainRequest->setFacets($facetFields);
-        }
-
-        if ($builder->getOrder() !== []) {
-            $mainRequest->setSort($builder->getOrder());
-        }
-
-        $requests = ['main' => $mainRequest];
-
-        if ($builder->getPartition() !== null) {
-            $requests['leading'] = $this->partitionRequest($builder, $uid, $resolver, $builder->partitionsFirst())
-                ->setHitsPerPage($limit)
-                ->setPage($page);
-        }
-
-        $allFacetKeys = $builder->getFacets();
-
-        foreach ($allFacetKeys as $key) {
-
-            $isStats = str_contains($key, '.');
-
-            if (! $isStats && ! $builder->hasFilter($key)) {
-                continue;
-            }
-
-            $excludeResolver = $this->createResolver($builder, $isStats ? $allFacetKeys : [$key]);
-
-            $facetRequest = (new SearchQuery)
-                ->setIndexUid($uid)
-                ->setLimit(0)
-                ->setFacets([$this->formatFacetField($key)]);
-
-            if (($query = $builder->getQuery()) !== null) {
-                $facetRequest->setQuery($query);
-            }
-
-            if (($filter = $this->compiler->compile($builder->getFilter(), $excludeResolver)) !== null) {
-                $facetRequest->setFilter([$filter]);
-            }
-
-            $requests["facet_{$key}"] = $facetRequest;
-        }
-
-        return $requests;
-    }
-
-    /**
-     * Create field resolver closure.
+     * @return array{hits: list<Hit>, total: int, facets: array<string, mixed>}
      *
-     * @param  list<string>  $exclude  Filter keys to drop from the compiled filter (e.g. for disjunctive facets).
+     * @throws InvalidSearchQueryException
      */
-    private function createResolver(Builder $builder, array $exclude = []): Closure
+    public function search(Builder $builder, int $perPage, int $page): array
     {
-        $map = $builder->getMap();
-        $model = $builder->getModel();
+        // Nothing to order when no hits are asked for, as when counting.
+        $partitioned = $builder->partition !== null && $perPage > 0;
+        $facets = $this->facetFields($builder);
 
-        $fields = $model instanceof InteractsWithIndex ? $model->indexAliases() : [];
+        // With a partition the main request only counts and facets; the hits come from each side in turn.
+        $requests = ['main' => [
+            ...$this->requests->make($builder),
+            'hitsPerPage' => $partitioned ? 0 : $perPage,
+            'page' => $partitioned ? 1 : $page,
+            ...$this->facetPaths($builder, $facets),
+        ]];
 
-        return function (string $key) use ($exclude, $fields, $map): ?string {
-            if (in_array($key, $exclude, true)) {
-                return null;
-            }
-
-            if ($key === 'id') {
-                return 'id';
-            }
-
-            if (isset($fields[$key])) {
-                return $fields[$key];
-            }
-
-            if (isset($map[$key])) {
-                return $map[$key];
-            }
-
-            return $this->formatFacetField($key);
-        };
-    }
-
-    /**
-     * Log unresolved filter keys.
-     */
-    private function logUnresolved(array $unresolved, string $entityType): void
-    {
-        foreach (array_keys($unresolved) as $key) {
-            $this->logger->warning("eav.search: filter key [{$key}] has no indexed field, condition dropped", [
-                'entity_type' => $entityType,
-            ]);
+        if ($partitioned) {
+            $requests['leading'] = [...$this->requests->make($builder, side: $builder->partitionFirst), 'hitsPerPage' => $perPage, 'page' => $page];
         }
-    }
 
-    /**
-     * Hydrate and enrich facet distributions.
-     */
-    private function hydrateFacets(array $results, Builder $builder): array
-    {
-        $facets = [];
-        $mainResult = $results['main'];
-
-        $baseDistributions = $mainResult->getFacetDistribution() ?? [];
-        $baseStats = $mainResult->getFacetStats() ?? [];
-
-        $attributes = $this->loadContextAttributes($builder);
-        $locale = $this->localeRegistry->current();
-
-        foreach ($builder->getFacets() as $key) {
-            $indexField = $this->formatFacetField($key);
-            $isStats = str_contains($key, '.');
-
-            $scopedResult = ($isStats || $builder->hasFilter($key)) ? ($results["facet_{$key}"] ?? $mainResult) : $mainResult;
-            $isMainResult = $scopedResult === $mainResult;
-
-            if ($isStats) {
-                $stats = $isMainResult ? $baseStats : ($scopedResult->getFacetStats() ?? []);
-                $facet = $this->hydrateStats($stats, $indexField);
-            } else {
-                $distributions = $isMainResult ? $baseDistributions : ($scopedResult->getFacetDistribution() ?? []);
-                $facet = $this->hydrateDistribution($distributions, $indexField, $attributes->get($key), $locale);
-            }
-
-            if (! empty($facet)) {
-                $facets[$indexField] = $facet;
+        // A facet counts as if its own filter were not applied, so its other values stay selectable.
+        foreach ($facets as $name => $field) {
+            if ($builder->constrains($field)) {
+                $requests["facet:{$name}"] = [
+                    ...$this->requests->make($builder, except: [$field->path]),
+                    'limit' => 0,
+                    'facets' => [$builder->path($field)],
+                ];
             }
         }
 
-        return $facets;
-    }
+        $responses = array_combine(array_keys($requests), $this->transport->multiSearch(array_values($requests))['results']);
+        $main = $responses['main'];
+        $scoped = [];
 
-    /**
-     * Extract and format numeric stats facet.
-     */
-    private function hydrateStats(array $stats, string $field): array
-    {
-        $fieldStats = $stats[$field] ?? null;
-
-        if ($fieldStats === null) {
-            return [];
+        foreach (array_keys($facets) as $name) {
+            if (isset($responses["facet:{$name}"])) {
+                $scoped[$name] = $responses["facet:{$name}"];
+            }
         }
 
         return [
-            'min' => $fieldStats['min'] ?? null,
-            'max' => $fieldStats['max'] ?? null,
+            'hits' => $this->hits($builder, $partitioned ? $this->partition($builder, $responses['leading'], $perPage, $page) : $main['hits']),
+            'total' => (int) ($main['totalHits'] ?? $main['estimatedTotalHits'] ?? 0),
+            'facets' => $this->facets->format($builder, $facets, $main, $scoped),
         ];
     }
 
     /**
-     * Extract and enrich term distribution facet.
+     * Run several searches as one, their hits merged into a single ranked list.
+     *
+     * @param  list<Builder>  $builders
+     * @return array{hits: list<Hit>, total: int, facets: array<string, array<string, mixed>>}
+     *
+     * @throws InvalidSearchQueryException
      */
-    private function hydrateDistribution(array $distributions, string $field, mixed $attribute, int $locale): array
+    public function federated(array $builders, int $limit, int $offset): array
     {
-        $distribution = $distributions[$field] ?? [];
+        $queries = [];
+        $federation = ['limit' => $limit, 'offset' => $offset];
 
-        if (empty($distribution) || $attribute === null) {
-            return $distribution;
+        foreach ($builders as $builder) {
+            $queries[] = [
+                ...$this->requests->make($builder),
+                ...($builder->weight === null ? [] : ['federationOptions' => ['weight' => $builder->weight]]),
+            ];
+
+            if (($paths = $this->facetPaths($builder, $this->facetFields($builder))) !== []) {
+                $federation['facetsByIndex'][$builder->index->uid()] = $paths['facets'];
+            }
         }
 
-        return $this->fieldFactory->make($attribute)->enrichFacetDistribution($distribution, $locale);
+        $response = $this->transport->multiSearch($queries, $federation);
+        $hits = [];
+        $facets = [];
+
+        foreach ($response['hits'] ?? [] as $hit) {
+            if (($builder = $builders[$hit['_federation']['queriesPosition'] ?? -1] ?? null) !== null) {
+                array_push($hits, ...$this->hits($builder, [$hit]));
+            }
+        }
+
+        foreach ($builders as $builder) {
+            $found = $response['facetsByIndex'][$builder->index->uid()] ?? null;
+
+            if ($found !== null && $builder->facets !== []) {
+                $facets[$builder->index->entityType] = $this->facets->format($builder, $this->facetFields($builder), [
+                    'facetDistribution' => $found['distribution'] ?? [],
+                    'facetStats' => $found['stats'] ?? [],
+                ]);
+            }
+        }
+
+        return ['hits' => $hits, 'total' => (int) ($response['estimatedTotalHits'] ?? count($hits)), 'facets' => $facets];
     }
 
     /**
-     * Load filterable attributes context.
+     * Search the values of one facet, within the builder's query and its other filters.
+     *
+     * @return list<array{value: string, label: string, count: int}>
+     *
+     * @throws InvalidSearchQueryException
      */
-    private function loadContextAttributes(Builder $builder): Collection
+    public function facetValues(Builder $builder, string $name, ?string $query): array
     {
-        return $this->schemaRegistry->resolve("{$builder->getEntityType()}:search_facets", function () use ($builder): Collection {
-            return Eav::$attributeModel::query()
-                ->forEntity($builder->getEntityType())
-                ->where('filterable', true)
-                ->get()
-                ->keyBy('code');
-        });
+        $field = $builder->filterable($name);
+        $request = $this->requests->make($builder, except: [$field->path]);
+
+        $response = $this->transport->facetSearch($builder->index->uid(), array_filter([
+            'facetName' => $builder->path($field),
+            'facetQuery' => $query,
+            'q' => $request['q'] ?? null,
+            'filter' => $request['filter'] ?? null,
+            'attributesToSearchOn' => $request['attributesToSearchOn'] ?? null,
+            'matchingStrategy' => $request['matchingStrategy'] ?? null,
+        ], static fn (mixed $value): bool => $value !== null));
+
+        return $this->facets->terms($builder, $field, array_column($response['facetHits'] ?? [], 'count', 'value'));
     }
 
     /**
-     * Format facet field name for index.
+     * Fill a partitioned page: the leading side first, topped up from the trailing side once it runs out.
+     *
+     * @param  array<string, mixed>  $leading
+     * @return list<array<string, mixed>>
      */
-    private function formatFacetField(string $key): string
+    private function partition(Builder $builder, array $leading, int $perPage, int $page): array
     {
-        return ! str_contains($key, '.') ? "attributes.{$key}" : $key;
+        $hits = $leading['hits'];
+        $missing = $perPage - count($hits);
+
+        if ($missing <= 0) {
+            return $hits;
+        }
+
+        $trailing = $this->transport->multiSearch([[
+            ...$this->requests->make($builder, side: ! $builder->partitionFirst),
+            'limit' => $missing,
+            'offset' => max(0, ($page - 1) * $perPage - (int) ($leading['totalHits'] ?? 0)),
+        ]])['results'][0];
+
+        return [...$hits, ...$trailing['hits']];
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $hits
+     * @return list<Hit>
+     */
+    private function hits(Builder $builder, array $hits): array
+    {
+        return array_map(static function (array $hit) use ($builder): Hit {
+            $score = $hit['_rankingScore'] ?? null;
+
+            return new Hit(
+                key: $hit['id'],
+                entityType: $builder->index->entityType,
+                document: array_filter($hit, static fn (string $key): bool => ! str_starts_with($key, '_'), ARRAY_FILTER_USE_KEY),
+                formatted: $hit['_formatted'] ?? [],
+                score: $score === null ? null : (float) $score,
+                search: $builder,
+            );
+        }, array_values($hits));
+    }
+
+    /**
+     * Fields the facets were asked for, keyed by the asked name.
+     *
+     * @return array<string, IndexField>
+     */
+    private function facetFields(Builder $builder): array
+    {
+        $fields = [];
+
+        foreach ($builder->facets as $name) {
+            $fields[$name] = $builder->filterable($name);
+        }
+
+        return $fields;
+    }
+
+    /**
+     * The facets parameter of a request, or nothing when no facets are asked for.
+     *
+     * @param  array<string, IndexField>  $fields
+     * @return array{facets?: list<string>}
+     */
+    private function facetPaths(Builder $builder, array $fields): array
+    {
+        return $fields === [] ? [] : ['facets' => array_values(array_map($builder->path(...), $fields))];
     }
 }

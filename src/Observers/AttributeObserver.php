@@ -6,8 +6,9 @@ namespace Jurager\Eav\Observers;
 
 use Jurager\Eav\Attributes\Persistence\ValuePruner;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
 use Jurager\Eav\Schema\SchemaSynchronizer;
+use Jurager\Eav\Search\Index\Synchronizer;
 
 /**
  * Synchronize cached schemas and search indexes when attributes change.
@@ -18,6 +19,7 @@ class AttributeObserver
         protected SchemaSynchronizer $sync,
         protected EnumRegistry $enums,
         protected ValuePruner $pruner,
+        protected Synchronizer $indexes,
     ) {
     }
 
@@ -28,11 +30,7 @@ class AttributeObserver
 
     public function updated(Attribute $attribute): void
     {
-        $this->sync->refresh(
-            $attribute,
-            documents: $attribute->wasChanged(['searchable', 'filterable']),
-            settings: $attribute->wasChanged('filterable'),
-        );
+        $this->sync->refresh($attribute, indexed: $this->indexes->affectedBy($attribute));
     }
 
     /**

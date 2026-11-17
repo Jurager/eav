@@ -6,7 +6,7 @@ namespace Jurager\Eav\Tests\Feature;
 
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Models\EntityAttribute;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 
 class EntityAttributeReferenceDataRegistryTest extends FeatureTestCase
 {

@@ -4,12 +4,16 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Concerns;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Jurager\Eav\Fields\Field;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Search\Index\Document;
+use Jurager\Eav\Search\Index\Index;
+use Jurager\Eav\Search\Index\IndexFactory;
 use Laravel\Scout\Searchable;
 
 /**
- * Add Scout search support with attribute indexing.
+ * Index the entity with Scout: the fields it declares in `searchIndex()` and its indexed attributes.
  *
  * @mixin Searchable
  */
@@ -17,88 +21,87 @@ trait HasSearchableAttributes
 {
     use Searchable;
 
+    /**
+     * Whether the save in progress writes attribute values, which reindexes the entity by itself.
+     */
+    private bool $savesAttributeValues = false;
+
+    public static function bootHasSearchableAttributes(): void
+    {
+        static::saving(static function (self $model): void {
+            // Only a value being written is sure to raise the change that reindexes; clearing one may find nothing to drop.
+            $model->savesAttributeValues = array_any(
+                $model->attributeManager?->getDirty() ?? [],
+                static fn (Field $field): bool => $field->isFilled(),
+            );
+        });
+    }
+
+    /**
+     * Declare the model's own index fields; indexed attributes are added on top.
+     */
+    public function searchIndex(Index $index): void {}
+
     public function toSearchableArray(): array
     {
-        return ['id' => (string) $this->getScoutKey(), ...$this->eav()->indexData()];
-    }
-
-    public function shouldBeSearchable(): bool
-    {
-        return ! empty($this->eav()->indexData());
+        return app(Document::class)->build($this);
     }
 
     /**
-     * Columns whose change alters the index document.
-     *
-     * @return list<string>
-     */
-    protected function searchableColumns(): array
-    {
-        return [];
-    }
-
-    /**
-     * Skip reindexing a save that cannot have changed the document.
+     * Skip reindexing a save that cannot have changed the document, or that is reindexed anyway.
      */
     public function searchIndexShouldBeUpdated(): bool
     {
+        // The values written with this save queue the reindex once they are committed: not twice.
+        if ($this->savesAttributeValues) {
+            return false;
+        }
+
         if ($this->wasRecentlyCreated) {
             return true;
         }
 
-        $columns = $this->searchableColumns();
+        $columns = app(IndexFactory::class)->for($this)->watched();
 
         return $columns !== [] && $this->wasChanged($columns);
     }
 
     /**
-     * Relations this entity needs beyond its attribute values, on top of what EAV loads itself.
+     * Load everything the index document is built from, for the whole batch at once.
      *
-     * @return list<string>
-     */
-    protected function searchableWith(): array
-    {
-        return [];
-    }
-
-    /**
-     * Eager load everything the index document is built from, for the whole batch at once.
+     * Loaded anew: relations already on the models may hold the active locale's translations only.
      *
      * @param  Collection<int, static>  $models
      * @return Collection<int, static>
      */
     public function makeSearchableUsing(Collection $models): Collection
     {
-        return $models->loadMissing($this->indexRelations());
+        $models->load($this->indexRelations());
+
+        app(Document::class)->prepared($models);
+
+        return $models;
     }
 
     /**
-     * Eager load the same relations when importing the whole model.
+     * Attribute values in every locale, plus the relations declared fields are read from.
      *
-     * @param  Builder<static>  $query
-     * @return Builder<static>
-     */
-    protected function makeAllSearchableUsing(Builder $query): Builder
-    {
-        return $query->with($this->indexRelations());
-    }
-
-    /**
-     * Attribute value relations are always included — a model declaring its own cannot drop them.
-     *
-     * @return list<string>
+     * @return array<int|string, mixed>
      */
     private function indexRelations(): array
     {
+        // The index holds every locale, whichever one the request runs in.
+        $everyLocale = static fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class);
+
         $relations = [
-            'attribute_values.attribute.enums.translations',
-            'attribute_values.translations',
-            ...$this->searchableWith(),
+            'attribute_values.attribute.enums.translations' => $everyLocale,
+            'attribute_values.translations' => $everyLocale,
+            ...app(IndexFactory::class)->for($this)->relations(),
         ];
 
         if (($parent = $this->attributeParentRelationName()) !== null) {
-            $relations[] = "{$parent}.attribute_values.attribute.enums.translations";
-            $relations[] = "{$parent}.attribute_values.translations";
+            $relations["{$parent}.attribute_values.attribute.enums.translations"] = $everyLocale;
+            $relations["{$parent}.attribute_values.translations"] = $everyLocale;
 
             if (($scope = $this->attributeScopeRelationName()) !== null) {
                 $relations[] = "{$parent}.{$scope}";

@@ -12,8 +12,7 @@ use Jurager\Eav\Attributes\Persistence\AttributePersister;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Exceptions\UnknownAttributeException;
 use Jurager\Eav\Fields\Field;
-use Jurager\Eav\Registry\LocaleRegistry;
-use Jurager\Eav\Search\IndexDocument;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Read and write an entity's attribute values.
@@ -31,9 +30,6 @@ class AttributeManager
     /** @var array<string, Field> Unsaved fields keyed by code. */
     private array $dirty = [];
 
-    /** @var array<string, mixed>|null */
-    private ?array $indexData = null;
-
     private int $schemaRevision = -1;
 
     public function __construct(
@@ -42,7 +38,6 @@ class AttributeManager
         private readonly EntityValues $values,
         private readonly AttributePersister $persister,
         private readonly LocaleRegistry $locales,
-        private readonly IndexDocument $document,
     ) {}
 
     public function entity(): Attributable
@@ -213,7 +208,6 @@ class AttributeManager
         }
 
         $this->dirty = array_diff_key($this->dirty, $fields);
-        $this->indexData = null;
     }
 
     /**
@@ -226,7 +220,6 @@ class AttributeManager
         $this->assertAvailable($fields);
         $this->fields = [...$this->fields, ...$fields];
         $this->dirty = array_diff_key($this->dirty, $fields);
-        $this->indexData = null;
 
         $this->persister->persist($this->filled($fields));
     }
@@ -242,7 +235,6 @@ class AttributeManager
         $this->fields = $fields;
         $this->complete = false;
         $this->dirty = [];
-        $this->indexData = null;
 
         $this->persister->replace($this->filled($fields));
     }
@@ -254,7 +246,6 @@ class AttributeManager
      */
     public function detach(array $attributeIds): void
     {
-        $this->indexData = null;
 
         $this->persister->detach($attributeIds);
     }
@@ -282,14 +273,6 @@ class AttributeManager
         return $this->values->list($codes, $paginated, $query);
     }
 
-    /**
-     * Get the attribute data for the search index.
-     */
-    public function indexData(): array
-    {
-        return $this->indexData ??= $this->document->build($this->entity, $this->values);
-    }
-
     /** @throws UnknownAttributeException */
     private function fieldOrFail(string $code): Field
     {
@@ -307,7 +290,6 @@ class AttributeManager
         $fields = array_replace($this->fields, $this->dirty);
         $this->fields = $this->schema->filterFields($fields);
         $this->complete = false;
-        $this->indexData = null;
         $this->schemaRevision = $revision;
     }
 

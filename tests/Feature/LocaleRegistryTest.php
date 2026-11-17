@@ -9,7 +9,7 @@ use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Jurager\Eav\Exceptions\InvalidConfigurationException;
 use Jurager\Eav\Http\Middleware\SetLocaleContext;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 
 class LocaleRegistryTest extends TestCase

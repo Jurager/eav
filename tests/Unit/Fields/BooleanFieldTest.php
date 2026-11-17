@@ -7,8 +7,8 @@ namespace Jurager\Eav\Tests\Unit\Fields;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Boolean;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\EnumRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
 use Mockery;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -186,22 +186,23 @@ class BooleanFieldTest extends TestCase
     }
 
     // -----------------------------------------------------------------------
-    // indexData()
+    // toIndex()
     // -----------------------------------------------------------------------
 
-    public function test_index_data_returns_false_when_no_value_set(): void
+    public function test_to_index_is_null_without_a_stored_value(): void
     {
-        $field = $this->makeField(['code' => 'active']);
-
-        $this->assertSame(['active' => false], $field->indexData());
+        $this->assertNull($this->makeField(['code' => 'active'])->toIndex());
     }
 
-    public function test_index_data_returns_true_when_filled_with_true(): void
+    public function test_to_index_is_a_boolean_so_false_can_be_filtered_on(): void
     {
         $field = $this->makeField(['code' => 'active']);
-        $field->fill(true);
 
-        $this->assertSame(['active' => true], $field->indexData());
+        $field->fill(false);
+        $this->assertFalse($field->toIndex());
+
+        $field->fill(true);
+        $this->assertTrue($field->toIndex());
     }
 
     // -----------------------------------------------------------------------

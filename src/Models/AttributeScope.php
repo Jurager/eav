@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Models;
 
 use Illuminate\Database\Eloquent\Relations\Pivot;
-use Jurager\Eav\Registry\SchemaRegistry;
+use Jurager\Eav\Registries\SchemaRegistry;
 
 class AttributeScope extends Pivot
 {

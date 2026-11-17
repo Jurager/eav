@@ -17,7 +17,7 @@ use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Fields\Field;
 use Jurager\Eav\Fields\FieldFactory;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Scopes\ActiveLocaleScope;
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
 
 /**
  * Resolve an entity's stored and inherited attribute values.
@@ -51,27 +51,6 @@ class EntityValues
         return $this->query()
             ->whereIn('attribute_id', $attributeIds)
             ->with(['translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class)])
-            ->get();
-    }
-
-    /**
-     * Get rows for searchable or filterable attributes.
-     *
-     * @return Collection<int, Model>
-     */
-    public function indexable(): Collection
-    {
-        if (($loaded = $this->loaded()) !== null) {
-            return $loaded->filter(static fn (Model $value): bool => self::indexed($value->attribute))->values();
-        }
-
-        return $this->query()
-            ->whereHas('attribute', fn ($query) => $query->whereAny(['searchable', 'filterable'], true))
-            ->with([
-                'attribute',
-                'attribute.enums.translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
-                'translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class),
-            ])
             ->get();
     }
 
@@ -176,11 +155,6 @@ class EntityValues
     public function query(): Builder
     {
         return Eav::$entityAttributeModel::query()->forEntity($this->entity);
-    }
-
-    private static function indexed(?Attribute $attribute): bool
-    {
-        return (bool) ($attribute?->searchable || $attribute?->filterable);
     }
 
     /**

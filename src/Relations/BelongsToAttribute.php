@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Relations;
 
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 
 /**
  * Reuse reference metadata for lazy reads while retaining Eloquent's native eager loading.

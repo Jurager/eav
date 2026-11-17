@@ -7,7 +7,7 @@ namespace Jurager\Eav\Filterable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Contracts\Attributable;
-use Jurager\Eav\Registry\AttributeRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Filterable\Contracts\FieldResolver;
 use Jurager\Filterable\Contracts\RelationResolver;
 use Jurager\Filterable\Support\FilterOperator;

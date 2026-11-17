@@ -9,8 +9,8 @@ use Jurager\Eav\Eav;
 use Jurager\Eav\Enums\HeldBy;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Models\Attribute;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Schema\Repositories\AttributeRepository;
 
 /**
@@ -22,6 +22,7 @@ use Jurager\Eav\Schema\Repositories\AttributeRepository;
  * @method $this multiple(bool $value = true)
  * @method $this filterable(bool $value = true)
  * @method $this searchable(bool $value = true)
+ * @method $this sortable(bool $value = true)
  * @method $this held_by(HeldBy $side)
  * @method $this inherit_from_parent(bool $value = true)
  * @method $this sort(int $position)

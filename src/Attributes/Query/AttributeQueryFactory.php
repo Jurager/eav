@@ -6,8 +6,8 @@ namespace Jurager\Eav\Attributes\Query;
 
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Fields\FieldFactory;
-use Jurager\Eav\Registry\AttributeRegistry;
-use Jurager\Eav\Registry\EnumRegistry;
+use Jurager\Eav\Registries\AttributeRegistry;
+use Jurager\Eav\Registries\EnumRegistry;
 
 class AttributeQueryFactory
 {

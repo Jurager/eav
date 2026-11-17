@@ -7,7 +7,7 @@ namespace Jurager\Eav\Translation;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Jurager\Eav\Models\Locale;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 
 /**
  * Manage locales and translated model labels.

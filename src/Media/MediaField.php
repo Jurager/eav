@@ -6,6 +6,7 @@ namespace Jurager\Eav\Media;
 
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Enums\IndexType;
 use Jurager\Eav\Fields\File;
 use Jurager\Eav\Models\EntityAttribute;
 use Jurager\Media\Contracts\InteractsWithMedia;
@@ -85,15 +86,19 @@ class MediaField extends File
         return $media instanceof Media ? ($media->order_column ?? PHP_INT_MAX) : PHP_INT_MAX;
     }
 
-    public function indexData(): array
+    public function indexType(): IndexType
     {
-        if ($this->isLocalizable()) {
-            return [];
-        }
+        return IndexType::Keyword;
+    }
 
-        $value = $this->value();
-
-        return $value === null ? [] : [$this->code() => $this->urlFor($value)];
+    /**
+     * Media is indexed by URL, for display in search hits.
+     *
+     * @return string|list<string>|null
+     */
+    public function toIndex(?int $localeId = null): string|array|null
+    {
+        return $this->isLocalizable() ? null : $this->urlFor($this->value());
     }
 
     public function mediaCollection(InteractsWithMedia $model): MediaCollection

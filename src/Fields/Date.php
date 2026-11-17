@@ -9,6 +9,7 @@ use Carbon\Exceptions\InvalidFormatException;
 use Exception;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Enums\IndexType;
 
 /**
  * Date/time field stored as datetime and exposed as Carbon instances.
@@ -60,23 +61,19 @@ class Date extends Field
         return $value->format($format);
     }
 
-    /** @return array<string, int|list<int>> */
-    public function indexData(): array
+    public function indexType(): IndexType
     {
-        $code = $this->code();
+        return IndexType::Date;
+    }
 
-        if (! $this->isLocalizable()) {
-            $value = $this->toTimestamp($this->value());
-
-            return $value !== null ? [$code => $value] : [];
-        }
-
-        $values = array_values(array_filter(
-            array_map(fn (mixed $value) => $this->toTimestamp($this->parse($value)), $this->values),
-            static fn ($v) => $v !== null
-        ));
-
-        return $values ? [$code => $values] : [];
+    /**
+     * Dates are indexed as Unix timestamps, so they can be compared and sorted.
+     *
+     * @return int|list<int>|null
+     */
+    public function toIndex(?int $localeId = null): int|array|null
+    {
+        return $this->toTimestamp($this->value($localeId));
     }
 
     protected function validate(mixed $value, ?Attributable $entity = null): bool
@@ -133,7 +130,7 @@ class Date extends Field
         }
 
         if (is_array($value)) {
-            return array_map(static fn (Carbon $date): int => $date->timestamp, $value);
+            return array_values(array_map(static fn (Carbon $date): int => $date->timestamp, $value));
         }
 
         return $value->timestamp;

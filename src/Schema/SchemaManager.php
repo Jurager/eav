@@ -8,17 +8,15 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\FluentBuilderException;
-use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Models\AttributeGroup;
 use Jurager\Eav\Models\AttributeType;
-use Jurager\Eav\Registry\AttributeTypeRegistry;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\AttributeTypeRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Schema\Repositories\AttributeRepository;
 use Jurager\Eav\Schema\Repositories\EnumRepository;
 use Jurager\Eav\Schema\Repositories\GroupRepository;
-use Jurager\Eav\Search\Indexer;
 
 /**
  * Manage attributes, groups, and enum options.
@@ -119,21 +117,5 @@ class SchemaManager
     public function types(): Builder
     {
         return Eav::$attributeTypeModel::query();
-    }
-
-    /**
-     * Full-text search over attribute codes and translated labels.
-     *
-     * @throws SearchNotAvailableException When Laravel Scout is not configured on the attribute model.
-     */
-    public function search(string $query): mixed
-    {
-        $model = Eav::$attributeModel;
-
-        if (! Indexer::searchable($model)) {
-            throw SearchNotAvailableException::scoutNotInstalled();
-        }
-
-        return $model::search($query);
     }
 }

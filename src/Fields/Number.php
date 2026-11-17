@@ -6,6 +6,7 @@ namespace Jurager\Eav\Fields;
 
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Enums\IndexType;
 
 class Number extends Field
 {
@@ -15,6 +16,11 @@ class Number extends Field
     public function column(): AttributeStorage
     {
         return AttributeStorage::Float;
+    }
+
+    public function indexType(): IndexType
+    {
+        return IndexType::Number;
     }
 
     /**

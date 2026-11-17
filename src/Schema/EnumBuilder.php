@@ -8,7 +8,7 @@ use Illuminate\Support\Fluent;
 use Jurager\Eav\Exceptions\FluentBuilderException;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
-use Jurager\Eav\Registry\LocaleRegistry;
+use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Schema\Repositories\EnumRepository;
 
 /**
