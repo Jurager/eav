@@ -9,15 +9,41 @@ use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Attributes\Query\AttributeQueryBuilder;
 use Jurager\Eav\Attributes\Query\AttributeQueryFactory;
 use Jurager\Eav\Contracts\ShouldUseNestedSet;
+use Jurager\Eav\Models\Attribute;
 
 trait HasAttributeQueryScopes
 {
+    /** @var array<int|string, true>|null Attributes the query may be filtered and sorted by, keyed by id; null when it is not limited. */
+    private ?array $filterableAttributeIds = null;
+
     /**
      * Get attribute filter query builder.
      */
     protected function attributeFilterBuilder(): AttributeQueryBuilder
     {
         return app(AttributeQueryFactory::class)->for($this->getEntityType());
+    }
+
+    /**
+     * Limit filtering and sorting by attribute code to the given attributes; system attributes stay available.
+     *
+     * @param  list<int|string>|null  $attributeIds  Null lifts the limit.
+     */
+    public function scopeFilterableBy(Builder $query, ?array $attributeIds): Builder
+    {
+        $this->filterableAttributeIds = $attributeIds === null ? null : array_fill_keys($attributeIds, true);
+
+        return $query;
+    }
+
+    /**
+     * Determine if the query on this model may be filtered and sorted by the attribute.
+     */
+    public function isFilterableBy(Attribute $attribute): bool
+    {
+        return $this->filterableAttributeIds === null
+            || isset($this->filterableAttributeIds[$attribute->getKey()])
+            || $attribute->getAttribute('system');
     }
 
     /**

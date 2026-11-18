@@ -25,6 +25,7 @@ use Jurager\Eav\Registries\AttributeTypeRegistry;
  * @property string $code
  * @property int $sort
  * @property bool $required
+ * @property bool $system
  * @property bool $localizable
  * @property bool $multiple
  * @property bool $unique
@@ -144,6 +145,7 @@ class Attribute extends Model
             'validations' => 'array',
             'meta' => 'array',
             'required' => 'boolean',
+            'system' => 'boolean',
             'localizable' => 'boolean',
             'multiple' => 'boolean',
             'unique' => 'boolean',

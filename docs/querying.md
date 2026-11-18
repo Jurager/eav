@@ -106,6 +106,22 @@ Category::whereAttributeTree('code', 'electronics')->get();
 Category::whereAttribute('code', 'electronics', 'tree')->get();
 ```
 
+## Request filters
+
+On a model that uses `jurager/filterable`, attribute codes work as fields of the request filter and sort: `filter[color]=red`, `filter[parent.color]=red`, `sort=-weight`.
+
+To let a caller filter and sort by some attributes only, limit the query with `filterableBy()`:
+
+```php
+Product::query()
+    ->filterableBy($attributeIds)
+    ->filter($request->query('filter', []))
+    ->sort($request->query('sort'))
+    ->paginate();
+```
+
+An attribute outside the list is treated as one the entity does not have: its filter and sort are ignored, inside `or` and `and` groups and for attributes of related entities too. System attributes stay available. `null` lifts the limit, an empty list leaves the system attributes only.
+
 ## Finding entities by attribute value
 
 Use `Attributes::query()` to find entities by attribute value:

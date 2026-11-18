@@ -34,8 +34,8 @@ class AttributeSortResolver implements SortResolver
         $entityType = $model->getEntityType();
         $attribute = $this->attributes->forCodes($entityType, [$field])->first();
 
-        // Not an attribute of this entity — leave the field to the remaining resolvers.
-        if ($attribute === null) {
+        // Not an attribute of this entity, or one the query may not be sorted by — leave the field to the remaining resolvers.
+        if ($attribute === null || (method_exists($model, 'isFilterableBy') && ! $model->isFilterableBy($attribute))) {
             return false;
         }
 

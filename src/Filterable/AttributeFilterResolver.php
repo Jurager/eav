@@ -25,7 +25,7 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
             return false;
         }
 
-        if (! $this->hasAttribute($model, $name)) {
+        if (! $this->hasAttribute($model, $name, $model)) {
             return false;
         }
 
@@ -58,7 +58,7 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
 
         $related = $model->{$relation}()->getRelated();
 
-        if (! $related instanceof Attributable || ! $this->hasAttribute($related, $attribute)) {
+        if (! $related instanceof Attributable || ! $this->hasAttribute($related, $attribute, $model)) {
             return false;
         }
 
@@ -76,11 +76,13 @@ class AttributeFilterResolver implements FieldResolver, RelationResolver
     }
 
     /**
-     * Determine whether the entity actually declares the given attribute.
+     * Determine whether the entity declares the given attribute and the queried model may be filtered by it.
      */
-    private function hasAttribute(Attributable $entity, string $code): bool
+    private function hasAttribute(Attributable $entity, string $code, Model $queried): bool
     {
-        return $this->attributes->forCodes($entity->getEntityType(), [$code])->isNotEmpty();
+        $attribute = $this->attributes->forCodes($entity->getEntityType(), [$code])->first();
+
+        return $attribute !== null && (! method_exists($queried, 'isFilterableBy') || $queried->isFilterableBy($attribute));
     }
 
     /** @param array<int, array{0: string, 1: mixed}> $conditions */
