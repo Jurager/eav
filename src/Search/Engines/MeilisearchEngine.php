@@ -183,7 +183,7 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
     /**
      * Document paths of the facets asked for, keyed by the asked name.
      *
-     * @return array<string, string>
+     * @return array<array-key, string>
      */
     private function facetPaths(Builder $search): array
     {
@@ -260,7 +260,7 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
      * Requests counting each filtered facet as if its own filter were not applied, so its other values
      * stay selectable. Keyed `facet:{name}`.
      *
-     * @param  array<string, string>  $facets
+     * @param  array<array-key, string>  $facets
      * @return array<string, array<string, mixed>>
      */
     private function scopedFacetRequests(Builder $search, array $facets): array
@@ -268,7 +268,7 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
         $requests = [];
 
         foreach ($facets as $name => $path) {
-            $field = $search->filterable($name);
+            $field = $search->filterable((string) $name);
 
             if ($search->constrains($field)) {
                 $requests["facet:{$name}"] = [...$this->request($search, except: [$field->path]), 'limit' => 0, 'facets' => [$path]];
@@ -281,17 +281,17 @@ class MeilisearchEngine extends ScoutMeilisearchEngine implements DerivesIndexSe
     /**
      * Facet data keyed by the asked names, each read from its own scoped response where there is one.
      *
-     * @param  array<string, string>  $facets
+     * @param  array<array-key, string>  $facets
      * @param  array<string, mixed>  $response
      * @param  array<string, array<string, mixed>>  $scoped
-     * @return array<string, mixed>
+     * @return array<array-key, mixed>
      */
     private function facetData(Builder $search, array $facets, array $response, array $scoped = []): array
     {
         $found = [];
 
         foreach ($facets as $name => $path) {
-            $found[$name] = $this->facet($search->filterable($name), $path, $scoped["facet:{$name}"] ?? $response);
+            $found[$name] = $this->facet($search->filterable((string) $name), $path, $scoped["facet:{$name}"] ?? $response);
         }
 
         return $found;

@@ -269,6 +269,26 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->assertSame(0, $facet['limit']);
     }
 
+    public function test_a_facet_named_by_a_number_is_counted_and_read_by_its_name(): void
+    {
+        $this->option($this->attribute('select', '12113', ['filterable' => true]), 'red');
+        $this->engine->respond(self::PRODUCTS, [], facets: ['attributes.12113' => ['red' => 3]]);
+
+        $results = SearchableProduct::search()
+            ->where('12113', 'red')
+            ->where('price', '<', 500)
+            ->facets('12113')
+            ->paginate();
+
+        $this->assertCount(2, $this->engine->queries());
+        $this->assertSame('(attributes.price < 500)', $this->request(1)['filter']);
+        $this->assertSame(['attributes.12113'], $this->request(1)['facets']);
+        $this->assertSame(
+            ['type' => 'terms', 'values' => [['value' => 'red', 'label' => 'red', 'count' => 3]]],
+            $results->facets()['12113'],
+        );
+    }
+
     public function test_a_facet_must_be_filterable(): void
     {
         $this->expectExceptionMessage('field [title] is not filterable');
@@ -419,6 +439,24 @@ class MeilisearchEngineTest extends SearchTestCase
         $this->assertSame('(attributes.price > 1)', $facets['queries'][1]['filter']);
         $this->assertSame(['attributes.color'], $facets['queries'][1]['facets']);
         $this->assertSame(['red', 'blue'], array_column($results->facets()['searchable_product']['color']['values'], 'value'));
+    }
+
+    public function test_a_facet_named_by_a_number_of_a_federated_search_is_counted_and_read_by_its_name(): void
+    {
+        $this->option($this->attribute('select', '12113', ['filterable' => true]), 'red');
+        $this->engine->respond(self::PRODUCTS, [], facets: ['attributes.12113' => ['red' => 2]]);
+
+        $results = Search::federated([
+            SearchableProduct::search('x')->where('12113', 'red')->facets('12113'),
+            SearchableCategory::search('x'),
+        ])->paginate();
+
+        [, $facets] = $this->engine->searches;
+
+        $this->assertCount(2, $facets['queries']);
+        $this->assertSame('(attributes.12113 = "red")', $facets['queries'][0]['filter']);
+        $this->assertSame(['attributes.12113'], $facets['queries'][1]['facets']);
+        $this->assertSame(['red'], array_column($results->facets()['searchable_product']['12113']['values'], 'value'));
     }
 
     public function test_a_partition_leads_within_a_federated_search(): void

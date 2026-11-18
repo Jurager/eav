@@ -231,6 +231,31 @@ class MeilisearchTest extends SearchTestCase
         $this->assertSame('red', $results->facets()['searchable_product']['color']['values'][0]['value']);
     }
 
+    public function test_a_facet_named_by_a_number_keeps_its_other_values(): void
+    {
+        $size = $this->attribute('select', '12113', ['filterable' => true]);
+        $small = $this->option($size, 's', ['en' => 'Small']);
+        $medium = $this->option($size, 'm', ['en' => 'Medium']);
+        $this->app->call([new SyncIndexSettings('searchable_product'), 'handle']);
+
+        foreach (['Shoes' => $small, 'Boots' => $small, 'Jacket' => $medium] as $name => $option) {
+            SearchableProduct::query()->firstWhere('name', $name)->eav()->set('12113', $option->id)->save();
+        }
+
+        $this->settle();
+
+        $results = Search::federated([
+            SearchableProduct::search()->where('12113', 's')->facets('12113'),
+            SearchableCategory::search(),
+        ])->paginate(10);
+
+        $this->assertSame(2, $results->getCollection()->whereInstanceOf(SearchableProduct::class)->count());
+        $this->assertEqualsCanonicalizing([
+            ['value' => 's', 'label' => 'Small', 'count' => 2],
+            ['value' => 'm', 'label' => 'Medium', 'count' => 1],
+        ], $results->facets()['searchable_product']['12113']['values']);
+    }
+
     public function test_a_request_the_engine_rejects_is_a_422(): void
     {
         $this->expectException(InvalidSearchQueryException::class);
