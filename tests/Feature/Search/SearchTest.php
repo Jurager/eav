@@ -133,6 +133,7 @@ class SearchTest extends SearchTestCase
             fn ($search) => $search->partition(['price' => 1]),
             fn ($search) => $search->searchOn('name'),
             fn ($search) => $search->highlight('name'),
+            fn ($search) => $search->correction(),
             fn ($search) => $search->facetValues('price'),
         ];
 
@@ -167,6 +168,7 @@ class SearchTest extends SearchTestCase
             ->filter(['or' => [['price' => ['gt' => 1]], ['parent' => 2]]])
             ->facets('price')
             ->highlight('name')
+            ->correction()
             ->sort('-price');
 
         $this->assertInstanceOf(NullEngine::class, $search()->engine());
@@ -176,6 +178,7 @@ class SearchTest extends SearchTestCase
         $this->assertCount(0, $results);
         $this->assertSame(0, $results->total());
         $this->assertSame([], $results->facets());
+        $this->assertNull($results->correction());
         $this->assertSame(0, $search()->boost(['price' => 1])->count());
         $this->assertSame([], $search()->facetValues('price', '1'));
         $this->assertCount(0, Search::federated([$search(), SearchableCategory::search('shoes')])->paginate());

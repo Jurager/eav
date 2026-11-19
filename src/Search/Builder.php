@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search;
 
 use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Pagination\LengthAwarePaginator;
 use InvalidArgumentException;
 use Jurager\Eav\Contracts\Search\FilterResolver;
 use Jurager\Eav\Contracts\Search\SupportsExtendedSearch;
@@ -64,6 +65,9 @@ class Builder extends ScoutBuilder
 
     /** @var list<string>|null Fields to highlight matches in; empty for every searched field. */
     public ?array $highlight = null;
+
+    /** Whether the engine is asked how it read the text, for `Results::correction()`. */
+    public bool $correction = false;
 
     public ?string $distinct = null;
 
@@ -366,6 +370,18 @@ class Builder extends ScoutBuilder
     }
 
     /**
+     * Report how the engine read the text: the typos it put up with, the words it skipped.
+     */
+    public function correction(): static
+    {
+        $this->requireExtended('report corrections');
+
+        $this->correction = true;
+
+        return $this;
+    }
+
+    /**
      * Keep one hit per value of the field, for this search only.
      */
     public function distinct(string $field): static
@@ -413,7 +429,22 @@ class Builder extends ScoutBuilder
         return Results::of(
             $paginator,
             $engine instanceof SupportsExtendedSearch ? $this->formatter->format($this, $engine->facets($this, $raw)) : [],
+            $this->corrected($paginator),
         )->appends('query', $this->query);
+    }
+
+    /**
+     * How the engine read the text, judged by the best hit of the whole list.
+     */
+    private function corrected(LengthAwarePaginator $page): ?Correction
+    {
+        if (! $this->corrects()) {
+            return null;
+        }
+
+        $best = $page->currentPage() === 1 ? $page->getCollection()->first() : $this->withoutFacets()->take(1)->first();
+
+        return $best === null ? null : Correction::detect((string) $this->text(), $best->scoutMetadata());
     }
 
     /**
@@ -449,6 +480,14 @@ class Builder extends ScoutBuilder
     public function text(): ?string
     {
         return $this->query === null || $this->query === '' ? null : (string) $this->query;
+    }
+
+    /**
+     * Whether a correction of the text is asked for: it has no meaning without a text.
+     */
+    public function corrects(): bool
+    {
+        return $this->correction && $this->text() !== null;
     }
 
     /**

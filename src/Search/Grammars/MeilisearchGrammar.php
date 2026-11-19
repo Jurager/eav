@@ -51,6 +51,7 @@ class MeilisearchGrammar
         $request = [
             'indexUid' => $builder->uid(),
             'showRankingScore' => true,
+            ...($builder->corrects() ? ['showRankingScoreDetails' => true] : []),
             ...$this->text($builder),
         ];
 
@@ -66,13 +67,25 @@ class MeilisearchGrammar
             $request['distinct'] = $builder->filterable($builder->distinct)->path;
         }
 
-        if ($builder->highlight !== null) {
-            $request['attributesToHighlight'] = $builder->highlight === []
-                ? ($request['attributesToSearchOn'] ?? ['*'])
-                : array_map(static fn (string $name): string => $builder->path($builder->field($name)), $builder->highlight);
+        if ($builder->highlight !== null || $builder->corrects()) {
+            $request['attributesToHighlight'] = $this->highlighted($builder, $request);
         }
 
         return [...$request, ...$builder->options];
+    }
+
+    /**
+     * Paths to highlight: the named fields, and every searched one when none is named or a correction is reported.
+     *
+     * @param  array<string, mixed>  $request
+     * @return list<string>
+     */
+    private function highlighted(Builder $builder, array $request): array
+    {
+        $named = array_map(static fn (string $name): string => $builder->path($builder->field($name)), $builder->highlight ?? []);
+        $searched = $builder->highlight === [] || $builder->corrects() ? ($request['attributesToSearchOn'] ?? ['*']) : [];
+
+        return array_values(array_unique([...$searched, ...$named]));
     }
 
     /**

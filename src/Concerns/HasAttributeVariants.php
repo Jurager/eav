@@ -25,6 +25,8 @@ trait HasAttributeVariants
      */
     public function attributeParent(): ?Attributable
     {
+        static $foreignKeys = [];
+
         $relation = $this->attributeParentRelationName();
 
         if ($relation === null) {
@@ -32,7 +34,7 @@ trait HasAttributeVariants
         }
 
         // Skip the query when the parent foreign key is absent.
-        $foreignKey = $this->attributeParentRelation()?->getForeignKeyName();
+        $foreignKey = ($foreignKeys[static::class.'::'.$relation] ??= [$this->attributeParentRelation()?->getForeignKeyName()])[0];
 
         if ($foreignKey !== null && $this->getAttribute($foreignKey) === null) {
             return null;

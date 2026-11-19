@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Contracts\Console\Kernel;
+use Jurager\Eav\Enums\CorrectionReason;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Jobs\SyncIndexSettings;
 use Jurager\Eav\Exceptions\InvalidSearchQueryException;
@@ -145,6 +146,40 @@ class MeilisearchTest extends SearchTestCase
         $this->assertSame(['Shoes'], $this->names(SearchableProduct::search('кросовки')->locale('ru')->get()));
         $this->assertSame([], $this->names(SearchableProduct::search('кросовки')->locale('en')->get()));
         $this->assertSame(['Jacket'], $this->names(SearchableProduct::search('jaket')->get()));
+    }
+
+    public function test_the_engine_tells_how_it_read_the_text(): void
+    {
+        $typo = SearchableProduct::search('jaket')->correction()->paginate()->correction();
+        $skipped = SearchableProduct::search('jacket zzzz')->correction()->paginate()->correction();
+
+        $this->assertSame(['jaket', 'jacket', CorrectionReason::Typo], [$typo?->original, $typo?->corrected, $typo?->reason]);
+        $this->assertSame(['jacket zzzz', 'jacket', CorrectionReason::Partial], [$skipped?->original, $skipped?->corrected, $skipped?->reason]);
+        $this->assertNull(SearchableProduct::search('jacket')->correction()->paginate()->correction());
+        $this->assertNull(SearchableProduct::search('jaket')->paginate()->correction());
+    }
+
+    public function test_the_correction_is_the_same_on_every_page(): void
+    {
+        $search = fn (int $page) => SearchableProduct::search('red boots')->correction()->paginate(1, 'page', $page);
+
+        $this->assertSame(['Boots'], $this->names($search(1)));
+        $this->assertSame(['Shoes'], $this->names($search(2)));
+
+        // The second hit holds only one of the words, but the best one holds both.
+        $this->assertNull($search(1)->correction());
+        $this->assertNull($search(2)->correction());
+    }
+
+    public function test_the_best_hit_of_a_federated_search_tells_how_the_engine_read_the_text(): void
+    {
+        $federated = fn (int $page) => Search::federated([
+            SearchableProduct::search('jaket')->correction(),
+            SearchableCategory::search('jaket'),
+        ])->paginate(1, 'page', $page);
+
+        $this->assertSame('jacket', $federated(1)->correction()?->corrected);
+        $this->assertSame('jacket', $federated(2)->correction()?->corrected);
     }
 
     public function test_declared_fields_and_option_labels_are_searched(): void

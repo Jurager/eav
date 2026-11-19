@@ -37,10 +37,7 @@ class FederatedBuilder
     }
 
     /**
-     * Run the searches and get a page of models of mixed types, with facets.
-     *
-     * The total is an estimate. Facets are keyed by entity type, then by facet name, and describe every hit
-     * of that type.
+     * Paginates combined search results with facets and text corrections.
      */
     public function paginate(?int $perPage = null, string $pageName = 'page', ?int $page = null): Results
     {
@@ -50,8 +47,8 @@ class FederatedBuilder
 
         $engine = $this->searches === [] ? null : $this->searches[0]->engine();
 
-        [$models, $total, $facets] = match (true) {
-            $engine === null => [[], 0, []],
+        [$models, $total, $facets, $correction] = match (true) {
+            $engine === null => [[], 0, [], null],
             $engine instanceof FederatesSearches => $this->federate($engine, $perPage, $offset),
             default => $this->merge($perPage, $offset),
         };
@@ -59,7 +56,7 @@ class FederatedBuilder
         return Results::of(new LengthAwarePaginator(new EloquentCollection($models), $total, $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
             'pageName' => $pageName,
-        ]), $facets);
+        ]), $facets, $correction);
     }
 
     /**
@@ -75,7 +72,7 @@ class FederatedBuilder
     /**
      * Let the engine merge the searches, then load the models as Scout loads them.
      *
-     * @return array{0: list<Model>, 1: int, 2: array<string, mixed>}
+     * @return array{0: list<Model>, 1: int, 2: array<string, mixed>, 3: Correction|null}
      */
     private function federate(FederatesSearches $engine, int $limit, int $offset): array
     {
@@ -123,14 +120,29 @@ class FederatedBuilder
             }
         }
 
-        return [$models, $found['total'], $facets];
+        return [$models, $found['total'], $facets, $this->corrected($engine, $found['hits'], $offset)];
     }
 
     /**
-     * Federate for an engine that cannot: run each search and rank the hits together by weight, and by
-     * the engine's score where it tells one, by rank otherwise.
+     * Detects a text correction based on the best search hit.
      *
-     * @return array{0: list<Model>, 1: int, 2: array<string, mixed>}
+     * @param  list<array{0: Builder, 1: array<string, mixed>}>  $hits  The hits of the page, with the search each came from.
+     */
+    private function corrected(FederatesSearches $engine, array $hits, int $offset): ?Correction
+    {
+        if (! array_any($this->searches, static fn (Builder $search): bool => $search->corrects())) {
+            return null;
+        }
+
+        $best = ($offset === 0 ? $hits : $engine->federated(array_map(static fn (Builder $search): Builder => $search->withoutFacets(), $this->searches), 1, 0)['hits'])[0] ?? null;
+
+        return $best !== null && $best[0]->corrects() ? Correction::detect((string) $best[0]->text(), $best[1]) : null;
+    }
+
+    /**
+     * Merges results from multiple searches into a single ranked list.
+     *
+     * @return array{0: list<Model>, 1: int, 2: array<string, mixed>, 3: Correction|null}
      */
     private function merge(int $limit, int $offset): array
     {
@@ -157,6 +169,14 @@ class FederatedBuilder
         // Best weighted score first; equal scores keep the order of the searches and of their own hits.
         usort($ranked, static fn (array $a, array $b): int => [$b[0], $a[1], $a[2]] <=> [$a[0], $b[1], $b[2]]);
 
-        return [array_column(array_slice($ranked, $offset, $limit), 3), $total, $facets];
+        $best = $ranked[0] ?? null;
+        $search = $best === null ? null : $this->searches[$best[1]];
+
+        return [
+            array_column(array_slice($ranked, $offset, $limit), 3),
+            $total,
+            $facets,
+            $search?->corrects() ? Correction::detect((string) $search->text(), $best[3]->scoutMetadata()) : null,
+        ];
     }
 }

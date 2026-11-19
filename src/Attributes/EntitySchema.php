@@ -84,7 +84,6 @@ class EntitySchema
         $attributes = $this->registry->forCodes($this->entityType, array_map(strval(...), $codes));
 
         if ($attributes->isNotEmpty() && ($available = $this->idsInScope()) !== null) {
-            $available = array_flip($available);
             $attributes = $attributes->filter(static fn (Attribute $attribute): bool => isset($available[$attribute->getKey()]));
         }
 
@@ -185,7 +184,7 @@ class EntitySchema
 
                 return Eav::$attributeModel::query()
                     ->forEntity($this->entityType)
-                    ->when($ids !== null, fn ($query) => $query->whereKey($ids))
+                    ->when($ids !== null, fn ($query) => $query->whereKey(array_keys($ids)))
                     ->ordered()
                     ->get();
             },
@@ -193,9 +192,9 @@ class EntitySchema
     }
 
     /**
-     * Get the allowed attribute IDs, or null for an unrestricted scope.
+     * Get the allowed attribute IDs as array keys, or null for an unrestricted scope.
      *
-     * @return list<int|string>|null
+     * @return array<int|string, int>|null
      */
     private function idsInScope(): ?array
     {
@@ -208,7 +207,7 @@ class EntitySchema
 
         return $this->schemas->resolve(
             "{$this->entityType}:ids:".md5(json_encode($scope, JSON_THROW_ON_ERROR)),
-            fn (): Collection => collect([$this->scope->attributeIdsInScope()]),
+            fn (): Collection => collect([($ids = $this->scope->attributeIdsInScope()) === null ? null : array_flip($ids)]),
         )->first();
     }
 }

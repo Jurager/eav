@@ -263,6 +263,25 @@ $product->scoutMetadata()['_rankingScore'];      // 0.87
 
 As in Scout, a second call to `options()` replaces the first.
 
+### Corrections
+
+The engine puts up with typos, and when no document holds every word it searches for the first ones alone. Neither shows in the results, so a page for `jaket` looks like one for `jacket`. To tell the user what was searched for, ask for the correction:
+
+```php
+$results = Product::search('jaket')->correction()->paginate();
+
+$results->correction();
+// Correction {original: 'jaket', corrected: 'jacket', reason: CorrectionReason::Typo}
+```
+
+`reason` is `Typo` when the best hit holds the words written otherwise, and `Partial` when it holds only some of them. `corrected` is the text as the best hit writes the words, with the skipped ones left out; it is null when the highlights do not tell which word each one stands for. `correction()` is null when the text was found as written, and `toArray()` gives `original`, `corrected`, and `reason` as plain values.
+
+The engine is asked for the ranking details and for highlights in every searched field. The correction is judged by the best hit of the whole list, whichever page you ask for: a page after the first asks the engine for that hit once more. In a federated search the best hit is the best across the types.
+
+Filters narrow what is judged. If no document that passes them holds every word, the text is reported as `Partial`, though another document would hold them all.
+
+A search without text has nothing to correct.
+
 ## Federated search
 
 Search several entity types at once and get one list ranked across them, such as products and services for the same query:
@@ -383,7 +402,7 @@ Entities are searched with the Scout driver they are indexed with. With Scout's 
 
 On any other driver a search uses Scout's own query API: text, `where()` with comparisons, `whereIn()`, `whereNotIn()`, `whereBetween()`, sorting, and pagination. Fields are still checked against the index definition.
 
-What Scout cannot express there throws Scout's `NotSupportedException`: `or` groups, facets, `searchOn()`, `highlight()`, `boost()`, `partition()`, and facet search. Federated search still works: each search runs alone, and the hits are ranked by weight and rank.
+What Scout cannot express there throws Scout's `NotSupportedException`: `or` groups, facets, `searchOn()`, `highlight()`, `correction()`, `boost()`, `partition()`, and facet search. Federated search still works: each search runs alone, and the hits are ranked by weight and rank.
 
 Keep in mind that Scout's `database` and `collection` drivers search the model's columns, not the indexed document, so they do not see attribute values.
 
@@ -417,4 +436,4 @@ $this->get('/products?q=shoes')->assertOk();
 $search->assertSearched(fn (Builder $search) => $search->query === 'shoes');
 ```
 
-`respond()` takes the entity type, then keys or documents with an `id`. Pass `facets` to answer with facet data.
+`respond()` takes the entity type, then keys or documents with an `id`. Pass `facets` to answer with facet data. The keys of a document that start with `_` become Scout metadata of its model, so a hit can carry `_rankingScore`, or the `_rankingScoreDetails` and `_formatted` a correction is read from.
