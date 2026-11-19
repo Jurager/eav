@@ -55,11 +55,7 @@ class IndexFactory
         }
 
         if ($attributes !== null) {
-            foreach ($attributes->sortBy(['sort', 'id']) as $attribute) {
-                if (! Synchronizer::indexed($attribute)) {
-                    continue;
-                }
-
+            foreach ($attributes->filter(Synchronizer::indexed(...))->sortBy(['sort', 'id']) as $attribute) {
                 foreach ($this->fields->make($attribute)->indexFields() as $field) {
                     if (! isset($index->fields()[$field->path])) {
                         $index->add($field);
