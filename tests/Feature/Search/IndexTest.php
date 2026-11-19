@@ -10,6 +10,7 @@ use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Search\Grammars\MeilisearchGrammar;
 use Jurager\Eav\Jobs\SyncIndexSettings;
+use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Tests\Fixtures\Product;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
 
@@ -84,6 +85,32 @@ class IndexTest extends SearchTestCase
         $this->attribute('number', 'price', ['filterable' => true]);
 
         $this->assertNotNull(Search::index(SearchableProduct::class)->find('price'));
+    }
+
+    public function test_the_index_follows_schema_changes_of_earlier_requests(): void
+    {
+        $price = $this->attribute('number', 'price', ['filterable' => true]);
+        Search::index(SearchableProduct::class);
+
+        $price->update(['filterable' => false]);
+        $this->attribute('text', 'title', ['searchable' => true]);
+        app()->forgetScopedInstances();
+
+        $this->assertSame(
+            ['id', 'name', 'parent_id', 'attributes.title'],
+            array_keys(Search::index(SearchableProduct::class)->fields()),
+        );
+    }
+
+    public function test_indexed_attributes_are_picked_once_while_the_registry_holds_the_same_definitions(): void
+    {
+        $price = $this->attribute('number', 'price', ['filterable' => true]);
+        Search::index(SearchableProduct::class);
+
+        app(AttributeRegistry::class)->get('searchable_product', $price->id)->setAttribute('filterable', false);
+        app()->forgetScopedInstances();
+
+        $this->assertNotNull(Search::index(SearchableProduct::class)->find('price'), 'Nothing announced the change.');
     }
 
     public function test_a_model_that_is_not_searchable_has_no_index(): void

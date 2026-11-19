@@ -6,20 +6,26 @@ namespace Jurager\Eav\Search\Index;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Collection;
 use Jurager\Eav\Concerns\HasSearchableAttributes;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
 use Jurager\Eav\Exceptions\SearchNotAvailableException;
 use Jurager\Eav\Fields\FieldFactory;
+use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Registries\AttributeRegistry;
 use Jurager\Eav\Registries\LocaleRegistry;
 use Laravel\Scout\Searchable;
+use WeakMap;
 
 /**
  * Build the search index definition of an entity type from its model and its attributes.
  */
 class IndexFactory
 {
+    /** @var WeakMap<Collection<int, Attribute>, Collection<int, Attribute>>|null Indexed attributes in index order, for as long as the registry holds the definitions they were picked from. */
+    private static ?WeakMap $indexedAttributes = null;
+
     /** @var array<string, array{0: mixed, 1: Index}> Built indexes with the attribute definitions they were built from. */
     private array $indexes = [];
 
@@ -55,7 +61,7 @@ class IndexFactory
         }
 
         if ($attributes !== null) {
-            foreach ($attributes->filter(Synchronizer::indexed(...))->sortBy(['sort', 'id']) as $attribute) {
+            foreach (self::indexedAttributes($attributes) as $attribute) {
                 foreach ($this->fields->make($attribute)->indexFields() as $field) {
                     if (! isset($index->fields()[$field->path])) {
                         $index->add($field);
@@ -67,6 +73,19 @@ class IndexFactory
         $this->indexes[$key] = [$attributes, $index];
 
         return $index;
+    }
+
+    /**
+     * Pick the indexed attributes in index order: once for the definitions the registry holds, whatever the request.
+     *
+     * @param  Collection<int, Attribute>  $attributes
+     * @return Collection<int, Attribute>
+     */
+    private static function indexedAttributes(Collection $attributes): Collection
+    {
+        self::$indexedAttributes ??= new WeakMap;
+
+        return self::$indexedAttributes[$attributes] ??= $attributes->filter(Synchronizer::indexed(...))->sortBy(['sort', 'id']);
     }
 
     /**
