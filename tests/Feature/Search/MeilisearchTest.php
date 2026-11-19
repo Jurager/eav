@@ -17,6 +17,7 @@ use Jurager\Eav\Facades\Search;
 use Jurager\Eav\Jobs\ReindexAttribute;
 use Jurager\Eav\Jobs\ReindexEntities;
 use Jurager\Eav\Search\Results;
+use Jurager\Eav\Tests\Fixtures\Layouts;
 use Jurager\Eav\Tests\Fixtures\PricedProduct;
 use Jurager\Eav\Tests\Fixtures\SearchableCategory;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
@@ -180,6 +181,33 @@ class MeilisearchTest extends SearchTestCase
 
         $this->assertSame('jacket', $federated(1)->correction()?->corrected);
         $this->assertSame('jacket', $federated(2)->correction()?->corrected);
+    }
+
+    public function test_a_text_typed_in_the_other_layout_or_script_is_found(): void
+    {
+        config(['eav.search.layouts' => [Layouts::RUSSIAN]]);
+
+        $layout = SearchableProduct::search('rhjccjdrb')->locale('ru')->retype()->paginate();
+        $script = SearchableProduct::search('шоес')->locale('ru')->retype()->paginate();
+
+        $this->assertSame(['Shoes'], $this->names($layout));
+        $this->assertSame(['rhjccjdrb', 'кроссовки', CorrectionReason::Layout], [$layout->correction()?->original, $layout->correction()?->corrected, $layout->correction()?->reason]);
+        $this->assertSame(['Shoes'], $this->names($script));
+        $this->assertSame(['шоес', 'shoes', CorrectionReason::Transliteration], [$script->correction()?->original, $script->correction()?->corrected, $script->correction()?->reason]);
+        $this->assertSame([], $this->names(SearchableProduct::search('rhjccjdrb')->locale('ru')->paginate()));
+    }
+
+    public function test_a_federated_search_is_retyped_as_a_whole(): void
+    {
+        config(['eav.search.layouts' => [Layouts::RUSSIAN]]);
+
+        $results = Search::federated([
+            SearchableProduct::search('rhjccjdrb')->locale('ru')->retype(),
+            SearchableCategory::search('rhjccjdrb')->locale('ru'),
+        ])->paginate();
+
+        $this->assertSame(['Shoes'], $this->names($results));
+        $this->assertSame('кроссовки', $results->correction()?->corrected);
     }
 
     public function test_declared_fields_and_option_labels_are_searched(): void

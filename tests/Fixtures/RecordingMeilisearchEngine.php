@@ -50,10 +50,11 @@ class RecordingMeilisearchEngine extends MeilisearchEngine
      * @param  list<array<string, mixed>>  $hits  Documents, each with at least an `id`.
      * @param  array<string, array<string, int>>  $facets  Facet distribution keyed by index path.
      * @param  array<string, array{min: int|float, max: int|float}>  $stats  Facet stats keyed by index path.
+     * @param  string|null  $text  Answer only the searches for this text.
      */
-    public function respond(string $index, array $hits, ?int $total = null, array $facets = [], array $stats = []): static
+    public function respond(string $index, array $hits, ?int $total = null, array $facets = [], array $stats = [], ?string $text = null): static
     {
-        $this->results[$index] = [
+        $this->results[$text === null ? $index : "{$index}\0{$text}"] = [
             'hits' => array_values($hits),
             'total' => $total ?? count($hits),
             'facetDistribution' => $facets,
@@ -72,7 +73,7 @@ class RecordingMeilisearchEngine extends MeilisearchEngine
         }
 
         return ['results' => array_map(function (array $query): array {
-            $result = $this->results[$query['indexUid']] ?? ['hits' => [], 'total' => 0, 'facetDistribution' => [], 'facetStats' => []];
+            $result = $this->answer($query) ?? ['hits' => [], 'total' => 0, 'facetDistribution' => [], 'facetStats' => []];
             $perPage = $query['hitsPerPage'] ?? $query['limit'] ?? 20;
             $offset = isset($query['page']) ? ($query['page'] - 1) * $perPage : ($query['offset'] ?? 0);
 
@@ -85,6 +86,15 @@ class RecordingMeilisearchEngine extends MeilisearchEngine
                 'facetStats' => $result['facetStats'],
             ];
         }, $queries)];
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>|null
+     */
+    private function answer(array $query): ?array
+    {
+        return $this->results["{$query['indexUid']}\0".($query['q'] ?? '')] ?? $this->results[$query['indexUid']] ?? null;
     }
 
     protected function facetSearch(string $index, array $query): array
@@ -139,7 +149,7 @@ class RecordingMeilisearchEngine extends MeilisearchEngine
         $facets = [];
 
         foreach ($queries as $position => $query) {
-            $result = $this->results[$query['indexUid']] ?? null;
+            $result = $this->answer($query);
 
             foreach ($result['hits'] ?? [] as $hit) {
                 $hits[] = $hit + ['_federation' => ['indexUid' => $query['indexUid'], 'queriesPosition' => $position]];

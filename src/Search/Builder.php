@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jurager\Eav\Search;
 
+use Closure;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Pagination\LengthAwarePaginator;
 use InvalidArgumentException;
@@ -68,6 +69,9 @@ class Builder extends ScoutBuilder
 
     /** Whether the engine is asked how it read the text, for `Results::correction()`. */
     public bool $correction = false;
+
+    /** Whether a search that finds nothing is run again for the text typed another way. */
+    public bool $retype = false;
 
     public ?string $distinct = null;
 
@@ -382,6 +386,38 @@ class Builder extends ScoutBuilder
     }
 
     /**
+     * Search the text typed in the other keyboard layout or script when nothing is found.
+     */
+    public function retype(): static
+    {
+        $this->retype = true;
+
+        return $this;
+    }
+
+    /**
+     * The same search that is not run again for a retyped text.
+     */
+    public function withoutRetype(): static
+    {
+        $search = clone $this;
+        $search->retype = false;
+
+        return $search;
+    }
+
+    /**
+     * The same search for another text.
+     */
+    public function withText(string $text): static
+    {
+        $search = clone $this;
+        $search->query = $text;
+
+        return $search;
+    }
+
+    /**
      * Keep one hit per value of the field, for this search only.
      */
     public function distinct(string $field): static
@@ -426,11 +462,33 @@ class Builder extends ScoutBuilder
             )));
         }
 
-        return Results::of(
+        $results = Results::of(
             $paginator,
             $engine instanceof SupportsExtendedSearch ? $this->formatter->format($this, $engine->facets($this, $raw)) : [],
             $this->corrected($paginator),
         )->appends('query', $this->query);
+
+        if ($results->total() > 0) {
+            return $results;
+        }
+
+        return $this->retyped(fn (string $text): Results => $this->withoutRetype()->withText($text)->paginate($perPage, $pageName, $page))?->appends('query', $this->query) ?? $results;
+    }
+
+    /**
+     * The results of the first retyped text that finds something; null when none does, or when retyping was not asked for.
+     *
+     * @param  Closure(string): Results  $search
+     */
+    public function retyped(Closure $search): ?Results
+    {
+        $text = $this->text();
+
+        if (! $this->retype || $text === null) {
+            return null;
+        }
+
+        return Retype::find($text, strtolower(substr($this->locales()[0] ?? 'en', 0, 2)), (array) config('eav.search.layouts', []), $search);
     }
 
     /**

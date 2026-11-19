@@ -14,4 +14,10 @@ enum CorrectionReason: string
 
     /** The best hit holds only some of the words: the engine skipped the rest. */
     case Partial = 'partial';
+
+    /** Nothing was found for the text, but the text typed in the other keyboard layout found something. */
+    case Layout = 'layout';
+
+    /** Nothing was found for the text, but the text written in the other script found something. */
+    case Transliteration = 'transliteration';
 }

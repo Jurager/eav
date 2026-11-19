@@ -29,10 +29,11 @@ class FakeEngine extends NullEngine implements SupportsExtendedSearch
      * @param  list<int|string|array<string, mixed>>  $hits  Keys, or documents with an `id`; keys starting with `_`,
      *                                                        such as `_rankingScore`, become Scout metadata of the model.
      * @param  array<string, mixed>  $facets  A map of value to count, or `min` and `max`, per facet name.
+     * @param  string|null  $text  Answer only the searches for this text.
      */
-    public function respond(string $entityType, array $hits, ?int $total = null, array $facets = []): static
+    public function respond(string $entityType, array $hits, ?int $total = null, array $facets = [], ?string $text = null): static
     {
-        $this->responses[$entityType] = [
+        $this->responses[$text === null ? $entityType : "{$entityType}\0{$text}"] = [
             'hits' => array_map(static fn (mixed $hit): array => is_array($hit) ? $hit : ['id' => $hit], array_values($hits)),
             'total' => $total ?? count($hits),
             'facets' => $facets,
@@ -50,7 +51,8 @@ class FakeEngine extends NullEngine implements SupportsExtendedSearch
     {
         $this->searches[] = $builder;
 
-        $response = $this->responses[$builder->definition->entityType] ?? ['hits' => [], 'total' => 0, 'facets' => []];
+        $entityType = $builder->definition->entityType;
+        $response = $this->responses["{$entityType}\0{$builder->text()}"] ?? $this->responses[$entityType] ?? ['hits' => [], 'total' => 0, 'facets' => []];
 
         return [
             'hits' => array_slice($response['hits'], ((int) $page - 1) * (int) $perPage, (int) $perPage),

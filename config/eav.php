@@ -127,6 +127,11 @@ return [
          */
         'relation_limit' => 1000,
 
+        // Keyboard layouts that retype() tries: each is its letters on the keys qwertyuiop[]asdfghjkl;'zxcvbnm,.` in that order.
+        'layouts' => [
+            // 'йцукенгшщзхъфывапролджэячсмитьбюё',
+        ],
+
         'meilisearch' => [
 
             /*

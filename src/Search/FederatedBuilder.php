@@ -53,10 +53,31 @@ class FederatedBuilder
             default => $this->merge($perPage, $offset),
         };
 
-        return Results::of(new LengthAwarePaginator(new EloquentCollection($models), $total, $perPage, $page, [
+        $results = Results::of(new LengthAwarePaginator(new EloquentCollection($models), $total, $perPage, $page, [
             'path' => Paginator::resolveCurrentPath(),
             'pageName' => $pageName,
         ]), $facets, $correction);
+
+        return $total === 0 ? $this->retyped($results, $perPage, $pageName, $page) : $results;
+    }
+
+    /**
+     * The results for the first retyped text that finds something, or the empty ones when none does.
+     */
+    private function retyped(Results $none, int $perPage, string $pageName, int $page): Results
+    {
+        $first = array_find($this->searches, static fn (Builder $search): bool => $search->retype && $search->text() !== null);
+
+        if ($first === null) {
+            return $none;
+        }
+
+        $text = $first->text();
+
+        return $first->retyped(fn (string $retyped): Results => (new self($this->formatter, array_map(
+            static fn (Builder $search): Builder => $search->text() === $text ? $search->withoutRetype()->withText($retyped) : $search->withoutRetype(),
+            $this->searches,
+        )))->paginate($perPage, $pageName, $page)) ?? $none;
     }
 
     /**
@@ -152,7 +173,7 @@ class FederatedBuilder
 
         foreach ($this->searches as $position => $search) {
             // Any of the searches may fill the whole page, so each is asked for all of it.
-            $results = $search->paginate($offset + $limit, 'page', 1);
+            $results = $search->withoutRetype()->paginate($offset + $limit, 'page', 1);
             $total += $results->total();
 
             foreach ($results->items() as $rank => $model) {

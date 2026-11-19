@@ -282,6 +282,36 @@ Filters narrow what is judged. If no document that passes them holds every word,
 
 A search without text has nothing to correct.
 
+### Retyping
+
+Text typed on the wrong keyboard layout, or in letters the documents do not use, finds nothing. With `retype()`, a search that finds nothing is run again for the text retyped, and the correction says so:
+
+```php
+$results = Product::search('irfa')->retype()->paginate();
+
+$results->correction();
+// Correction {original: 'irfa', corrected: 'шкаф', reason: CorrectionReason::Layout}
+```
+
+The texts are tried in turn, and the first that finds something wins, with `reason` and `corrected` the text found. If none finds anything, the results stay empty.
+
+| Reason            | The text retyped                                                                                                      |
+|-------------------|-----------------------------------------------------------------------------------------------------------------------|
+| `Layout`          | The same keys on another layout, one text for each layout in `eav.search.layouts`: Latin letters become its letters, and its letters Latin ones |
+| `Transliteration` | The letters written in Latin ones as `Str::ascii()` writes them (`самсунг` as `samsung`), which is how slugs are made |
+
+The package knows no layout. List the ones you need under `eav.search.layouts`, each as its letters on the keys `` qwertyuiop[]asdfghjkl;'zxcvbnm,.` `` of a US keyboard, in that order:
+
+```php
+'layouts' => [
+    'йцукенгшщзхъфывапролджэячсмитьбюё',
+],
+```
+
+A layout needs a letter for each of the 33 keys. A text that would come out with signs instead of letters is not tried, nor is one that equals the text typed or another one tried. Each layout costs one more search when nothing is found. Transliteration needs no setup: it follows the language of the locale searched, and a language `Str::ascii()` has no rules for is written the English way.
+
+A retyped search keeps the conditions, the sort, the facets, and the page. A federated search is run again as a whole, with the same text in every search that has it. Only `paginate()` retypes, and a text found as typed is never retyped.
+
 ## Federated search
 
 Search several entity types at once and get one list ranked across them, such as products and services for the same query:
@@ -436,4 +466,4 @@ $this->get('/products?q=shoes')->assertOk();
 $search->assertSearched(fn (Builder $search) => $search->query === 'shoes');
 ```
 
-`respond()` takes the entity type, then keys or documents with an `id`. Pass `facets` to answer with facet data. The keys of a document that start with `_` become Scout metadata of its model, so a hit can carry `_rankingScore`, or the `_rankingScoreDetails` and `_formatted` a correction is read from.
+`respond()` takes the entity type, then keys or documents with an `id`. Pass `facets` to answer with facet data, and `text` to answer only the searches for that text. The keys of a document that start with `_` become Scout metadata of its model, so a hit can carry `_rankingScore`, or the `_rankingScoreDetails` and `_formatted` a correction is read from.
