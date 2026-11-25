@@ -5,11 +5,9 @@ declare(strict_types=1);
 namespace Jurager\Eav\Search\Index;
 
 use DateTimeInterface;
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Eav;
-use Laravel\Scout\Jobs\MakeRangeSearchable;
 use Laravel\Scout\ModelObserver;
 
 /**
@@ -62,22 +60,13 @@ class Indexer
     }
 
     /**
-     * Reindex everything touched since a point in time, in ranges of ids.
+     * Reindex everything touched since a point in time.
      */
     public function since(string $entityType, DateTimeInterface $since, int $chunk = 500): void
     {
-        if (($model = $this->model($entityType)) === null) {
-            return;
+        if (($model = $this->model($entityType)) !== null) {
+            $model->newQuery()->where($model->getUpdatedAtColumn(), '>=', $since)->searchable($chunk);
         }
-
-        $key = $model->getScoutKeyName();
-
-        $model->newQuery()
-            ->where($model->getUpdatedAtColumn(), '>=', $since)
-            ->select($key)
-            ->chunkById($chunk, static fn (Collection $ids) => dispatch(
-                new MakeRangeSearchable($model::class, $ids->min($key), $ids->max($key)),
-            ), $key);
     }
 
     /**

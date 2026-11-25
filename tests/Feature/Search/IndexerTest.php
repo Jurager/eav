@@ -7,7 +7,6 @@ namespace Jurager\Eav\Tests\Feature\Search;
 use Illuminate\Support\Facades\Queue;
 use Jurager\Eav\Search\Index\Indexer;
 use Jurager\Eav\Tests\Fixtures\SearchableProduct;
-use Laravel\Scout\Jobs\MakeRangeSearchable;
 use Laravel\Scout\Jobs\MakeSearchable;
 
 class IndexerTest extends SearchTestCase
@@ -43,20 +42,16 @@ class IndexerTest extends SearchTestCase
 
     public function test_since_queues_only_what_was_touched_after_the_moment(): void
     {
+        $recent = $this->product('Recent');
         $old = $this->product('Old');
         SearchableProduct::query()->whereKey($old->id)->update(['updated_at' => now()->subDay()]);
-        $recent = $this->product('Recent');
         $latest = $this->product('Latest');
         Queue::fake();
 
         app(Indexer::class)->since('searchable_product', now()->subHour());
 
-        Queue::assertPushed(MakeRangeSearchable::class, 1);
-        Queue::assertPushed(MakeRangeSearchable::class, function (MakeRangeSearchable $job) use ($recent, $latest): bool {
-            $range = (fn () => [$this->start, $this->end])->call($job);
-
-            return $range == [$recent->id, $latest->id];
-        });
+        Queue::assertPushed(MakeSearchable::class, 1);
+        Queue::assertPushed(MakeSearchable::class, fn (MakeSearchable $job) => $job->models->modelKeys() === [$recent->id, $latest->id]);
     }
 
     public function test_an_entity_type_that_is_not_searchable_is_left_alone(): void
