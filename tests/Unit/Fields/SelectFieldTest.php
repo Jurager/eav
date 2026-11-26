@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jurager\Eav\Tests\Unit\Fields;
 
 use Jurager\Eav\Enums\AttributeStorage;
+use Jurager\Eav\Exceptions\UnknownOptionException;
 use Jurager\Eav\Fields\Select;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
@@ -148,6 +149,13 @@ class SelectFieldTest extends TestCase
         $field->set('blue');
 
         $this->assertSame(20, $field->value());
+    }
+
+    public function test_set_rejects_an_unknown_option_code(): void
+    {
+        $this->expectException(UnknownOptionException::class);
+
+        $this->makeField()->set('purple');
     }
 
     // -----------------------------------------------------------------------

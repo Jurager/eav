@@ -14,7 +14,7 @@ The field type determines how a value is validated:
 | `number` | Integer or float |
 | `boolean` | Boolean |
 | `date` | Date or datetime, resolved as Carbon |
-| `select` | Enum option ID or code, stored as the ID |
+| `select` | Enum option ID or code, stored as the ID; `set()` throws `UnknownOptionException` for an unknown code |
 | `image` | File path or URL |
 | `file` | File path or URL |
 | `link` | Absolute HTTP or HTTPS URL |

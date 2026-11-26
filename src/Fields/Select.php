@@ -7,6 +7,7 @@ namespace Jurager\Eav\Fields;
 use Jurager\Eav\Contracts\Attributable;
 use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Enums\IndexType;
+use Jurager\Eav\Exceptions\UnknownOptionException;
 use Jurager\Eav\Models\AttributeEnum;
 use Jurager\Eav\Search\Index\Index;
 use Jurager\Eav\Search\Index\IndexField;
@@ -202,6 +203,16 @@ class Select extends Field
      */
     protected function normalize(mixed $value): ?int
     {
-        return $value === null ? null : (int) $this->enumRegistry->coerce($this->attribute->getAttribute('id'), $value);
+        if ($value === null) {
+            return null;
+        }
+
+        $id = $this->enumRegistry->coerce($this->attribute->getAttribute('id'), $value);
+
+        if ($id === null || $id === '') {
+            throw UnknownOptionException::code(is_scalar($value) ? (string) $value : get_debug_type($value), (string) $this->attribute->getAttribute('code'));
+        }
+
+        return (int) $id;
     }
 }
