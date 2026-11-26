@@ -57,23 +57,29 @@ class HasTranslationsTest extends FeatureTestCase
 
     public function test_label_with_explicit_locale_overrides_current_request_locale(): void
     {
-        app(LocaleRegistry::class)->set(['fr']);
+        app(LocaleRegistry::class)->set(['fr', 'en']);
 
         $this->assertSame('Astana', $this->fresh()->label($this->en->id));
     }
 
-    public function test_label_falls_back_to_first_translation_when_active_locale_has_none(): void
+    public function test_label_is_null_when_the_active_locale_has_none(): void
     {
         $this->createLocale('de');
         app(LocaleRegistry::class)->set(['de']);
 
-        // 'de' has no translation row for this entity — falls back to the first loaded translation.
-        $this->assertSame('Astana', $this->fresh()->label());
+        $this->assertNull($this->fresh()->label());
     }
 
-    public function test_translations_relation_exposes_both_locales(): void
+    public function test_translations_relation_loads_every_locale_when_none_is_active(): void
     {
         $this->assertCount(2, $this->fresh()->translations);
+    }
+
+    public function test_translations_relation_is_narrowed_to_the_active_locales(): void
+    {
+        app(LocaleRegistry::class)->set(['fr']);
+
+        $this->assertSame(['fr'], $this->fresh()->translations->pluck('code')->all());
     }
 
     public function test_deleting_the_model_removes_only_its_translations(): void
@@ -86,6 +92,15 @@ class HasTranslationsTest extends FeatureTestCase
         $this->assertDatabaseMissing('entity_translations', ['entity_type' => $this->entity->getMorphClass(), 'entity_id' => $this->entity->id]);
         $this->assertDatabaseHas('entity_translations', ['entity_type' => $other->getMorphClass(), 'entity_id' => $other->id]);
         $this->assertDatabaseCount('locales', 2);
+    }
+
+    public function test_deleting_the_model_removes_translations_outside_the_active_locales(): void
+    {
+        app(LocaleRegistry::class)->set(['fr']);
+
+        $this->entity->delete();
+
+        $this->assertDatabaseMissing('entity_translations', ['entity_type' => $this->entity->getMorphClass(), 'entity_id' => $this->entity->id]);
     }
 
     public function test_a_soft_deleted_model_keeps_its_translations_until_force_deleted(): void

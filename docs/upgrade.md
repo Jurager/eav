@@ -3,6 +3,17 @@ title: Upgrade guide
 weight: 95
 ---
 
+## Upgrading from 1.0.14
+
+Labels of models with `HasTranslations` now follow the same rule as attribute values: the requested locale or nothing.
+
+- The `translations` relation is narrowed to the active locales of the request. It used to load every locale. With no active locale, every locale is loaded, as before.
+- `label()` returns `null` when the model has no label in the requested locale. It used to return the first label it found, in whichever locale came first.
+- `whereHas('translations', ...)` and filters on `translations.label` match only the active locales.
+- `Select::label()` without a locale reads the current locale, as documented, instead of the application locale.
+
+Check the code that shows `label()` to users, and decide what it shows for `null`. Code that reads `label($localeId)` or `translations` in a locale outside the active ones must load them without the scope, see [Localization](localization.md#choosing-the-active-locale). A model that overrode `translations()` only to keep the scope can drop the override.
+
 ## Upgrading to 1.0.7 from 1.0.3 or earlier
 
 Search was rebuilt on Laravel Scout's own builder, around one index definition per model. The public search API changed, and the search document has a new shape, so indexes must be rebuilt.

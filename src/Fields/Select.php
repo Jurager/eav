@@ -90,7 +90,7 @@ class Select extends Field
      */
     public function label(?int $localeId = null): string|array|null
     {
-        $localeId ??= $this->localeRegistry->default();
+        $localeId ??= $this->localeRegistry->current();
 
         if ($this->isMultiple()) {
             return array_map(

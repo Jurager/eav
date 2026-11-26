@@ -8,6 +8,8 @@ use Jurager\Eav\Enums\AttributeStorage;
 use Jurager\Eav\Fields\Select;
 use Jurager\Eav\Models\Attribute;
 use Jurager\Eav\Models\AttributeEnum;
+use Jurager\Eav\Models\EntityTranslation;
+use Jurager\Eav\Models\Locale;
 use Jurager\Eav\Registries\EnumRegistry;
 use Jurager\Eav\Registries\LocaleRegistry;
 use Jurager\Eav\Tests\TestCase;
@@ -62,6 +64,14 @@ class SelectFieldTest extends TestCase
     private function makeField(array $attributes = []): Select
     {
         return new Select($this->makeAttribute($attributes), $this->localeRegistry, $this->enumRegistry);
+    }
+
+    private function translation(int $localeId, string $label): Locale
+    {
+        $locale = (new Locale)->forceFill(['id' => $localeId]);
+        $locale->setRelation('pivot', (new EntityTranslation)->forceFill(['locale_id' => $localeId, 'label' => $label]));
+
+        return $locale;
     }
 
     // -----------------------------------------------------------------------
@@ -173,6 +183,25 @@ class SelectFieldTest extends TestCase
 
         $this->assertIsArray($value);
         $this->assertSame([10, 20], $value);
+    }
+
+    // -----------------------------------------------------------------------
+    // label()
+    // -----------------------------------------------------------------------
+
+    public function test_label_reads_the_current_locale_when_none_is_given(): void
+    {
+        $this->localeRegistry->shouldReceive('current')->andReturn(2);
+
+        $enum = (new AttributeEnum)->forceFill(['id' => 10, 'code' => 'red', 'attribute_id' => 1]);
+        $enum->setRelation('translations', collect([$this->translation(1, 'Red'), $this->translation(2, 'Красный')]));
+
+        $this->enumRegistry->shouldReceive('find')->with(1, 10)->andReturn($enum);
+
+        $field = $this->makeField();
+        $field->fill(10);
+
+        $this->assertSame('Красный', $field->label());
     }
 
     // -----------------------------------------------------------------------

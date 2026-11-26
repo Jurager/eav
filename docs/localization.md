@@ -56,11 +56,21 @@ $registry->default();    // Application locale ID.
 
 Active locales are reset between requests and jobs.
 
-Values use the first active locale, falling back to the application locale. Set active locales to limit the translations returned for a request:
+Values and labels are read in the first active locale, or in the application locale when none is active. A value or label missing in that locale is `null`: no other locale is substituted.
+
+Active locales also narrow the translations loaded with a model: of attribute values, of attributes, groups and options, and of models with `HasTranslations`. With no active locale, every locale is loaded, as an admin panel editing all translations at once needs:
 
 ```php
 $registry->set(['ru', 'en']);  // mark request-active locales
 $registry->get();              // ?array — the active locale codes, or null
+```
+
+To read a locale outside the active ones, load the translations without the scope:
+
+```php
+use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
+
+$region->load(['translations' => fn ($query) => $query->withoutGlobalScope(ActiveLocaleScope::class)]);
 ```
 
 Add `SetLocaleContext` to read active locales from `Accept-Language` and set the application locale:
@@ -124,7 +134,7 @@ class Region extends Model
 }
 ```
 
-The trait adds the `translations` relation with labels in every locale, and `label()`, which returns the label in the request's locale, or the first one when that locale has none. Use the same translator API:
+The trait adds the `translations` relation, narrowed to the active locales like any other translations, and `label()`, which returns the label in the request's locale, or `null` when the model has none in it. Use the same translator API:
 
 ```php
 Translator::for($region)
@@ -132,7 +142,7 @@ Translator::for($region)
     ->label('Европа', 'ru')
     ->save();
 
-$region->label(); // 'Европа' for a Russian request
+$region->label(); // 'Европа' for a Russian request, null for a German one
 ```
 
 Labels are removed when the model is deleted. A model using `SoftDeletes` keeps them until it is force deleted. Deleting rows with a query builder, such as `Region::query()->delete()`, fires no model events and leaves the labels.

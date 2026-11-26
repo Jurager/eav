@@ -8,7 +8,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Jurager\Eav\Eav;
-use Jurager\Eav\Models\Scopes\ActiveLocaleScope;
 use Jurager\Eav\Registries\LocaleRegistry;
 
 trait HasTranslations
@@ -28,18 +27,16 @@ trait HasTranslations
         return $this->morphToMany(Eav::$localeModel, 'entity', 'entity_translations')
             ->using(Eav::$entityTranslationModel)
             ->withPivot(['id', 'label', 'params'])
-            ->withTimestamps()
-            ->withoutGlobalScope(ActiveLocaleScope::class);
+            ->withTimestamps();
     }
 
     public function label(?int $localeId = null): ?string
     {
         $localeId ??= app(LocaleRegistry::class)->current();
 
-        $translations = $this->translations;
-
-        $translation = $translations->first(fn ($t) => (int) $t->pivot->getAttribute('locale_id') === $localeId) ?? $translations->first();
-
-        return $translation?->pivot?->getAttribute('label');
+        return $this->translations
+            ->first(fn ($t) => (int) $t->pivot->getAttribute('locale_id') === $localeId)
+            ?->pivot
+            ?->getAttribute('label');
     }
 }
