@@ -183,12 +183,13 @@ class Select extends Field
         $values = (array) $value;
 
         foreach ($values as $item) {
+            $id = $this->enumRegistry->coerce($this->attribute->getAttribute('id'), $item);
 
-            if (! is_numeric($item)) {
+            if (! is_numeric($id)) {
                 return $this->addError(__('eav::attributes.validation.invalid_value'));
             }
 
-            if (! $this->enumRegistry->isValidId($this->attribute->getAttribute('id'), (int) $item)) {
+            if (! $this->enumRegistry->isValidId($this->attribute->getAttribute('id'), (int) $id)) {
                 return $this->addError(__('eav::attributes.validation.invalid_enum'));
             }
         }
@@ -197,10 +198,10 @@ class Select extends Field
     }
 
     /**
-     * Normalize the value to an integer.
+     * Normalize the option id or code to the option id.
      */
     protected function normalize(mixed $value): ?int
     {
-        return $value === null ? null : (int) $value;
+        return $value === null ? null : (int) $this->enumRegistry->coerce($this->attribute->getAttribute('id'), $value);
     }
 }

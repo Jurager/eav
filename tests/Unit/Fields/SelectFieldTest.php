@@ -24,6 +24,9 @@ class SelectFieldTest extends TestCase
     /** Valid enum IDs for the test attribute (id=1). */
     private array $validEnumIds = [10 => true, 20 => true, 30 => true];
 
+    /** Enum IDs of the test attribute by option code. */
+    private array $enumIdsByCode = ['blue' => 20];
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -37,6 +40,8 @@ class SelectFieldTest extends TestCase
         $this->enumRegistry = Mockery::mock(EnumRegistry::class);
         $this->enumRegistry->shouldReceive('isValidId')
             ->andReturnUsing(fn ($attrId, $id) => isset($this->validEnumIds[$id]));
+        $this->enumRegistry->shouldReceive('coerce')
+            ->andReturnUsing(fn ($attrId, $value) => is_numeric($value) ? $value : (is_string($value) ? ($this->enumIdsByCode[$value] ?? null) : null));
         $this->enumRegistry->shouldReceive('find')
             ->byDefault()
             ->andReturnNull();
@@ -126,6 +131,23 @@ class SelectFieldTest extends TestCase
 
         $this->assertFalse($field->fill('red'));
         $this->assertTrue($field->hasErrors());
+    }
+
+    public function test_fill_accepts_an_option_code(): void
+    {
+        $field = $this->makeField();
+
+        $this->assertTrue($field->fill('blue'));
+        $this->assertSame(20, $field->value());
+    }
+
+    public function test_set_stores_the_option_id_of_a_code(): void
+    {
+        $field = $this->makeField();
+
+        $field->set('blue');
+
+        $this->assertSame(20, $field->value());
     }
 
     // -----------------------------------------------------------------------
